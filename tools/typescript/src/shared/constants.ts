@@ -4629,7 +4629,7 @@ export const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   list_whatsapp_templates: {
     name: "list_whatsapp_templates",
     description:
-      "List WhatsApp message templates. Filter by WABA, category (AUTHENTICATION, MARKETING, UTILITY), or status (APPROVED, PENDING, REJECTED, DISABLED).",
+      "List WhatsApp message templates. Filter by WABA, category (AUTHENTICATION, MARKETING, UTILITY), or status (APPROVED, PENDING, REJECTED, DISABLED). When discovering templates to send (e.g. after check_whatsapp_window returns window_active=false), pass status=APPROVED to only see sendable templates; omit the filter to inspect templates in any state.",
     parameters: {
       type: "object",
       properties: {
