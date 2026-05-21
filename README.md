@@ -15,6 +15,8 @@ This repo is the one-stop shop for AI Agents and AI-first developers building wi
   
 - [Agent CLI](#agent-cli) - provision and build on Telnyx infrastructure in a single command.
 
+- [Model Context Protocol (MCP)](#model-context-protocol-mcp) - use Telnyx's generic API MCP proxy or app-layer MCP Apps.
+
 - [Guides](#guides) - step-by-step tutorials for common workflows
  
 
@@ -168,7 +170,19 @@ To run a local Telnyx MCP server using npx:
 npx -y @telnyx/mcp --api-key=YOUR_TELNYX_API_KEY
 ```
 
-See [MCP](/tools/mcp) for more details.
+See [MCP](/tools/mcp) for more details about the generic API MCP proxy.
+
+### MCP Apps
+
+[`tools/mcp-apps`](/tools/mcp-apps) contains app-layer MCP servers with MCP Apps UI resources for focused Telnyx workflows. These are separate from the generic `@telnyx/mcp` proxy above.
+
+Current apps:
+
+- Number Intelligence (`tools/mcp-apps/apps/number-intelligence`)
+- Usage & Cost Explorer (`tools/mcp-apps/apps/usage-cost-explorer`)
+- Voice Monitor (`tools/mcp-apps/apps/voice-monitor`)
+
+From `tools/mcp-apps`, use `npm install`, `npm run typecheck`, `npm run build`, and `npm test`.
 
 ## Guides
 

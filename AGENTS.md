@@ -26,6 +26,7 @@ npm ci
 cd cli && npm ci
 cd tools/typescript && npm ci
 cd tools/mcp && npm ci
+cd tools/mcp-apps && npm ci
 cd tools/python && pip install -e ".[dev]"
 ```
 
@@ -37,6 +38,7 @@ cd tools/python && pip install -e ".[dev]"
 | `tools/python/`  | `cd tools/python && pytest`        |
 | `tools/typescript/` | `cd tools/typescript && npm test` |
 | `tools/mcp/`     | `cd tools/mcp && npm run build`    |
+| `tools/mcp-apps/`| `cd tools/mcp-apps && npm run typecheck && npm run build && npm test` |
 | `guides/`        | `npm run test:guides` (from root)  |
 | Guides API tests | `npm run test:guides-api` (root)   |
 
@@ -52,7 +54,8 @@ Run the relevant package's test suite before declaring a task done. Don't run al
 | `plugins/opencode/`     | OpenCode plugin (auth + TUI for Telnyx-hosted models).                    |
 | `tools/python/`         | Python agent toolkit (PyPI: `telnyx-agent-toolkit`).                      |
 | `tools/typescript/`     | TypeScript agent toolkit (npm).                                           |
-| `tools/mcp/`            | MCP proxy server.                                                         |
+| `tools/mcp/`            | MCP proxy server for the generic Telnyx API MCP endpoint.                |
+| `tools/mcp-apps/`       | Focused app-layer MCP servers with MCP Apps UI resources.                |
 | `tools/ffl-cli/`        | Filling-from-life CLI tooling.                                            |
 | `cli/`                  | Agent CLI for provisioning Telnyx infrastructure.                         |
 | `inference/`            | Documentation for Telnyx-hosted inference.                                |
