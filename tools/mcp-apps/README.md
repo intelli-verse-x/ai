@@ -1,6 +1,8 @@
 # Telnyx MCP Apps
 
-Telnyx MCP Apps are app-layer MCP servers with focused tools and MCP Apps UI resources for specific Telnyx workflows. They live under `tools/mcp-apps` in the `team-telnyx/ai` monorepo.
+Telnyx MCP Apps are app-layer MCP servers with focused tools and MCP Apps UI resources for specific Telnyx workflows. This directory keeps local/reference app source in the `team-telnyx/ai` monorepo.
+
+Deployment and image builds live in [`team-telnyx/mcp-apps`](https://github.com/team-telnyx/mcp-apps).
 
 These apps are separate from [`tools/mcp`](../mcp), which is the generic `@telnyx/mcp` stdio proxy to the hosted Telnyx API MCP endpoint at `https://api.telnyx.com/v2/mcp`.
 
