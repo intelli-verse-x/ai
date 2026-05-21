@@ -49,8 +49,8 @@ export function createServer(): McpServer {
       },
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } }
     },
-    async ({ phone_number, include_raw, sources }) => {
-      const deps = createLiveDeps();
+    async ({ phone_number, include_raw, sources }, extra) => {
+      const deps = createLiveDeps(extra);
       if (!deps) {
         return missingApiKeyResult();
       }
@@ -93,8 +93,8 @@ export function createServer(): McpServer {
       },
       _meta: { ui: { resourceUri: UI_RESOURCE_URI } }
     },
-    async ({ numbers, include_raw, sources }) => {
-      const deps = createLiveDeps();
+    async ({ numbers, include_raw, sources }, extra) => {
+      const deps = createLiveDeps(extra);
       if (!deps) {
         return missingApiKeyResult();
       }
@@ -146,8 +146,10 @@ export function createServer(): McpServer {
   return server;
 }
 
-function createLiveDeps(): AnalyzeNumberDeps | undefined {
-  const apiKey = process.env.TELNYX_API_KEY;
+type AuthBearingExtra = { authInfo?: { token?: string } };
+
+function createLiveDeps(extra?: AuthBearingExtra): AnalyzeNumberDeps | undefined {
+  const apiKey = extra?.authInfo?.token ?? process.env.TELNYX_API_KEY;
   if (!apiKey) {
     return undefined;
   }

@@ -205,8 +205,8 @@ function registerReadTool<T extends ToolShape>(
       annotations: READ_ONLY_ANNOTATIONS,
       _meta: { ui: uiResourceUri ? { resourceUri: uiResourceUri } : { visibility: ["app"] } }
     },
-    async (input: ToolInput<T>) => {
-      const service = createLiveService();
+    async (input: ToolInput<T>, extra: AuthBearingExtra) => {
+      const service = createLiveService(extra);
       if (!service) return missingApiKeyResult();
       try {
         return toolResult(await run(service, input));
@@ -217,8 +217,10 @@ function registerReadTool<T extends ToolShape>(
   );
 }
 
-function createLiveService(): VoiceMonitorService | undefined {
-  const apiKey = process.env.TELNYX_API_KEY;
+type AuthBearingExtra = { authInfo?: { token?: string } };
+
+function createLiveService(extra?: AuthBearingExtra): VoiceMonitorService | undefined {
+  const apiKey = extra?.authInfo?.token ?? process.env.TELNYX_API_KEY;
   if (!apiKey) return undefined;
   const client = new TelnyxVoiceMonitorClient({ apiKey, baseUrl: process.env.TELNYX_API_BASE_URL });
   return createVoiceMonitorService(client, {

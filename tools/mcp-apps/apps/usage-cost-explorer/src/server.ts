@@ -333,8 +333,8 @@ function registerReadTool<T extends ToolShape>(
       annotations,
       _meta: { ui: uiResourceUri ? { resourceUri: uiResourceUri } : { visibility: ["app"] } }
     },
-    async (input: ToolInput<T>) => {
-      const service = createLiveService();
+    async (input: ToolInput<T>, extra: AuthBearingExtra) => {
+      const service = createLiveService(extra);
       if (!service) return missingApiKeyResult();
       try {
         const result = await run(service, input);
@@ -354,8 +354,10 @@ async function safeDashboardRead(name: string, read: () => Promise<unknown>): Pr
   }
 }
 
-function createLiveService(): BillingService | undefined {
-  const apiKey = process.env.TELNYX_API_KEY;
+type AuthBearingExtra = { authInfo?: { token?: string } };
+
+function createLiveService(extra?: AuthBearingExtra): BillingService | undefined {
+  const apiKey = extra?.authInfo?.token ?? process.env.TELNYX_API_KEY;
   if (!apiKey) return undefined;
   const client = new TelnyxBillingClient({
     apiKey,
