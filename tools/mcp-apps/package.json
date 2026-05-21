@@ -1,0 +1,25 @@
+{
+  "name": "@telnyx/mcp-apps",
+  "private": true,
+  "type": "module",
+  "description": "App-layer Telnyx MCP servers and MCP Apps UI resources.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/team-telnyx/ai",
+    "directory": "tools/mcp-apps"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "npm --workspaces run test",
+    "typecheck": "npm --workspaces run typecheck",
+    "build": "npm --workspaces run build"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3",
+    "tsx": "^4.20.6",
+    "vitest": "^4.0.13"
+  }
+}
