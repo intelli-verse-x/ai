@@ -13,15 +13,134 @@
 name: Publish PyPI
 on:
   workflow_dispatch:
+    inputs:
+      publish_disable_actor:
+        description: 'Actor who activated the PyPI publish disable guard'
+        required: false
+      publish_disable_timestamp:
+        description: 'UTC timestamp when the guard was activated'
+        required: false
+      publish_disable_reason:
+        description: 'Reason for temporarily disabling PyPI publish'
+        required: false
+      publish_disable_incident_id:
+        description: 'Related incident or ticket identifier for audit'
+        required: false
+      force_publish:
+        description: 'Set to true to ignore a temporary publish disable flag'
+        required: false
+        type: boolean
+        default: false
   release:
     types: [published]
 
 jobs:
+  publish-guard:
+    name: publish gate check
+    runs-on: ubuntu-latest
+    outputs:
+      publish_enabled: ${{ steps.evaluate.outputs.enabled }}
+      publish_audit_actor: ${{ steps.evaluate.outputs.publish_audit_actor }}
+      publish_audit_timestamp: ${{ steps.evaluate.outputs.publish_audit_timestamp }}
+      publish_audit_reason: ${{ steps.evaluate.outputs.publish_audit_reason }}
+      publish_audit_incident_id: ${{ steps.evaluate.outputs.publish_audit_incident_id }}
+      publish_override_used: ${{ steps.evaluate.outputs.publish_override_used }}
+    steps:
+      - id: evaluate
+        name: Evaluate publish gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FORCE_PUBLISH="${{ github.event_name == 'workflow_dispatch' && inputs.force_publish || 'false' }}"
+          PUBLISH_ENABLED_RAW='${{ vars.PUBLISH_PYPI_ENABLED }}'
+          AUDIT_ACTOR='${{ vars.PUBLISH_PYPI_DISABLE_ACTOR }}'
+          AUDIT_TIMESTAMP='${{ vars.PUBLISH_PYPI_DISABLE_TIMESTAMP }}'
+          AUDIT_REASON='${{ vars.PUBLISH_PYPI_DISABLE_REASON }}'
+          AUDIT_INCIDENT_ID='${{ vars.PUBLISH_PYPI_DISABLE_INCIDENT_ID }}'
+
+          if [[ "${{ github.event_name }}" == 'workflow_dispatch' ]]; then
+            [[ -n '${{ inputs.publish_disable_actor }}' ]] && AUDIT_ACTOR='${{ inputs.publish_disable_actor }}'
+            [[ -n '${{ inputs.publish_disable_timestamp }}' ]] && AUDIT_TIMESTAMP='${{ inputs.publish_disable_timestamp }}'
+            [[ -n '${{ inputs.publish_disable_reason }}' ]] && AUDIT_REASON='${{ inputs.publish_disable_reason }}'
+            [[ -n '${{ inputs.publish_disable_incident_id }}' ]] && AUDIT_INCIDENT_ID='${{ inputs.publish_disable_incident_id }}'
+          fi
+
+          if [[ -z "$AUDIT_ACTOR" ]]; then
+            AUDIT_ACTOR='${{ github.actor }}'
+          fi
+          if [[ -z "$AUDIT_TIMESTAMP" ]]; then
+            AUDIT_TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          fi
+          if [[ -z "$FORCE_PUBLISH" || "$FORCE_PUBLISH" == 'false' ]]; then
+            FORCE_PUBLISH='false'
+          fi
+
+          echo "publish_audit_actor=$AUDIT_ACTOR" >> "$GITHUB_OUTPUT"
+          echo "publish_audit_timestamp=$AUDIT_TIMESTAMP" >> "$GITHUB_OUTPUT"
+          echo "publish_audit_reason=$AUDIT_REASON" >> "$GITHUB_OUTPUT"
+          echo "publish_audit_incident_id=$AUDIT_INCIDENT_ID" >> "$GITHUB_OUTPUT"
+
+          if [[ "$FORCE_PUBLISH" == 'true' ]]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "publish_override_used=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "## PyPI publish override"
+              echo "- result: allowed"
+              echo "- override: \`force_publish=true\`"
+              echo "- actor: \`$AUDIT_ACTOR\`"
+              echo "- timestamp: \`$AUDIT_TIMESTAMP\`"
+              echo "- reason: \`${AUDIT_REASON:-manual override force_publish=true}\`"
+              echo "- incident_id: \`${AUDIT_INCIDENT_ID:-none}\`"
+              echo "- event: \`${{ github.event_name }}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "publish_override_used=false" >> "$GITHUB_OUTPUT"
+
+          if [[ "${PUBLISH_ENABLED_RAW,,}" == 'false' || "${PUBLISH_ENABLED_RAW,,}" == '0' || "${PUBLISH_ENABLED_RAW,,}" == 'off' || "${PUBLISH_ENABLED_RAW,,}" == 'disabled' ]]; then
+            MISSING_FIELDS=()
+            [[ -z "$AUDIT_ACTOR" ]] && MISSING_FIELDS+=('actor')
+            [[ -z "$AUDIT_TIMESTAMP" ]] && MISSING_FIELDS+=('timestamp')
+            [[ -z "$AUDIT_REASON" ]] && MISSING_FIELDS+=('reason')
+            [[ -z "$AUDIT_INCIDENT_ID" ]] && MISSING_FIELDS+=('incident id')
+
+            if [[ "${#MISSING_FIELDS[@]}" -gt 0 ]]; then
+              FINAL_REASON="PyPI publish guard is active but audit payload is incomplete: ${MISSING_FIELDS[*]}"
+            else
+              FINAL_REASON="$AUDIT_REASON"
+            fi
+
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "publish_audit_reason=$FINAL_REASON" >> "$GITHUB_OUTPUT"
+
+            {
+              echo "## PyPI publish disabled"
+              echo "- result: denied"
+              echo "- actor: \`$AUDIT_ACTOR\`"
+              echo "- timestamp: \`$AUDIT_TIMESTAMP\`"
+              echo "- reason: \`$FINAL_REASON\`"
+              echo "- incident_id: \`${AUDIT_INCIDENT_ID:-missing}\`"
+              echo "- event: \`${{ github.event_name }}\`"
+              echo "- repository variable: \`PUBLISH_PYPI_ENABLED=${PUBLISH_ENABLED_RAW}\`"
+              echo "- workflow: \`${{ github.workflow }}\`"
+              echo "- run: \`${{ github.run_id }}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "publish_audit_reason=repository variable PUBLISH_PYPI_ENABLED is not false (${PUBLISH_ENABLED_RAW:-true})" >> "$GITHUB_OUTPUT"
+            echo "PyPI publish gate passed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   publish:
     name: publish to PyPI
+    needs: publish-guard
     runs-on: ubuntu-latest
     # Only run from the canonical repo
-    if: github.repository == 'team-telnyx/ai'
+    if: >-
+      github.repository == 'team-telnyx/ai' &&
+      needs.publish-guard.outputs.publish_enabled == 'true'
     permissions:
       contents: read
       id-token: write
@@ -35,4 +154,11 @@ jobs:
           version: '0.9.13'
 
       - name: Publish to PyPI
+        env:
+          PYPI_PUBLISH_ENABLED: ${{ needs.publish-guard.outputs.publish_enabled }}
+          PYPI_PUBLISH_DISABLE_ACTOR: ${{ needs.publish-guard.outputs.publish_audit_actor }}
+          PYPI_PUBLISH_DISABLE_TIMESTAMP: ${{ needs.publish-guard.outputs.publish_audit_timestamp }}
+          PYPI_PUBLISH_DISABLE_REASON: ${{ needs.publish-guard.outputs.publish_audit_reason }}
+          PYPI_PUBLISH_DISABLE_INCIDENT_ID: ${{ needs.publish-guard.outputs.publish_audit_incident_id }}
+          PYPI_PUBLISH_OVERRIDE_USED: ${{ needs.publish-guard.outputs.publish_override_used }}
         run: bash ./.github/bin/publish-pypi

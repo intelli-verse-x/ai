@@ -5,9 +5,91 @@
 
 set -eux
 
+log_publish_gate() {
+  local status="$1"
+  local package_name="$2"
+  local version="$3"
+
+  local actor="${NPM_PUBLISH_DISABLED_BY:-${GITHUB_ACTOR:-${GITHUB_TRIGGERING_ACTOR:-unknown}}}"
+  local reason="${NPM_PUBLISH_DISABLE_REASON:-$4}"
+  local incident_id="${NPM_PUBLISH_DISABLE_INCIDENT_ID:-unknown}"
+  local reason_text="${reason:-no reason supplied}"
+
+  local audit_path="${RUNNER_TEMP:-/tmp}/publish-audit-log.txt"
+  local timestamp="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+
+  {
+    echo "[$timestamp] npm publish gate=$status actor=$actor"
+    echo "  package=${package_name:-unknown}"
+    echo "  version=${version:-unknown}"
+    echo "  event=${GITHUB_EVENT_NAME:-unknown}"
+    echo "  run_id=${GITHUB_RUN_ID:-unknown}"
+    echo "  workflow=${GITHUB_WORKFLOW:-publish-npm}"
+    echo "  repository=${GITHUB_REPOSITORY:-unknown}"
+    echo "  reason=${reason_text}"
+    echo "  incident_id=${incident_id}"
+  } >> "$audit_path"
+
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      echo "## NPM Publish Gate"
+      echo
+      echo "Gate result: **$status**"
+      echo "- actor: $actor"
+      echo "- package: ${package_name:-unknown}"
+      echo "- version: ${version:-unknown}"
+      echo "- reason: $reason_text"
+      echo "- incident_id: $incident_id"
+      echo "- run: ${GITHUB_RUN_ID:-unknown}"
+      echo "- timestamp: $timestamp"
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+}
+
+enforce_publish_gate() {
+  local package_name="$1"
+  local version="$2"
+  local publish_enabled="${NPM_PUBLISH_ENABLED:-${NPM_PUBLISH_GATE_ENABLED:-true}}"
+  publish_enabled="$(echo "$publish_enabled" | tr '[:upper:]' '[:lower:]')"
+
+  if [[ "$publish_enabled" == "false" || "$publish_enabled" == "0" || "$publish_enabled" == "off" || "$publish_enabled" == "disabled" ]]; then
+    echo "NPM publishing is disabled via NPM_PUBLISH_ENABLED=false"
+    log_publish_gate "blocked" "$package_name" "$version" "${NPM_PUBLISH_DISABLE_REASON:-Emergency publish block is active for npm workflows.}"
+    echo "::notice title=npm publish blocked::NPM publish is currently disabled."
+    exit 0
+  fi
+
+  log_publish_gate "allowed" "$package_name" "$version" "${NPM_PUBLISH_DISABLE_REASON:-}"
+}
+
+scan_release_artifact() {
+  local package_dir="$1"
+  local scan_tmpdir
+  scan_tmpdir="$(mktemp -d)"
+
+  cleanup_scan_tmpdir() {
+    rm -rf "$scan_tmpdir"
+  }
+
+  trap cleanup_scan_tmpdir RETURN
+
+  local tarball_name
+  tarball_name="$(npm pack --pack-destination "$scan_tmpdir" | tail -n 1)"
+  local tarball_path="$scan_tmpdir/$tarball_name"
+
+  node "$(dirname "$0")/../scripts/scan-release-artifact.mjs" "$tarball_path"
+}
+
 PACKAGE_DIR="${1:-.}"
 
 cd "$PACKAGE_DIR"
+
+# Get package info first so we can record audit context before publishing.
+PACKAGE_NAME="$(jq -r -e '.name' ./package.json)"
+VERSION="$(jq -r -e '.version' ./package.json)"
+
+# Enforce publish gate before any publish-related side effects.
+enforce_publish_gate "$PACKAGE_NAME" "$VERSION"
 
 # Authenticate — prefer OIDC, fall back to NPM_TOKEN
 if [[ ${NPM_TOKEN:-} ]]; then
@@ -20,9 +102,9 @@ fi
 # Build (CLI has a no-op build, TS SDK compiles)
 npm run build
 
-# Get package info
-PACKAGE_NAME="$(jq -r -e '.name' ./package.json)"
-VERSION="$(jq -r -e '.version' ./package.json)"
+# Scan the exact artifact payload that would be published before publish proceeds.
+rm -f secret-scan-results.jsonl
+scan_release_artifact "$PACKAGE_DIR"
 
 echo "Publishing $PACKAGE_NAME@$VERSION"
 

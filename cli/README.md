@@ -80,7 +80,7 @@ Output: `{ sim_id, group_id, status, apn_config }`
 
 **One command: zero to AI assistant on a phone number.**
 
-Creates an AI assistant, buys a voice-capable number, and wires them together.
+Creates an AI assistant, buys a voice-capable number, creates a TeXML application for inbound routing, and assigns the number to that app.
 
 ```bash
 telnyx-agent setup-ai
@@ -89,6 +89,14 @@ telnyx-agent setup-ai --name "Support Bot" --json
 ```
 
 Output: `{ assistant_id, phone_number, test_command }`
+
+Verification:
+- Call the returned `phone_number`
+- Confirm the assistant answers and follows the supplied instructions
+
+Requirements:
+- `TELNYX_API_KEY`
+- Enough account balance for a number order and a short test call
 
 ### Edge Compute handoff commands
 

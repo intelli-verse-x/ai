@@ -5,24 +5,70 @@
 ## Prerequisites
 
 - Telnyx API key ([get one free](https://telnyx.com/agent-signup.md))
-- At least one phone number
-- AI credits or pay-as-you-go enabled
+- A positive enough balance for a number order and a short test call
+- `@telnyx/api-cli` or `@telnyx/agent-cli` installed locally
+
+## Fastest Happy Path
+
+The fastest contributor path in this repo is the composite CLI flow:
+
+```bash
+export TELNYX_API_KEY="KEY_..."
+
+# Option 1: run from this repo
+cd cli
+npm install
+npx tsx bin/telnyx-agent.ts setup-ai \
+  --instructions "You are a concise support agent for Acme. Confirm the caller's goal first." \
+  --json
+
+# Option 2: if published globally
+telnyx-agent setup-ai \
+  --instructions "You are a concise support agent for Acme. Confirm the caller's goal first." \
+  --json
+```
+
+What `setup-ai` does:
+
+1. Creates an AI assistant
+2. Searches for a voice-capable local number
+3. Orders the number
+4. Creates a TeXML application that points inbound calls at the assistant
+5. Assigns the TeXML app to the purchased number
+
+Successful output includes:
+
+- `assistant_id`
+- `phone_number`
+- `phone_number_id`
+- `test_command`
+- `ready: true`
+
+Smallest live verification:
+
+1. Run `telnyx-agent setup-ai --json`
+2. Copy the returned `phone_number`
+3. Place a real call to that number
+4. Confirm the assistant answers and follows the supplied instructions
+
+The repo's real-account verification reference for this path lives in [`cli/tests/E2E-RESULTS.md`](/cli/tests/E2E-RESULTS.md).
 
 ## Quick Start
 
 ```bash
-# Create an assistant
+# Create an assistant directly via API
 curl -X POST "https://api.telnyx.com/v2/ai/assistants" \
   -H "Authorization: Bearer $TELNYX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Support Bot",
     "instructions": "You are a helpful customer support assistant. Be friendly and concise.",
-    "voice": {"provider": "telnyx", "settings": {"voice_id": "en-US-Neural2-F"}}
+    "model": "Qwen/Qwen3-235B-A22B"
   }'
 
-# Wire to a phone number (via Call Control application settings in portal)
-# Or use the assistant ID in your webhook response
+# Then either:
+# - use telnyx-agent setup-ai for the rest of the phone-number wiring flow, or
+# - follow the manual wiring section below
 ```
 
 ## API Reference
@@ -46,7 +92,7 @@ curl -X POST "https://api.telnyx.com/v2/ai/assistants" \
         "pitch": 0
       }
     },
-    "model": "meta-llama/Llama-3.3-70B-Instruct",
+    "model": "Qwen/Qwen3-235B-A22B",
     "greeting": "Hello! Thanks for calling Acme Corp. How can I help you today?",
     "hold_music_url": "https://example.com/hold.mp3"
   }'
@@ -69,7 +115,7 @@ curl -X POST "https://api.telnyx.com/v2/ai/assistants" \
   "id": "assistant-uuid",
   "name": "Sales Assistant",
   "instructions": "...",
-  "model": "meta-llama/Llama-3.3-70B-Instruct",
+  "model": "Qwen/Qwen3-235B-A22B",
   "created_at": "2024-01-15T12:00:00Z"
 }
 ```
@@ -207,12 +253,12 @@ assistant = requests.post(
     json={
         "name": "Support Bot",
         "instructions": "You are a helpful customer support agent.",
-        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "model": "Qwen/Qwen3-235B-A22B",
         "voice": {"provider": "telnyx", "settings": {"voice_id": "en-US-Neural2-F"}},
         "greeting": "Hello! How can I help you today?"
     }
 ).json()
-assistant_id = assistant["data"]["id"]
+assistant_id = assistant["id"]
 print(f"Created: {assistant_id}")
 
 # List assistants
@@ -248,12 +294,12 @@ const createRes = await fetch(`${BASE_URL}/ai/assistants`, {
   body: JSON.stringify({
     name: "Support Bot",
     instructions: "You are a helpful customer support agent.",
-    model: "meta-llama/Llama-3.3-70B-Instruct",
+    model: "Qwen/Qwen3-235B-A22B",
     voice: { provider: "telnyx", settings: { voice_id: "en-US-Neural2-F" } },
     greeting: "Hello! How can I help you today?",
   }),
 });
-const { data: assistant } = await createRes.json();
+const assistant = await createRes.json();
 console.log(`Created: ${assistant.id}`);
 
 // List assistants
@@ -287,10 +333,10 @@ toolkit = TelnyxToolkit(api_key="KEY...")
 # Create an AI assistant
 assistant = toolkit.execute("create_ai_assistant", {
     "name": "Support Bot",
-    "model": "meta-llama/Llama-3.3-70B-Instruct",
+    "model": "Qwen/Qwen3-235B-A22B",
     "instructions": "You are a helpful customer support agent."
 })
-print(f"Created: {assistant['data']['id']}")
+print(f"Created: {assistant['id']}")
 
 # List assistants
 assistants = toolkit.execute("list_ai_assistants", {"page_size": 10})
@@ -300,28 +346,28 @@ for a in assistants["data"]:
 
 ## Wiring to a Phone Number
 
-1. Create a Call Control application in the portal
-2. Set the webhook URL to: `https://api.telnyx.com/v2/ai/assistants/{assistant_id}/answer`
-3. Assign your phone number to this application
+`telnyx-agent setup-ai` automates this section. If you need to do it manually, use a TeXML application and then assign it to the number's voice settings.
 
-Or programmatically:
+Manual API sequence:
 
 ```bash
-# Create connection pointing to assistant
-curl -X POST "https://api.telnyx.com/v2/connections" \
+# Create a TeXML application that routes inbound calls to the assistant
+curl -X POST "https://api.telnyx.com/v2/texml_applications" \
   -H "Authorization: Bearer $TELNYX_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "AI Assistant Connection",
+    "friendly_name": "AI Assistant App",
     "active": true,
-    "webhook_api_url": "https://api.telnyx.com/v2/ai/assistants/{assistant_id}/answer"
+    "ai_assistant_id": "{assistant_id}",
+    "voice_url": "https://api.telnyx.com/v2/ai/assistants/{assistant_id}/call",
+    "voice_method": "POST"
   }'
 
-# Assign phone number to connection
-curl -X PATCH "https://api.telnyx.com/v2/phone_numbers/{number_id}" \
+# Assign that TeXML application to the phone number
+curl -X PATCH "https://api.telnyx.com/v2/phone_numbers/{number_id}/voice" \
   -H "Authorization: Bearer $TELNYX_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"connection_id": "connection-id"}'
+  -d '{"connection_id": "texml-app-id"}'
 ```
 
 ## Available Voices

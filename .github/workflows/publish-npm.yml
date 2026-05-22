@@ -15,6 +15,20 @@ name: Publish npm
 on:
   workflow_dispatch:
     inputs:
+      publish_disable_reason:
+        description: 'Reason for temporarily disabling npm publish (audit trail)'
+        required: false
+      publish_disable_incident_id:
+        description: 'Related incident or ticket identifier for audit'
+        required: false
+      publish_disable_by:
+        description: 'Person requesting publish disable/re-enable'
+        required: false
+      manual_publish_approved:
+        description: 'Audited override for medium secret-scan findings'
+        required: false
+        type: boolean
+        default: false
       package:
         description: 'Which package to publish'
         required: true
@@ -25,15 +39,115 @@ on:
           - cli
           - mcp
           - opencode
+      force_publish:
+        description: 'Set to true to ignore a temporary publish disable flag'
+        required: false
+        type: boolean
+        default: false
   release:
     types: [published]
 
 jobs:
+  publish-guard:
+    name: publish gate check
+    runs-on: ubuntu-latest
+    outputs:
+      publish_enabled: ${{ steps.evaluate.outputs.enabled }}
+      publish_audit_reason: ${{ steps.evaluate.outputs.reason }}
+      publish_audit_incident_id: ${{ steps.evaluate.outputs.incident_id }}
+      publish_audit_by: ${{ steps.evaluate.outputs.publish_audit_by }}
+    steps:
+      - id: evaluate
+        name: Evaluate publish gate
+        run: |
+          write_output() {
+            local key="$1"
+            local value="$2"
+
+            {
+              echo "${key}<<__PUBLISH_GUARD__"
+              echo "$value"
+              echo "__PUBLISH_GUARD__"
+            } >> "$GITHUB_OUTPUT"
+          }
+
+          normalize_bool() {
+            local value="${1:-}"
+            value="$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]')"
+
+            case "$value" in
+              true|1|yes|on)
+                printf 'true'
+                ;;
+              false|0|no|off|disabled|'')
+                printf 'false'
+                ;;
+              *)
+                printf '%s' "$value"
+                ;;
+            esac
+          }
+
+          FORCE_PUBLISH_RAW="${{ github.event_name == 'workflow_dispatch' && inputs.force_publish || 'false' }}"
+          PUBLISH_ENABLED_RAW='${{ vars.PUBLISH_NPM_ENABLED }}'
+          DISABLED_BY='${{ github.event_name == "workflow_dispatch" && inputs.publish_disable_by || github.actor }}'
+          INCIDENT_ID='${{ github.event_name == "workflow_dispatch" && inputs.publish_disable_incident_id || '' }}'
+          REASON='${{ github.event_name == "workflow_dispatch" && inputs.publish_disable_reason || '' }}'
+
+          FORCE_PUBLISH="$(normalize_bool "$FORCE_PUBLISH_RAW")"
+          PUBLISH_ENABLED="$(normalize_bool "$PUBLISH_ENABLED_RAW")"
+
+          write_output "publish_audit_by" "$DISABLED_BY"
+          write_output "incident_id" "$INCIDENT_ID"
+
+          if [[ "$FORCE_PUBLISH" == 'true' ]]; then
+            write_output "enabled" "true"
+            write_output "reason" "manual override force_publish=true"
+            echo "Publish enabled via workflow dispatch override: force_publish=true" >> "$GITHUB_STEP_SUMMARY"
+          elif [[ "$PUBLISH_ENABLED" == 'false' ]]; then
+            write_output "enabled" "false"
+            FINAL_REASON="${REASON:-repository variable PUBLISH_NPM_ENABLED is false}"
+            write_output "reason" "$FINAL_REASON"
+            {
+              echo "## npm publish disabled"
+              echo "- result: denied"
+              echo "- timestamp: \`$(date -u +'%Y-%m-%dT%H:%M:%SZ')\`"
+              echo "- workflow: \`${{ github.workflow }}\`"
+              echo "- run: \`${{ github.run_id }}\`"
+              echo "- disabled_by: \`$DISABLED_BY\`"
+              echo "- incident_id: \`${INCIDENT_ID:-none}\`"
+              echo "- reason: \`$FINAL_REASON\`"
+              echo "- event: \`${{ github.event_name }}\`"
+              echo "- repository variable: \`PUBLISH_NPM_ENABLED=${PUBLISH_ENABLED_RAW:-true}\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            write_output "enabled" "true"
+            write_output "reason" "repository variable PUBLISH_NPM_ENABLED is not false (${PUBLISH_ENABLED_RAW:-true})"
+            echo "npm publish gate passed" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Audit disabled publish
+        if: ${{ steps.evaluate.outputs.enabled == 'false' }}
+        run: |
+          {
+            echo "## npm publish disabled"
+            echo "- reason: ${{ steps.evaluate.outputs.reason }}"
+            echo "- disabled_by: \`${{ steps.evaluate.outputs.publish_audit_by }}\`"
+            echo "- incident_id: \`${{ steps.evaluate.outputs.incident_id || 'none' }}\`"
+            echo "- event: \`${{ github.event_name }}\`"
+            echo "- package selector: \`${{ github.event_name == 'workflow_dispatch' && inputs.package || github.event_name }}\`"
+            echo "- ref: \`${{ github.ref }}\`"
+            echo "- sha: \`${{ github.sha }}\`"
+            echo "- disabled at: \`$(date -u +'%Y-%m-%dT%H:%M:%SZ')\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   publish-typescript:
     name: publish @telnyx/agent-toolkit
+    needs: publish-guard
     runs-on: ubuntu-latest
     if: >-
       github.repository == 'team-telnyx/ai' &&
+      needs.publish-guard.outputs.publish_enabled == 'true' &&
       (github.event_name == 'release' || github.event.inputs.package == 'all' || github.event.inputs.package == 'typescript')
     permissions:
       contents: read
@@ -46,18 +160,41 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.3/gitleaks_8.18.3_linux_x64.tar.gz \
+            | tar -xz -C /tmp
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          chmod +x /usr/local/bin/gitleaks
+
       - name: Install dependencies
         working-directory: tools/typescript
         run: npm ci
 
       - name: Publish @telnyx/agent-toolkit
+        env:
+          MANUAL_PUBLISH_APPROVED: ${{ github.event_name == 'workflow_dispatch' && inputs.manual_publish_approved && 'true' || 'false' }}
+          NPM_PUBLISH_ENABLED: ${{ needs.publish-guard.outputs.publish_enabled }}
+          NPM_PUBLISH_DISABLE_REASON: ${{ needs.publish-guard.outputs.publish_audit_reason }}
+          NPM_PUBLISH_DISABLE_INCIDENT_ID: ${{ needs.publish-guard.outputs.publish_audit_incident_id }}
+          NPM_PUBLISH_DISABLED_BY: ${{ needs.publish-guard.outputs.publish_audit_by }}
         run: bash ./.github/bin/publish-npm tools/typescript
+
+      - name: Upload secret scan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-results-typescript
+          path: tools/typescript/secret-scan-results.jsonl
+          if-no-files-found: error
 
   publish-cli:
     name: publish @telnyx/agent-cli
+    needs: publish-guard
     runs-on: ubuntu-latest
     if: >-
       github.repository == 'team-telnyx/ai' &&
+      needs.publish-guard.outputs.publish_enabled == 'true' &&
       (github.event_name == 'release' || github.event.inputs.package == 'all' || github.event.inputs.package == 'cli')
     permissions:
       contents: read
@@ -70,18 +207,41 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.3/gitleaks_8.18.3_linux_x64.tar.gz \
+            | tar -xz -C /tmp
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          chmod +x /usr/local/bin/gitleaks
+
       - name: Install dependencies
         working-directory: cli
         run: npm ci
 
       - name: Publish @telnyx/agent-cli
+        env:
+          MANUAL_PUBLISH_APPROVED: ${{ github.event_name == 'workflow_dispatch' && inputs.manual_publish_approved && 'true' || 'false' }}
+          NPM_PUBLISH_ENABLED: ${{ needs.publish-guard.outputs.publish_enabled }}
+          NPM_PUBLISH_DISABLE_REASON: ${{ needs.publish-guard.outputs.publish_audit_reason }}
+          NPM_PUBLISH_DISABLE_INCIDENT_ID: ${{ needs.publish-guard.outputs.publish_audit_incident_id }}
+          NPM_PUBLISH_DISABLED_BY: ${{ needs.publish-guard.outputs.publish_audit_by }}
         run: bash ./.github/bin/publish-npm cli
+
+      - name: Upload secret scan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-results-cli
+          path: cli/secret-scan-results.jsonl
+          if-no-files-found: error
 
   publish-mcp:
     name: publish @telnyx/mcp
+    needs: publish-guard
     runs-on: ubuntu-latest
     if: >-
       github.repository == 'team-telnyx/ai' &&
+      needs.publish-guard.outputs.publish_enabled == 'true' &&
       (github.event_name == 'release' || github.event.inputs.package == 'all' || github.event.inputs.package == 'mcp')
     permissions:
       contents: read
@@ -94,18 +254,41 @@ jobs:
         with:
           node-version: '24'
 
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.3/gitleaks_8.18.3_linux_x64.tar.gz \
+            | tar -xz -C /tmp
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          chmod +x /usr/local/bin/gitleaks
+
       - name: Install dependencies
         working-directory: tools/mcp
         run: npm ci
 
       - name: Publish @telnyx/mcp
+        env:
+          MANUAL_PUBLISH_APPROVED: ${{ github.event_name == 'workflow_dispatch' && inputs.manual_publish_approved && 'true' || 'false' }}
+          NPM_PUBLISH_ENABLED: ${{ needs.publish-guard.outputs.publish_enabled }}
+          NPM_PUBLISH_DISABLE_REASON: ${{ needs.publish-guard.outputs.publish_audit_reason }}
+          NPM_PUBLISH_DISABLE_INCIDENT_ID: ${{ needs.publish-guard.outputs.publish_audit_incident_id }}
+          NPM_PUBLISH_DISABLED_BY: ${{ needs.publish-guard.outputs.publish_audit_by }}
         run: bash ./.github/bin/publish-npm tools/mcp
+
+      - name: Upload secret scan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-results-mcp
+          path: tools/mcp/secret-scan-results.jsonl
+          if-no-files-found: error
 
   publish-opencode:
     name: publish @telnyx/opencode
+    needs: publish-guard
     runs-on: ubuntu-latest
     if: >-
       github.repository == 'team-telnyx/ai' &&
+      needs.publish-guard.outputs.publish_enabled == 'true' &&
       (github.event_name == 'release' || github.event.inputs.package == 'all' || github.event.inputs.package == 'opencode')
     permissions:
       contents: read
@@ -120,19 +303,41 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      - name: Install gitleaks
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.18.3/gitleaks_8.18.3_linux_x64.tar.gz \
+            | tar -xz -C /tmp
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          chmod +x /usr/local/bin/gitleaks
+
       - name: Install dependencies
         working-directory: plugins/opencode
         run: npm ci --legacy-peer-deps
 
       - name: Publish @telnyx/opencode
+        env:
+          MANUAL_PUBLISH_APPROVED: ${{ github.event_name == 'workflow_dispatch' && inputs.manual_publish_approved && 'true' || 'false' }}
+          NPM_PUBLISH_ENABLED: ${{ needs.publish-guard.outputs.publish_enabled }}
+          NPM_PUBLISH_DISABLE_REASON: ${{ needs.publish-guard.outputs.publish_audit_reason }}
+          NPM_PUBLISH_DISABLE_INCIDENT_ID: ${{ needs.publish-guard.outputs.publish_audit_incident_id }}
+          NPM_PUBLISH_DISABLED_BY: ${{ needs.publish-guard.outputs.publish_audit_by }}
         run: bash ./.github/bin/publish-npm plugins/opencode
+
+      - name: Upload secret scan evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secret-scan-results-opencode
+          path: plugins/opencode/secret-scan-results.jsonl
+          if-no-files-found: error
 
   publish-mcp-registry:
     name: publish to MCP Registry
     runs-on: ubuntu-latest
-    needs: publish-mcp
+    needs: [publish-guard, publish-mcp]
     if: >-
       github.repository == 'team-telnyx/ai' &&
+      needs.publish-guard.outputs.publish_enabled == 'true' &&
       (github.event_name == 'release' || github.event.inputs.package == 'all' || github.event.inputs.package == 'mcp')
     permissions:
       contents: read
