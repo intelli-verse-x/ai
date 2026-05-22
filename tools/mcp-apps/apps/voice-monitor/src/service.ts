@@ -4,6 +4,7 @@ import type {
   CallStatusRequest,
   CallTimelineRequest,
   ConnectionData,
+  DebugReportRequest,
   DiscoveryOption,
   ListOptionsInput,
   RecordingsRequest,
@@ -116,6 +117,121 @@ export function createVoiceMonitorService(client: VoiceMonitorClient, options: V
       const normalized = normalizeRecordingsInput(input, page, now, maxRecordingWindowHours);
       const envelope = await client.listRecordings(normalized);
       return sanitizeVoiceMonitorValue({ ...envelope, applied_filters: normalized.appliedFilters });
+    },
+
+    async debugReport(input: DebugReportRequest = {}) {
+      const page = normalizePage(input, maxPageSize);
+      const warnings: Array<{ source: string; message: string }> = [];
+      const hasTimelineContext = Boolean(
+        input.callControlId ||
+          input.callLegId ||
+          input.callSessionId ||
+          input.applicationSessionId ||
+          input.connectionId
+      );
+      const normalizedTimeline = hasTimelineContext
+        ? normalizeTimelineInput(
+            {
+              callLegId: input.callLegId,
+              callSessionId: input.callSessionId,
+              applicationSessionId: input.applicationSessionId,
+              connectionId: input.connectionId,
+              pageNumber: page.pageNumber,
+              pageSize: page.pageSize
+            },
+            page,
+            now,
+            maxTimelineWindowHours
+          )
+        : undefined;
+      const timelineEnvelope = normalizedTimeline
+        ? await safeRead("call_events", () => client.listCallEvents(normalizedTimeline), warnings)
+        : undefined;
+      const timelineEvents = dataArray(timelineEnvelope);
+      const correlation = buildCorrelationSummary([
+        timelineEnvelope,
+        compactRecord({
+          call_control_id: normalizeOptionalString(input.callControlId),
+          call_leg_id: normalizeOptionalString(input.callLegId),
+          call_session_id: normalizeOptionalString(input.callSessionId),
+          application_session_id: normalizeOptionalString(input.applicationSessionId),
+          connection_id: normalizeOptionalString(input.connectionId),
+          assistant_id: normalizeOptionalString(input.assistantId),
+          conversation_id: normalizeOptionalString(input.conversationId)
+        })
+      ]);
+      const callControlId = normalizeOptionalString(input.callControlId) ?? correlation.call_control_ids[0];
+      const connectionId = normalizeOptionalString(input.connectionId) ?? correlation.connection_ids[0];
+      const assistantId = normalizeOptionalString(input.assistantId) ?? correlation.assistant_ids[0];
+      const callStatusEnvelope = callControlId
+        ? await safeRead("call_status", () => client.getCallStatus(callControlId), warnings)
+        : undefined;
+      const applicationEnvelope = connectionId
+        ? await safeRead("call_control_application", () => client.getCallControlApplication(connectionId), warnings)
+        : undefined;
+      const webhookUrl =
+        normalizeOptionalString(input.webhookUrl) ??
+        collectUniqueStrings(applicationEnvelope, "webhook_event_url")[0] ??
+        collectUniqueStrings(applicationEnvelope, "webhook_url")[0];
+      const webhookDeliveriesEnvelope = webhookUrl
+        ? await safeRead(
+            "webhook_deliveries",
+            () => client.listWebhookDeliveries({ pageNumber: page.pageNumber, pageSize: page.pageSize, filterWebhookUrl: webhookUrl }),
+            warnings
+          )
+        : undefined;
+      const conversationId = normalizeOptionalString(input.conversationId) ?? correlation.conversation_ids[0];
+      let conversationEnvelope: TelnyxEnvelope | undefined;
+      let conversationListEnvelope: TelnyxEnvelope | undefined;
+      if (conversationId) {
+        conversationEnvelope = await safeRead("conversation", () => client.getConversation(conversationId), warnings);
+      } else if (assistantId) {
+        conversationListEnvelope = await safeRead(
+          "conversations",
+          () => client.listConversations({ assistantId, pageNumber: page.pageNumber, pageSize: page.pageSize }),
+          warnings
+        );
+        const discoveredConversationId = collectUniqueStrings(conversationListEnvelope, "id")[0];
+        if (discoveredConversationId) {
+          conversationEnvelope = await safeRead("conversation", () => client.getConversation(discoveredConversationId), warnings);
+        }
+      }
+
+      return sanitizeVoiceMonitorValue({
+        correlation,
+        minimum_signal: {
+          capture_from_bootstrap: [
+            "call_control_id",
+            "call_session_id",
+            "connection_id",
+            "assistant_id",
+            "conversation_id"
+          ],
+          best_lookup_order: [
+            "call_control_id",
+            "call_session_id",
+            "call_leg_id",
+            "conversation_id",
+            "assistant_id"
+          ]
+        },
+        debug_surfaces: {
+          timeline_inspection: summarizeTimelineSurface(timelineEvents, normalizedTimeline?.appliedFilters, normalizedTimeline?.notice),
+          webhook_failures: summarizeWebhookFailuresSurface(webhookDeliveriesEnvelope, webhookUrl),
+          latency_buckets: summarizeLatencySurface(timelineEvents, callStatusEnvelope),
+          provider_usage: summarizeProviderUsageSurface([timelineEnvelope, callStatusEnvelope, conversationEnvelope, applicationEnvelope]),
+          terminal_error_reasons: summarizeTerminalReasonsSurface([timelineEnvelope, callStatusEnvelope, conversationEnvelope])
+        },
+        sources: {
+          call_events: timelineEnvelope,
+          call_status: callStatusEnvelope,
+          call_control_application: applicationEnvelope,
+          webhook_deliveries: webhookDeliveriesEnvelope,
+          conversations: conversationListEnvelope,
+          conversation: conversationEnvelope
+        },
+        warnings
+      });
     }
   };
 }
@@ -361,4 +477,209 @@ function compactRecord(input: Record<string, unknown>): Record<string, unknown> 
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function buildCorrelationSummary(sources: unknown[]): Record<string, string[]> {
+  return {
+    call_control_ids: collectValuesFromSources(sources, "call_control_id"),
+    call_leg_ids: collectValuesFromSources(sources, "call_leg_id", "leg_id"),
+    call_session_ids: collectValuesFromSources(sources, "call_session_id"),
+    application_session_ids: collectValuesFromSources(sources, "application_session_id"),
+    connection_ids: collectValuesFromSources(sources, "connection_id"),
+    assistant_ids: collectValuesFromSources(sources, "assistant_id"),
+    conversation_ids: collectValuesFromSources(sources, "conversation_id"),
+    insight_group_ids: collectValuesFromSources(sources, "insight_group_id")
+  };
+}
+
+function collectValuesFromSources(sources: unknown[], ...keys: string[]): string[] {
+  const values = new Set<string>();
+  for (const source of sources) {
+    for (const key of keys) {
+      for (const value of collectUniqueStrings(source, key)) values.add(value);
+    }
+  }
+  return [...values];
+}
+
+function collectUniqueStrings(value: unknown, keyName: string): string[] {
+  const values = new Set<string>();
+  visitValue(value, (candidateKey, candidateValue) => {
+    if (candidateKey !== keyName) return;
+    const text = valueAsString(candidateValue)?.trim();
+    if (text) values.add(text);
+  });
+  return [...values];
+}
+
+function visitValue(value: unknown, visitor: (key: string, value: unknown, owner?: Record<string, unknown>) => void, owner?: Record<string, unknown>): void {
+  if (Array.isArray(value)) {
+    for (const item of value) visitValue(item, visitor, owner);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const record = value as Record<string, unknown>;
+  for (const [key, nested] of Object.entries(record)) {
+    visitor(key, nested, record);
+    visitValue(nested, visitor, record);
+  }
+}
+
+function summarizeTimelineSurface(events: unknown[], appliedFilters?: Record<string, unknown>, notice?: string): Record<string, unknown> {
+  const names = new Map<string, number>();
+  const statuses = new Map<string, number>();
+  const eventTypes = new Map<string, number>();
+  const timestamps: string[] = [];
+
+  for (const event of events) {
+    if (!event || typeof event !== "object" || Array.isArray(event)) continue;
+    const record = event as Record<string, unknown>;
+    const name = valueAsString(record.name ?? record.event_type);
+    const status = valueAsString(record.status);
+    const eventType = valueAsString(record.type);
+    const timestamp = eventTimestamp(record);
+    if (name) names.set(name, (names.get(name) ?? 0) + 1);
+    if (status) statuses.set(status, (statuses.get(status) ?? 0) + 1);
+    if (eventType) eventTypes.set(eventType, (eventTypes.get(eventType) ?? 0) + 1);
+    if (timestamp) timestamps.push(timestamp);
+  }
+
+  const sortedTimestamps = timestamps.slice().sort();
+  return {
+    event_count: events.length,
+    applied_filters: appliedFilters ?? {},
+    filters_notice: notice,
+    window: compactRecord({
+      first_event_at: sortedTimestamps[0],
+      last_event_at: sortedTimestamps[sortedTimestamps.length - 1]
+    }),
+    event_names: mapEntries(names),
+    statuses: mapEntries(statuses),
+    transport_types: mapEntries(eventTypes),
+    recent_events: events.slice(-5)
+  };
+}
+
+function summarizeWebhookFailuresSurface(envelope: TelnyxEnvelope | undefined, webhookUrl: string | undefined): Record<string, unknown> {
+  const deliveries = dataArray(envelope);
+  const failures = deliveries.filter(isWebhookFailure);
+  return {
+    source_detected: Boolean(webhookUrl),
+    source_label: webhookUrl ? "call control application webhook" : "not provided or not discoverable from call control application",
+    failure_count: failures.length,
+    delivery_count: deliveries.length,
+    failure_samples: failures.slice(0, 5),
+    attempt_statuses: countDistinct(deliveries, "attempt_status"),
+    status_codes: countDistinct(deliveries, "status_code")
+  };
+}
+
+function summarizeLatencySurface(events: unknown[], callStatusEnvelope: TelnyxEnvelope | undefined): Record<string, unknown> {
+  const timestamps = events
+    .map((event) => (event && typeof event === "object" && !Array.isArray(event) ? eventTimestamp(event as Record<string, unknown>) : undefined))
+    .filter((value): value is string => Boolean(value))
+    .map((value) => Date.parse(value))
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => a - b);
+  const buckets = { under_1s: 0, s1_to_5: 0, s5_to_15: 0, s15_to_60: 0, over_60s: 0 };
+  for (let index = 1; index < timestamps.length; index += 1) {
+    const deltaMs = timestamps[index] - timestamps[index - 1];
+    if (deltaMs < 1_000) buckets.under_1s += 1;
+    else if (deltaMs < 5_000) buckets.s1_to_5 += 1;
+    else if (deltaMs < 15_000) buckets.s5_to_15 += 1;
+    else if (deltaMs < 60_000) buckets.s15_to_60 += 1;
+    else buckets.over_60s += 1;
+  }
+
+  const durationCandidates = collectValuesFromSources([callStatusEnvelope], "call_duration", "duration_sec");
+  return {
+    event_gap_buckets: buckets,
+    measured_gap_count: Math.max(0, timestamps.length - 1),
+    call_duration_candidates: durationCandidates
+  };
+}
+
+function summarizeProviderUsageSurface(sources: unknown[]): Record<string, unknown> {
+  return {
+    assistant_ids: collectValuesFromSources(sources, "assistant_id"),
+    llm_models: collectValuesFromSources(sources, "llm_model", "model"),
+    stt_models: collectValuesFromSources(sources, "stt_model"),
+    tts_providers: collectValuesFromSources(sources, "tts_provider"),
+    tts_model_ids: collectValuesFromSources(sources, "tts_model_id"),
+    tts_voice_ids: collectValuesFromSources(sources, "tts_voice_id", "voice_id")
+  };
+}
+
+function summarizeTerminalReasonsSurface(sources: unknown[]): Array<Record<string, unknown>> {
+  const terminalReasons: Array<Record<string, unknown>> = [];
+  for (const source of sources) {
+    visitValue(source, (_key, value, owner) => {
+      if (!owner) return;
+      for (const reasonKey of ["failure_cause", "hangup_cause", "error_reason", "error_code", "error_type", "reason", "result"]) {
+        const reason = valueAsString(owner[reasonKey]);
+        if (!reason) continue;
+        const event = valueAsString(owner.name ?? owner.event_type ?? owner.status);
+        if (reasonKey === "result" && !event?.match(/(fail|end|stop|hangup|complete|terminate|error)/i)) continue;
+        terminalReasons.push(
+          compactRecord({
+            event,
+            field: reasonKey,
+            value: reason,
+            occurred_at: eventTimestamp(owner),
+            call_control_id: valueAsString(owner.call_control_id),
+            call_session_id: valueAsString(owner.call_session_id)
+          })
+        );
+      }
+    });
+  }
+  return dedupeObjects(terminalReasons).slice(0, 10);
+}
+
+function dedupeObjects(items: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  const seen = new Set<string>();
+  const output: Array<Record<string, unknown>> = [];
+  for (const item of items) {
+    const key = JSON.stringify(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(item);
+  }
+  return output;
+}
+
+function mapEntries(map: Map<string, number>): Array<{ value: string; count: number }> {
+  return [...map.entries()]
+    .map(([value, count]) => ({ value, count }))
+    .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value));
+}
+
+function eventTimestamp(record: Record<string, unknown>): string | undefined {
+  return (
+    normalizeOptionalString(valueAsString(record.occurred_at)) ??
+    normalizeOptionalString(valueAsString(record.event_timestamp)) ??
+    normalizeOptionalString(valueAsString(record.created_at)) ??
+    normalizeOptionalString(valueAsString(record.updated_at)) ??
+    normalizeOptionalString(valueAsString(record.end_time))
+  );
+}
+
+function countDistinct(items: unknown[], field: string): Array<{ value: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const value = valueAsString((item as Record<string, unknown>)[field]);
+    if (!value) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return mapEntries(counts);
+}
+
+function isWebhookFailure(item: unknown): boolean {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+  const record = item as Record<string, unknown>;
+  const statusCode = Number(record.status_code);
+  const attemptStatus = valueAsString(record.attempt_status)?.toLowerCase();
+  if (Number.isFinite(statusCode) && statusCode >= 400) return true;
+  return Boolean(attemptStatus && /(fail|error|timeout|rejected)/.test(attemptStatus));
 }

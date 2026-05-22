@@ -1,11 +1,13 @@
 import type {
   CallControlApplicationData,
   CallEventsInput,
+  ConversationsInput,
   ConnectionData,
   PageInput,
   RecordingsInput,
   TelnyxClientOptions,
   TelnyxEnvelope,
+  WebhookDeliveriesInput,
   VoiceNumberData
 } from "./types.js";
 
@@ -65,6 +67,10 @@ export class TelnyxVoiceMonitorClient {
     return this.request(url, { method: "GET" });
   }
 
+  async getCallControlApplication(id: string): Promise<TelnyxEnvelope<Record<string, unknown>>> {
+    return this.request(this.url(`/call_control_applications/${encodeURIComponent(id)}`), { method: "GET" });
+  }
+
   async listPhoneNumbers(input: PageInput = {}): Promise<TelnyxEnvelope<VoiceNumberData[]>> {
     const url = this.url("/phone_numbers/voice");
     addPaging(url, input);
@@ -112,6 +118,26 @@ export class TelnyxVoiceMonitorClient {
     addFilter(url, "created_at][lte", input.createdAtLte, "filter[created_at][lte]");
     addPaging(url, input);
     return this.request(url, { method: "GET" });
+  }
+
+  async listWebhookDeliveries(input: WebhookDeliveriesInput = {}): Promise<TelnyxEnvelope> {
+    const url = this.url("/webhook_deliveries");
+    addFilter(url, "status_code", input.filterStatusCode);
+    addFilter(url, "webhook_url", input.filterWebhookUrl);
+    addFilter(url, "attempt_status", input.filterAttemptStatus);
+    addPaging(url, input);
+    return this.request(url, { method: "GET" });
+  }
+
+  async listConversations(input: ConversationsInput = {}): Promise<TelnyxEnvelope> {
+    const url = this.url("/ai/conversations");
+    if (input.assistantId) url.searchParams.set("assistant_id", input.assistantId);
+    addPaging(url, input);
+    return this.request(url, { method: "GET" });
+  }
+
+  async getConversation(conversationId: string): Promise<TelnyxEnvelope> {
+    return this.request(this.url(`/ai/conversations/${encodeURIComponent(conversationId)}`), { method: "GET" });
   }
 
   private url(path: string): URL {

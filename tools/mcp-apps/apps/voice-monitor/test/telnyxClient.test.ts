@@ -20,13 +20,15 @@ describe("TelnyxVoiceMonitorClient", () => {
     await client.listPhoneNumbers({ pageNumber: 1, pageSize: 10 });
     await client.listActiveCalls("conn_keep_for_followup", { pageNumber: 1, pageSize: 5 });
     await client.getCallStatus("call_control_keep_for_followup");
+    await client.getCallControlApplication("app_keep_for_followup");
 
     expect(calls.map((call) => call.url)).toEqual([
       "https://api.telnyx.com/v2/connections?page%5Bnumber%5D=2&page%5Bsize%5D=25",
       "https://api.telnyx.com/v2/call_control_applications?page%5Bnumber%5D=1&page%5Bsize%5D=10",
       "https://api.telnyx.com/v2/phone_numbers/voice?page%5Bnumber%5D=1&page%5Bsize%5D=10",
       "https://api.telnyx.com/v2/connections/conn_keep_for_followup/active_calls?page%5Bnumber%5D=1&page%5Bsize%5D=5",
-      "https://api.telnyx.com/v2/calls/call_control_keep_for_followup"
+      "https://api.telnyx.com/v2/calls/call_control_keep_for_followup",
+      "https://api.telnyx.com/v2/call_control_applications/app_keep_for_followup"
     ]);
     expect(calls.every((call) => call.init?.method === "GET")).toBe(true);
     expect(calls.every((call) => (call.init?.headers as Record<string, string>).Authorization === "Bearer fixture_credential")).toBe(true);
@@ -69,6 +71,30 @@ describe("TelnyxVoiceMonitorClient", () => {
       "https://api.telnyx.test/v2/recordings?filter%5Bcall_control_id%5D=call_control_keep_for_followup&filter%5Bcall_leg_id%5D=leg_keep_for_followup&filter%5Bconnection_id%5D=conn_keep_for_followup&filter%5Bcreated_at%5D%5Bgte%5D=2026-05-20T00%3A00%3A00.000Z&page%5Bnumber%5D=1&page%5Bsize%5D=5"
     );
     expect(calls.map((call) => call.init?.method)).toEqual(["GET", "GET"]);
+  });
+
+  it("serializes webhook delivery and conversation lookups used by the debug report", async () => {
+    const calls: Array<{ url: string; init?: RequestInit }> = [];
+    const fetchImpl: typeof fetch = async (url, init) => {
+      calls.push({ url: String(url), init });
+      return json({ data: [] });
+    };
+    const client = new TelnyxVoiceMonitorClient({ apiKey: "fixture_credential", fetch: fetchImpl });
+
+    await client.listWebhookDeliveries({
+      filterWebhookUrl: "https://example.test/voice",
+      filterAttemptStatus: "failed",
+      pageNumber: 1,
+      pageSize: 5
+    });
+    await client.listConversations({ assistantId: "assistant_keep_for_followup", pageNumber: 1, pageSize: 5 });
+    await client.getConversation("conversation_keep_for_followup");
+
+    expect(calls.map((call) => call.url)).toEqual([
+      "https://api.telnyx.com/v2/webhook_deliveries?filter%5Bwebhook_url%5D=https%3A%2F%2Fexample.test%2Fvoice&filter%5Battempt_status%5D=failed&page%5Bnumber%5D=1&page%5Bsize%5D=5",
+      "https://api.telnyx.com/v2/ai/conversations?assistant_id=assistant_keep_for_followup&page%5Bnumber%5D=1&page%5Bsize%5D=5",
+      "https://api.telnyx.com/v2/ai/conversations/conversation_keep_for_followup"
+    ]);
   });
 
   it("redacts phone numbers, recording URLs, transcripts, metadata, and secrets while preserving operational IDs", async () => {

@@ -18,7 +18,7 @@ export const VOICE_MONITOR_UI_HTML = String.raw`<!doctype html>
         <div>
           <div class="eyebrow">Telnyx MCP App</div>
           <h1>Voice Monitor</h1>
-          <p>Read-only active-call, call timeline, status, and recording discovery with preloaded Call Control App and SIP Connection choices.</p>
+          <p>Read-only active-call, call timeline, status, recording discovery, and paved-road debugging surfaces with preloaded Call Control App and SIP Connection choices.</p>
         </div>
         <div class="pill-row">
           <span class="pill" id="bridgeStatus">Host bridge: initializing</span>
@@ -53,6 +53,7 @@ export const VOICE_MONITOR_UI_HTML = String.raw`<!doctype html>
               <button class="secondary" id="timelineButton" type="button">Load timeline</button>
               <button class="secondary" id="statusButton" type="button">Get status</button>
               <button class="secondary" id="recordingsButton" type="button">Search recordings</button>
+              <button class="secondary" id="debugButton" type="button">Build debug report</button>
             </div>
           </article>
 
@@ -85,7 +86,7 @@ export const VOICE_MONITOR_UI_HTML = String.raw`<!doctype html>
         bridgeStatus: document.getElementById("bridgeStatus"), error: document.getElementById("error"),
         connectionCount: document.getElementById("connectionCount"), activeCallCount: document.getElementById("activeCallCount"), activeMeta: document.getElementById("activeMeta"), selectedValue: document.getElementById("selectedValue"),
         connectionSelect: document.getElementById("connectionSelect"), sipConnectionSelect: document.getElementById("sipConnectionSelect"), idTypeSelect: document.getElementById("idTypeSelect"), sessionInput: document.getElementById("sessionInput"), callControlInput: document.getElementById("callControlInput"),
-        loadOptionsButton: document.getElementById("loadOptionsButton"), activeCallsButton: document.getElementById("activeCallsButton"), timelineButton: document.getElementById("timelineButton"), statusButton: document.getElementById("statusButton"), recordingsButton: document.getElementById("recordingsButton"),
+        loadOptionsButton: document.getElementById("loadOptionsButton"), activeCallsButton: document.getElementById("activeCallsButton"), timelineButton: document.getElementById("timelineButton"), statusButton: document.getElementById("statusButton"), recordingsButton: document.getElementById("recordingsButton"), debugButton: document.getElementById("debugButton"),
         activeBody: document.getElementById("activeBody"), fallbackPre: document.getElementById("fallbackPre"), jsonPre: document.getElementById("jsonPre")
       };
       function send(message) { window.parent.postMessage(message, "*"); }
@@ -128,7 +129,13 @@ export const VOICE_MONITOR_UI_HTML = String.raw`<!doctype html>
           voice_monitor_active_calls: active_target_id ? { connection_id: active_target_id } : {},
           voice_monitor_call_timeline: { ...(sip_connection_id ? { connection_id: sip_connection_id } : {}), ...(id ? { [idType]: id } : {}) },
           voice_monitor_call_status: call_control_id ? { call_control_id } : { call_control_id: "<paste call_control_id>" },
-          voice_monitor_recordings: { ...(sip_connection_id ? { connection_id: sip_connection_id } : {}), ...(call_control_id ? { call_control_id } : {}) }
+          voice_monitor_recordings: { ...(sip_connection_id ? { connection_id: sip_connection_id } : {}), ...(call_control_id ? { call_control_id } : {}) },
+          voice_monitor_debug_report: {
+            ...(sip_connection_id ? { connection_id: sip_connection_id } : {}),
+            ...(idType === "call_leg_id" && id ? { call_leg_id: id } : {}),
+            ...(idType === "call_session_id" && id ? { call_session_id: id } : {}),
+            ...(call_control_id ? { call_control_id } : {})
+          }
         };
         els.selectedValue.textContent = sip_connection_id || active_target_id || "All";
         els.fallbackPre.textContent = JSON.stringify(args, null, 2);
@@ -179,6 +186,7 @@ export const VOICE_MONITOR_UI_HTML = String.raw`<!doctype html>
       async function loadTimeline() { const args = JSON.parse(els.fallbackPre.textContent).voice_monitor_call_timeline; state.latest.timeline = await callTool("voice_monitor_call_timeline", { ...args, page_size: 100 }); renderJson(); resize(); }
       async function loadStatus() { const id = els.callControlInput.value.trim(); if (!id) throw new Error("Enter a call_control_id first."); state.latest.status = await callTool("voice_monitor_call_status", { call_control_id: id }); renderJson(); resize(); }
       async function loadRecordings() { const args = JSON.parse(els.fallbackPre.textContent).voice_monitor_recordings; state.latest.recordings = await callTool("voice_monitor_recordings", { ...args, page_size: 50 }); renderJson(); resize(); }
+      async function loadDebugReport() { const args = JSON.parse(els.fallbackPre.textContent).voice_monitor_debug_report; state.latest.debug_report = await callTool("voice_monitor_debug_report", { ...args, page_size: 50 }); renderJson(); resize(); }
       window.addEventListener("message", (event) => {
         if (event.source !== window.parent) return;
         const message = event.data;
@@ -197,6 +205,7 @@ export const VOICE_MONITOR_UI_HTML = String.raw`<!doctype html>
       els.timelineButton.addEventListener("click", () => loadTimeline().catch((error) => setError(error.message || "Could not load timeline.")));
       els.statusButton.addEventListener("click", () => loadStatus().catch((error) => setError(error.message || "Could not load status.")));
       els.recordingsButton.addEventListener("click", () => loadRecordings().catch((error) => setError(error.message || "Could not load recordings.")));
+      els.debugButton.addEventListener("click", () => loadDebugReport().catch((error) => setError(error.message || "Could not build debug report.")));
       window.addEventListener("resize", resize);
       new ResizeObserver(resize).observe(document.documentElement);
       new ResizeObserver(resize).observe(document.body);

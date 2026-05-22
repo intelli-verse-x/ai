@@ -12,6 +12,10 @@ function fakeClient(overrides: Partial<VoiceMonitorClient> = {}): VoiceMonitorCl
     listCallEvents: async () => ({ data: [] }),
     getCallStatus: async () => ({ data: {} }),
     listRecordings: async () => ({ data: [] }),
+    getCallControlApplication: async () => ({ data: {} }),
+    listWebhookDeliveries: async () => ({ data: [] }),
+    listConversations: async () => ({ data: [] }),
+    getConversation: async () => ({ data: {} }),
     ...overrides
   };
 }
@@ -133,5 +137,80 @@ describe("Voice Monitor service", () => {
     await expect(
       service.recordings({ occurredAtGte: "2026-05-01T00:00:00.000Z", occurredAtLte: "2026-05-20T00:00:00.000Z" })
     ).rejects.toThrow(/capped/i);
+  });
+
+  it("builds a paved-road debug report from timeline, webhook, and conversation signals", async () => {
+    const service = createVoiceMonitorService(
+      fakeClient({
+        listCallEvents: async () => ({
+          data: [
+            {
+              name: "call.initiated",
+              type: "webhook",
+              occurred_at: "2026-05-20T12:00:00.000Z",
+              call_control_id: "call_control_keep_for_followup",
+              call_session_id: "session_keep_for_followup",
+              connection_id: "app_keep_for_followup"
+            },
+            {
+              name: "call.conversation.ended",
+              type: "webhook",
+              occurred_at: "2026-05-20T12:00:06.000Z",
+              call_control_id: "call_control_keep_for_followup",
+              call_session_id: "session_keep_for_followup",
+              connection_id: "app_keep_for_followup",
+              payload: {
+                assistant_id: "assistant_keep_for_followup",
+                conversation_id: "conversation_keep_for_followup",
+                llm_model: "meta-llama/Llama-3.3-70B-Instruct",
+                stt_model: "telnyx-stt",
+                tts_provider: "telnyx",
+                tts_voice_id: "en-US-Neural2-F",
+                result: "completed"
+              }
+            },
+            {
+              name: "call.hangup",
+              type: "webhook",
+              occurred_at: "2026-05-20T12:00:08.000Z",
+              call_control_id: "call_control_keep_for_followup",
+              hangup_cause: "normal-clearing"
+            }
+          ]
+        }),
+        getCallControlApplication: async () => ({
+          data: {
+            id: "app_keep_for_followup",
+            webhook_event_url: "https://example.test/voice"
+          }
+        }),
+        listWebhookDeliveries: async () => ({
+          data: [
+            { id: "delivery_1", attempt_status: "failed", status_code: 500 },
+            { id: "delivery_2", attempt_status: "delivered", status_code: 200 }
+          ]
+        }),
+        getConversation: async () => ({
+          data: {
+            id: "conversation_keep_for_followup",
+            status: "ended",
+            error_reason: "assistant-finished"
+          }
+        })
+      }),
+      { now: () => new Date("2026-05-20T12:10:00.000Z") }
+    );
+
+    const result = await service.debugReport({ callSessionId: "session_keep_for_followup", connectionId: "app_keep_for_followup" });
+
+    expect(result.correlation.call_control_ids).toContain("call_control_keep_for_followup");
+    expect(result.correlation.conversation_ids).toContain("conversation_keep_for_followup");
+    expect(result.debug_surfaces.timeline_inspection.event_count).toBe(3);
+    expect(result.debug_surfaces.webhook_failures.failure_count).toBe(1);
+    expect(result.debug_surfaces.latency_buckets.event_gap_buckets.s1_to_5).toBe(1);
+    expect(result.debug_surfaces.latency_buckets.event_gap_buckets.s5_to_15).toBe(1);
+    expect(result.debug_surfaces.provider_usage.tts_providers).toContain("telnyx");
+    expect(JSON.stringify(result.debug_surfaces.terminal_error_reasons)).toContain("normal-clearing");
+    expect(result.minimum_signal.capture_from_bootstrap).toContain("call_control_id");
   });
 });
