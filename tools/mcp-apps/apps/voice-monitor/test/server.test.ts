@@ -12,6 +12,7 @@ describe("Voice Monitor MCP server", () => {
       [
         "voice_monitor_dashboard",
         "voice_monitor_active_calls",
+        "voice_monitor_debug_report",
         "voice_monitor_call_status",
         "voice_monitor_call_timeline",
         "voice_monitor_list_options",
@@ -27,6 +28,7 @@ describe("Voice Monitor MCP server", () => {
     expect(JSON.stringify(tools.voice_monitor_active_calls?._meta)).toContain("app");
     expect(tools.voice_monitor_active_calls?.description).toMatch(/Call Control Application/i);
     expect(tools.voice_monitor_list_options?.description).toMatch(/dropdown/i);
+    expect(tools.voice_monitor_debug_report?.description).toMatch(/timeline inspection/i);
   });
 
   it("returns a safe tool error without network when TELNYX_API_KEY is missing", async () => {
@@ -95,6 +97,7 @@ describe("Voice Monitor MCP server", () => {
     expect(VOICE_MONITOR_UI_HTML).toContain("connectionSelect");
     expect(VOICE_MONITOR_UI_HTML).toContain("sipConnectionSelect");
     expect(VOICE_MONITOR_UI_HTML).toContain("idTypeSelect");
+    expect(VOICE_MONITOR_UI_HTML).toContain("voice_monitor_debug_report");
     expect(VOICE_MONITOR_UI_HTML).toMatch(/manual JSON fallback/i);
   });
 });

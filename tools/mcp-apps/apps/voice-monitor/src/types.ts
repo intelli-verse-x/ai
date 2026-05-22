@@ -74,11 +74,15 @@ export interface RecordingsInput extends PageInput {
 export interface VoiceMonitorClient {
   listConnections(input?: PageInput): Promise<TelnyxEnvelope<ConnectionData[]>>;
   listCallControlApplications(input?: PageInput): Promise<TelnyxEnvelope<CallControlApplicationData[]>>;
+  getCallControlApplication(id: string): Promise<TelnyxEnvelope<Record<string, unknown>>>;
   listPhoneNumbers(input?: PageInput): Promise<TelnyxEnvelope<VoiceNumberData[]>>;
   listActiveCalls(connectionId: string, input?: PageInput): Promise<TelnyxEnvelope>;
   listCallEvents(input: CallEventsInput): Promise<TelnyxEnvelope>;
   getCallStatus(callControlId: string): Promise<TelnyxEnvelope>;
   listRecordings(input: RecordingsInput): Promise<TelnyxEnvelope>;
+  listWebhookDeliveries(input?: WebhookDeliveriesInput): Promise<TelnyxEnvelope>;
+  listConversations(input?: ConversationsInput): Promise<TelnyxEnvelope>;
+  getConversation(conversationId: string): Promise<TelnyxEnvelope>;
 }
 
 export type OptionKind = "connection" | "call_control_application" | "voice_number";
@@ -146,6 +150,29 @@ export interface RecordingsRequest {
   connectionId?: string;
   occurredAtGte?: string;
   occurredAtLte?: string;
+  pageNumber?: number;
+  pageSize?: number;
+}
+
+export interface WebhookDeliveriesInput extends PageInput {
+  filterStatusCode?: string;
+  filterWebhookUrl?: string;
+  filterAttemptStatus?: string;
+}
+
+export interface ConversationsInput extends PageInput {
+  assistantId?: string;
+}
+
+export interface DebugReportRequest {
+  callControlId?: string;
+  callLegId?: string;
+  callSessionId?: string;
+  applicationSessionId?: string;
+  connectionId?: string;
+  assistantId?: string;
+  conversationId?: string;
+  webhookUrl?: string;
   pageNumber?: number;
   pageSize?: number;
 }

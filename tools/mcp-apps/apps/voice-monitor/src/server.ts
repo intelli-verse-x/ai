@@ -41,7 +41,7 @@ export function createServer(): McpServer {
     server,
     "voice_monitor_dashboard",
     "Open Voice Monitor",
-    "Open a single read-only Telnyx voice monitor workspace with preloaded dropdowns, active calls, call timelines, status lookup, and recording search.",
+    "Open a single read-only Telnyx voice monitor workspace with preloaded dropdowns, active calls, call timelines, status lookup, recordings, and paved-road debugging surfaces.",
     pagingSchema,
     async (service, input) => {
       const options = await service.listOptions({ pageNumber: input.page_number, pageSize: input.page_size });
@@ -157,6 +157,37 @@ export function createServer(): McpServer {
         connectionId: input.connection_id,
         occurredAtGte: input.occurred_at_gte,
         occurredAtLte: input.occurred_at_lte,
+        pageNumber: input.page_number,
+        pageSize: input.page_size
+      })
+  );
+
+  registerReadTool(
+    server,
+    "voice_monitor_debug_report",
+    "Build debug report",
+    "Summarize the paved-road debugging surfaces for a live voice AI flow: timeline inspection, webhook failures, latency buckets, provider usage, and terminal error reasons. Prefer IDs captured from bootstrap flow output or call.conversation.ended webhooks.",
+    {
+      call_control_id: optionalString.describe("Telnyx call_control_id from bootstrap output or a live webhook."),
+      call_leg_id: optionalString.describe("Optional call_leg_id for direct call_events lookup."),
+      call_session_id: optionalString.describe("Optional call_session_id for direct call_events lookup."),
+      application_session_id: optionalString.describe("Optional application_session_id when it differs from call_session_id."),
+      connection_id: optionalString.describe("Optional Call Control Application ID used by the paved-road flow."),
+      assistant_id: optionalString.describe("Optional AI assistant ID from the paved-road flow."),
+      conversation_id: optionalString.describe("Optional AI conversation ID from call.conversation.ended."),
+      webhook_url: optionalString.describe("Optional webhook URL override when the call control application lookup is unavailable."),
+      ...pagingSchema
+    },
+    async (service, input) =>
+      service.debugReport({
+        callControlId: input.call_control_id,
+        callLegId: input.call_leg_id,
+        callSessionId: input.call_session_id,
+        applicationSessionId: input.application_session_id,
+        connectionId: input.connection_id,
+        assistantId: input.assistant_id,
+        conversationId: input.conversation_id,
+        webhookUrl: input.webhook_url,
         pageNumber: input.page_number,
         pageSize: input.page_size
       })
