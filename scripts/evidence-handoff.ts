@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import type { ScanReport, SecretFinding } from "./publish-secret-scan.ts";
+import { buildEscalationRoute } from "./evidence-escalation.ts";
 
 export type IncidentClass = "publish_path" | "secret_exposure";
 export type EscalationState = "owner_notified" | "oncall_notified" | "cto_notified";
@@ -55,6 +56,20 @@ export interface EvidenceHandoffPayload {
     onCallGroupId: string;
     ackDeadlineUtc: string;
     escalationState: EscalationState;
+    currentEvent: string;
+    nextEscalationState?: EscalationState;
+    nextEscalationAtUtc?: string;
+    notificationTargets: {
+      owner: OwnerIdentity;
+      onCall: {
+        id: string;
+        contactTarget: string;
+      };
+      cto: {
+        id: string;
+        contactTarget: string;
+      };
+    };
   };
   confidence: ConfidenceMetadata;
   evidenceReferences: EvidenceReference[];
@@ -240,24 +255,6 @@ export function resolveOwner(input: {
   };
 }
 
-function getAckMinutes(incidentClass: IncidentClass, escalationState: EscalationState): number {
-  if (incidentClass === "publish_path") {
-    if (escalationState === "owner_notified") return 10;
-    if (escalationState === "oncall_notified") return 20;
-    return 30;
-  }
-
-  if (escalationState === "owner_notified") return 5;
-  if (escalationState === "oncall_notified") return 10;
-  return 15;
-}
-
-function addMinutes(timestampUtc: string, minutes: number): string {
-  const time = new Date(timestampUtc);
-  time.setUTCMinutes(time.getUTCMinutes() + minutes);
-  return time.toISOString();
-}
-
 function buildBasePayload(input: {
   incidentClass: IncidentClass;
   workflow: string;
@@ -271,7 +268,6 @@ function buildBasePayload(input: {
   ownerContactTarget?: string;
   onCallGroupId?: string;
   codeownersText?: string;
-  escalationState: EscalationState;
   confidence: ConfidenceMetadata;
   evidenceReferences: EvidenceReference[];
   metadata?: EvidenceHandoffPayload["metadata"];
@@ -282,6 +278,15 @@ function buildBasePayload(input: {
     ownerId: input.ownerId,
     ownerContactTarget: input.ownerContactTarget,
     codeownersText: input.codeownersText,
+  });
+  const onCallGroupId = input.onCallGroupId || DEFAULT_ONCALL_GROUP_ID;
+  const route = buildEscalationRoute({
+    incidentClass: input.incidentClass,
+    timestampUtc,
+    owner: ownerResolution.owner,
+    onCallGroupId,
+    confidenceLevel: input.confidence.level,
+    publishGateState: input.metadata?.gateState,
   });
 
   const payload: EvidenceHandoffPayload = {
@@ -297,9 +302,13 @@ function buildBasePayload(input: {
       owner: ownerResolution.owner,
       ownerResolutionState: ownerResolution.state,
       ownerResolutionSource: ownerResolution.source,
-      onCallGroupId: input.onCallGroupId || DEFAULT_ONCALL_GROUP_ID,
-      ackDeadlineUtc: addMinutes(timestampUtc, getAckMinutes(input.incidentClass, input.escalationState)),
-      escalationState: input.escalationState,
+      onCallGroupId,
+      ackDeadlineUtc: route.ackDeadlineUtc,
+      escalationState: route.escalationState,
+      currentEvent: route.currentEvent,
+      nextEscalationState: route.nextEscalationState,
+      nextEscalationAtUtc: route.nextEscalationAtUtc,
+      notificationTargets: route.targets,
     },
     confidence: input.confidence,
     evidenceReferences: input.evidenceReferences,
@@ -344,7 +353,6 @@ export function buildPublishPathPayload(input: PublishPathPayloadInput): Evidenc
     ownerContactTarget: input.ownerContactTarget,
     onCallGroupId: input.onCallGroupId,
     codeownersText: input.codeownersText,
-    escalationState: input.gateState === "override" ? "oncall_notified" : "owner_notified",
     confidence: {
       level: input.gateState === "override" ? "critical" : "high",
       source: "publish_gate",
@@ -406,7 +414,6 @@ export function buildSecretExposurePayload(input: SecretExposurePayloadInput): E
     ownerContactTarget: input.ownerContactTarget,
     onCallGroupId: input.onCallGroupId,
     codeownersText: input.codeownersText,
-    escalationState: "oncall_notified",
     confidence: {
       level: highestSeverity,
       source: "publish_secret_scan",
@@ -442,6 +449,12 @@ export function validateEvidenceHandoffPayload(payload: EvidenceHandoffPayload):
   }
   if (!payload.routing.onCallGroupId) {
     throw new Error("Missing on-call group id");
+  }
+  if (!isValidContactTarget(payload.routing.notificationTargets.onCall.contactTarget)) {
+    throw new Error(`Invalid on-call contact target: ${payload.routing.notificationTargets.onCall.contactTarget}`);
+  }
+  if (!isValidContactTarget(payload.routing.notificationTargets.cto.contactTarget)) {
+    throw new Error(`Invalid CTO contact target: ${payload.routing.notificationTargets.cto.contactTarget}`);
   }
   if (Number.isNaN(Date.parse(payload.timestampUtc)) || Number.isNaN(Date.parse(payload.routing.ackDeadlineUtc))) {
     throw new Error("Evidence handoff payload contains invalid timestamps");
