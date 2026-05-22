@@ -39,7 +39,7 @@ All API calls can fail with network errors, rate limits (429), validation errors
 or authentication errors (401). Always handle errors in production code:
 
 ```ruby
-assistant = client.ai.assistants.create(instructions: "You are a helpful assistant.", model: "openai/gpt-4o", name: "my-resource")
+assistant = client.ai.assistants.create(instructions: "You are a helpful assistant.", model: "openai/gpt-5.4", name: "my-resource")
 puts(assistant)
 ```
 
@@ -51,6 +51,7 @@ Common error codes: `401` invalid API key, `403` insufficient permissions,
 
 - **Phone numbers** must be in E.164 format (e.g., `+13125550001`). Include the `+` prefix and country code. No spaces, dashes, or parentheses.
 - **Pagination:** Use `.auto_paging_each` for automatic iteration: `page.auto_paging_each { |item| puts item.id }`.
+- **Current hosted OpenAI model:** Use `openai/gpt-5.4` when you want the current Telnyx-hosted GPT model for voice assistants.
 
 ## Reference Use Rules
 
@@ -78,7 +79,7 @@ Assistant creation is the entrypoint for any AI assistant integration. Agents ne
 | ... | | | +12 optional params in [references/api-details.md](references/api-details.md) |
 
 ```ruby
-assistant = client.ai.assistants.create(instructions: "You are a helpful assistant.", model: "openai/gpt-4o", name: "my-resource")
+assistant = client.ai.assistants.create(instructions: "You are a helpful assistant.", model: "openai/gpt-5.4", name: "my-resource")
 
 puts(assistant)
 ```

@@ -8,6 +8,12 @@
 - At least one phone number
 - AI credits or pay-as-you-go enabled
 
+## Model Selection
+
+- Use `openai/gpt-5.4` when you want the current Telnyx-hosted OpenAI reasoning model for voice assistants.
+- Prefer Telnyx-hosted models first for production voice flows. Keeping STT, LLM, TTS, and telephony on the same Telnyx-managed path removes an extra vendor hop and simplifies billing and operations.
+- Reach for a custom OpenAI-compatible endpoint only when you have a hard requirement that the hosted model selector does not meet.
+
 ## Quick Start
 
 ```bash
@@ -18,6 +24,7 @@ curl -X POST "https://api.telnyx.com/v2/ai/assistants" \
   -d '{
     "name": "Support Bot",
     "instructions": "You are a helpful customer support assistant. Be friendly and concise.",
+    "model": "openai/gpt-5.4",
     "voice": {"provider": "telnyx", "settings": {"voice_id": "en-US-Neural2-F"}}
   }'
 
@@ -46,7 +53,7 @@ curl -X POST "https://api.telnyx.com/v2/ai/assistants" \
         "pitch": 0
       }
     },
-    "model": "meta-llama/Llama-3.3-70B-Instruct",
+    "model": "openai/gpt-5.4",
     "greeting": "Hello! Thanks for calling Acme Corp. How can I help you today?",
     "hold_music_url": "https://example.com/hold.mp3"
   }'
@@ -69,12 +76,18 @@ curl -X POST "https://api.telnyx.com/v2/ai/assistants" \
   "id": "assistant-uuid",
   "name": "Sales Assistant",
   "instructions": "...",
-  "model": "meta-llama/Llama-3.3-70B-Instruct",
+  "model": "openai/gpt-5.4",
   "created_at": "2024-01-15T12:00:00Z"
 }
 ```
 
 > **Note:** The AI assistants API returns the object directly — not wrapped in a `"data"` field like other v2 endpoints.
+
+## Hosted Inference Guidance
+
+- `openai/gpt-5.4` is available directly in the assistant model selector and via the Assistants API.
+- Telnyx-hosted inference is the default recommendation for real-time voice agents because the LLM stays on the same private Telnyx path as transcription, synthesis, and call media.
+- If you need a provider or routing policy outside the hosted catalog, use the custom OpenAI-compatible LLM path deliberately and document the external dependency in your deployment runbook.
 
 ### List Assistants
 
@@ -207,12 +220,12 @@ assistant = requests.post(
     json={
         "name": "Support Bot",
         "instructions": "You are a helpful customer support agent.",
-        "model": "meta-llama/Llama-3.3-70B-Instruct",
+        "model": "openai/gpt-5.4",
         "voice": {"provider": "telnyx", "settings": {"voice_id": "en-US-Neural2-F"}},
         "greeting": "Hello! How can I help you today?"
     }
 ).json()
-assistant_id = assistant["data"]["id"]
+assistant_id = assistant["id"]
 print(f"Created: {assistant_id}")
 
 # List assistants
@@ -248,12 +261,12 @@ const createRes = await fetch(`${BASE_URL}/ai/assistants`, {
   body: JSON.stringify({
     name: "Support Bot",
     instructions: "You are a helpful customer support agent.",
-    model: "meta-llama/Llama-3.3-70B-Instruct",
+    model: "openai/gpt-5.4",
     voice: { provider: "telnyx", settings: { voice_id: "en-US-Neural2-F" } },
     greeting: "Hello! How can I help you today?",
   }),
 });
-const { data: assistant } = await createRes.json();
+const assistant = await createRes.json();
 console.log(`Created: ${assistant.id}`);
 
 // List assistants
@@ -287,10 +300,11 @@ toolkit = TelnyxToolkit(api_key="KEY...")
 # Create an AI assistant
 assistant = toolkit.execute("create_ai_assistant", {
     "name": "Support Bot",
-    "model": "meta-llama/Llama-3.3-70B-Instruct",
+    "model": "openai/gpt-5.4",
     "instructions": "You are a helpful customer support agent."
 })
-print(f"Created: {assistant['data']['id']}")
+assistant_id = assistant.get("data", {}).get("id") or assistant["id"]
+print(f"Created: {assistant_id}")
 
 # List assistants
 assistants = toolkit.execute("list_ai_assistants", {"page_size": 10})
@@ -333,6 +347,12 @@ curl -X PATCH "https://api.telnyx.com/v2/phone_numbers/{number_id}" \
 - `en-GB-Neural2-M` (male, UK)
 
 **ElevenLabs:** Provide your API key in voice settings for access to all ElevenLabs voices.
+
+## Operational Notes
+
+- For the lowest-friction deployment path, start with a Telnyx-hosted model such as `openai/gpt-5.4` and a Telnyx-managed voice.
+- Keep custom tool calling and knowledge-base attachments inside the assistant configuration where possible before adding an external orchestration layer.
+- Re-test latency and turn-taking after every model change. Moving from one hosted model to another is usually low risk; moving to a custom LLM endpoint changes the network path and failure surface.
 
 ## Pricing
 

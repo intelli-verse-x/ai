@@ -61,6 +61,8 @@ Common error codes: `401` invalid API key, `403` insufficient permissions,
 - Call Control is event-driven. After `dial()` or an inbound webhook, issue follow-up commands from webhook handlers using the `call_control_id` in the event payload.
 - Outbound and inbound flows are different: outbound calls start with `dial()`, while inbound calls must be answered from the incoming webhook before other commands run.
 - A publicly reachable webhook endpoint is required for real call control. Without it, calls may connect but your application cannot drive the live call state.
+- For real-time STT, `transcription_start` supports `transcription_engine: "Speechmatics"` with `transcription_model: "speechmatics/standard"` when you need interim results in a live call workflow.
+- For outbound screening-aware dialing, prefer `answering_machine_detection: "premium_ios_call_screening_detection"` over basic AMD when your workflow must react to iOS Call Screening or Live Voicemail before speaking or bridging.
 
 ## Reference Use Rules
 

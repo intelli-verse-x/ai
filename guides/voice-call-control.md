@@ -23,6 +23,12 @@ curl -X POST "https://api.telnyx.com/v2/calls" \
   }'
 ```
 
+## Current Voice Patterns
+
+- Use `transcription_start` with `transcription_engine: "Speechmatics"` and `transcription_model: "speechmatics/standard"` when you need real-time call transcription with interim results.
+- Use `answering_machine_detection: "premium_ios_call_screening_detection"` on outbound calls when you need to distinguish a live human from iOS Call Screening or Live Voicemail before connecting an agent or starting a voice AI flow.
+- Treat screened-call handling as a webhook-driven state machine. The value is not just the first AMD result, but the follow-up events that tell you when to speak, retry, or abort.
+
 ## API Reference
 
 ### Make a Call
@@ -110,6 +116,62 @@ curl -X POST "https://api.telnyx.com/v2/calls/{call_control_id}/actions/record_s
   -H "Content-Type: application/json" \
   -d '{"format": "wav"}'
 ```
+
+### Start Real-Time Transcription with Speechmatics
+
+**`POST /v2/calls/{call_control_id}/actions/transcription_start`**
+
+```bash
+curl -X POST "https://api.telnyx.com/v2/calls/{call_control_id}/actions/transcription_start" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transcription_engine": "Speechmatics",
+    "transcription_engine_config": {
+      "transcription_engine": "Speechmatics",
+      "language": "en",
+      "transcription_model": "speechmatics/standard",
+      "interim_results": true
+    }
+  }'
+```
+
+Speechmatics is available through Telnyx-managed transcription, so you keep the call-control integration and webhook shape you already use while swapping the STT engine and model.
+
+### Outbound Dialing with Premium AMD for iOS Call Screening
+
+**`POST /v2/calls`**
+
+```bash
+curl -X POST "https://api.telnyx.com/v2/calls" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "to": "+15559876543",
+    "from": "+15551234567",
+    "connection_id": "your-connection-id",
+    "webhook_url": "https://your-app.com/webhooks/voice",
+    "answering_machine_detection": "premium_ios_call_screening_detection",
+    "answering_machine_detection_config": {
+      "total_analysis_time_millis": 30000,
+      "greeting_duration_millis": 2000,
+      "prompt_end_timeout_millis": 30000
+    }
+  }'
+```
+
+Use this mode when your outbound workflow must react differently to:
+
+- a human answering immediately
+- a traditional voicemail greeting
+- an iOS Call Screening or Live Voicemail prompt
+
+The key webhooks are:
+
+- `call.machine.premium.detection.ended` for the initial Premium AMD classification
+- `call.machine.premium.greeting.ended` with `result=prompt_ended` when the iOS screening prompt finishes and your app can respond with who is calling and why
+- `call.machine.premium.call_screening.detected` with `result=screening` when Apple call-screening audio is detected
+- a second `call.machine.premium.detection.ended` after screening, because Telnyx restarts Premium AMD on the screened call
 
 ### Conference Calls
 
@@ -253,6 +315,48 @@ def handle_ivr(call_control_id: str, digits: str):
         )
 ```
 
+### Reacting to Speechmatics Interim Transcripts
+
+```python
+def handle_webhook(event: dict):
+    if event["data"]["event_type"] != "call.transcription":
+        return
+
+    transcription = event["data"]["payload"]["transcription_data"]
+    transcript = transcription["transcript"]
+
+    if not transcription["is_final"]:
+        print(f"Partial transcript: {transcript}")
+        return
+
+    print(f"Final transcript: {transcript}")
+```
+
+### Reacting to iOS Call Screening / Live Voicemail
+
+```python
+def handle_amd(event: dict):
+    event_type = event["data"]["event_type"]
+    payload = event["data"]["payload"]
+
+    if event_type == "call.machine.premium.greeting.ended" and payload["result"] == "prompt_ended":
+        # The screening prompt ended without a beep. This is the point where
+        # your app can identify the caller and intent for Apple Call Screening.
+        requests.post(
+            f"{BASE_URL}/calls/{payload['call_control_id']}/actions/speak",
+            headers=headers,
+            json={"payload": "This is Acme Support returning your call.", "voice": "female"},
+        )
+        return
+
+    if event_type == "call.machine.premium.call_screening.detected":
+        print("Call entered iOS screening flow; wait for the restarted AMD result.")
+        return
+
+    if event_type == "call.machine.premium.detection.ended":
+        print(f"Premium AMD result: {payload['result']}")
+```
+
 ## Error Handling
 
 | Error | HTTP Status | Resolution |
@@ -266,3 +370,5 @@ def handle_ivr(call_control_id: str, digits: str):
 
 - [Call Control API Reference](https://developers.telnyx.com/docs/api/v2/call-control)
 - [Call Control Documentation](https://developers.telnyx.com/docs/voice/call-control)
+- [Speech-to-Text with Voice API and TeXML](https://developers.telnyx.com/docs/voice/programmable-voice/speech-to-text)
+- [Answering Machine Detection](https://developers.telnyx.com/docs/voice/programmable-voice/answering-machine-detection)
