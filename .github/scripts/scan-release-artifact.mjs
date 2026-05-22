@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 function ensureGitleaks() {
   try {
@@ -91,7 +92,7 @@ export function scanReleaseArtifact(tarballPath) {
     execFileSync(
       "node",
       [
-        resolve(dirname(new URL(import.meta.url).pathname), "normalize-gitleaks-results.mjs"),
+        resolve(dirname(fileURLToPath(import.meta.url)), "normalize-gitleaks-results.mjs"),
         "--source-root",
         stagingRoot,
         reportPath,
