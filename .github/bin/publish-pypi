@@ -4,7 +4,13 @@
 
 set -eux
 
-cd "$(dirname "$0")/../../tools/python"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# No undocumented bypass: manual invocations use the same repo-local publish gate
+# as the GitHub Actions workflows.
+bash "$SCRIPT_DIR/check-publish-gate"
+
+cd "$SCRIPT_DIR/../../tools/python"
 
 # Clean previous builds
 rm -rf dist

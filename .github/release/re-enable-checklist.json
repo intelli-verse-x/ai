@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "state": "OPEN",
+  "requestId": "replace-with-approved-request-id",
+  "requestedAt": "2026-05-22T00:00:00Z",
+  "window": {
+    "startsAt": "2026-05-22T00:00:00Z",
+    "expiresAt": "2026-05-22T23:59:59Z"
+  },
+  "approver": {
+    "name": "",
+    "email": "",
+    "approvedAt": ""
+  },
+  "items": [
+    {
+      "id": "credential_rotation",
+      "title": "Credential rotation evidence recorded",
+      "required": true,
+      "passed": false,
+      "evidence": []
+    },
+    {
+      "id": "review_signoff",
+      "title": "Reviewer signoff recorded",
+      "required": true,
+      "passed": false,
+      "evidence": []
+    },
+    {
+      "id": "replacement_package_validation",
+      "title": "Replacement package validation output recorded",
+      "required": true,
+      "passed": false,
+      "evidence": []
+    }
+  ],
+  "notes": "Template record. Update this file with approved evidence and a fresh approval window before rerunning publish."
+}

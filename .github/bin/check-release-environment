@@ -5,6 +5,14 @@ set -eu
 
 errors=()
 
+# Read out the publish gate state without blocking PR validation. Publish jobs
+# enforce the same gate in strict mode before any package publish step runs.
+if ! GATE_READOUT="$(bash ./.github/bin/check-publish-gate --readout-only 2>&1)"; then
+  errors+=("Publish gate readout failed unexpectedly: $GATE_READOUT")
+else
+  echo "Publish gate status: $GATE_READOUT"
+fi
+
 # Check no internal URLs leaked into publishable files
 INTERNAL_HITS=$(grep -r "\.query\.prod\.telnyx\.io\|\.query\.dev\.telnyx\.io\|\.service\.consul\|\.internal\.telnyx" \
   tools/python/telnyx_agent_toolkit/ tools/typescript/src/ cli/src/ \

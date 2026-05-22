@@ -6,6 +6,11 @@
 set -euo pipefail
 
 PACKAGE_DIR="${1:-.}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+# No undocumented bypass: manual invocations use the same repo-local publish gate
+# as the GitHub Actions workflows.
+bash "$SCRIPT_DIR/check-publish-gate"
 
 cd "$PACKAGE_DIR"
 
@@ -14,7 +19,6 @@ PUBLISH_PROVENANCE_MODE="unknown"
 PUBLISH_CREDENTIAL_SOURCE="unknown"
 PACKAGE_NAME=""
 VERSION=""
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 EVIDENCE_DIR="$REPO_ROOT/.github/artifacts/publish-alert-evidence"
 MISSING_MAINTAINERS_JSON='[]'

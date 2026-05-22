@@ -29,6 +29,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check publish re-enable gate
+        run: bash ./.github/bin/check-publish-gate
+
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:

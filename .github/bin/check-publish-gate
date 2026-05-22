@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# Validate the repo-local re-enable checklist before any publish path runs.
+
+set -euo pipefail
+
+READOUT_ONLY=0
+CHECKLIST_PATH="${PUBLISH_GATE_CHECKLIST_PATH:-.github/release/re-enable-checklist.json}"
+NOW_OVERRIDE="${PUBLISH_GATE_NOW:-}"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --readout-only)
+      READOUT_ONLY=1
+      shift
+      ;;
+    --checklist)
+      CHECKLIST_PATH="${2:?missing checklist path}"
+      shift 2
+      ;;
+    --now)
+      NOW_OVERRIDE="${2:?missing timestamp}"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ "$CHECKLIST_PATH" = /* ]]; then
+  CHECKLIST_FILE="$CHECKLIST_PATH"
+else
+  CHECKLIST_FILE="$ROOT_DIR/$CHECKLIST_PATH"
+fi
+
+write_outputs() {
+  local status="$1"
+  local reason="$2"
+  local message="$3"
+  local payload
+
+  payload="$(jq -nc \
+    --arg status "$status" \
+    --arg reason "$reason" \
+    --arg message "$message" \
+    --arg checklist "$CHECKLIST_PATH" \
+    '{status: $status, reason: $reason, message: $message, checklist: $checklist}')"
+
+  echo "$payload"
+
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    {
+      echo "publish_gate_status=$status"
+      echo "publish_gate_reason=$reason"
+      echo "publish_gate_checklist=$CHECKLIST_PATH"
+      echo "publish_gate_message<<EOF"
+      echo "$message"
+      echo "EOF"
+      echo "publish_gate_payload=$payload"
+    } >> "$GITHUB_OUTPUT"
+  fi
+}
+
+fail_gate() {
+  local reason="$1"
+  local message="$2"
+
+  write_outputs "blocked" "$reason" "$message"
+
+  if [[ "$READOUT_ONLY" -eq 1 ]]; then
+    echo "Publish gate readout: blocked by $reason" >&2
+    exit 0
+  fi
+
+  echo "::error title=Publish gate blocked::$reason $message" >&2
+  echo "Rollback path: refresh $CHECKLIST_PATH with corrected evidence/window data and rerun the workflow. No code rollback is required." >&2
+  exit 1
+}
+
+parse_timestamp() {
+  python3 - "$1" <<'PY'
+import datetime
+import sys
+
+raw = sys.argv[1].strip()
+if not raw:
+    raise SystemExit(1)
+
+normalized = raw.replace("Z", "+00:00")
+dt = datetime.datetime.fromisoformat(normalized)
+if dt.tzinfo is None:
+    raise SystemExit(1)
+
+print(int(dt.timestamp()))
+PY
+}
+
+if [[ ! -f "$CHECKLIST_FILE" ]]; then
+  fail_gate "CHECKLIST_MISSING" "Checklist file not found at $CHECKLIST_PATH."
+fi
+
+if ! jq -e . "$CHECKLIST_FILE" >/dev/null 2>&1; then
+  fail_gate "CHECKLIST_INVALID" "Checklist file at $CHECKLIST_PATH is not valid JSON."
+fi
+
+STATE="$(jq -r '.state // empty' "$CHECKLIST_FILE")"
+if [[ -z "$STATE" ]]; then
+  fail_gate "CHECKLIST_INVALID" "Checklist file at $CHECKLIST_PATH is missing .state."
+fi
+STATE="$(printf '%s' "$STATE" | tr '[:lower:]' '[:upper:]')"
+
+if [[ "$STATE" == "EXPIRED" ]]; then
+  fail_gate "CHECKLIST_EXPIRED" "Checklist state is EXPIRED."
+fi
+
+if [[ "$STATE" != "APPROVED" ]]; then
+  fail_gate "CHECKLIST_NOT_APPROVED" "Checklist state must be APPROVED before publish can proceed; found $STATE."
+fi
+
+WINDOW_START="$(jq -r '.window.startsAt // empty' "$CHECKLIST_FILE")"
+WINDOW_END="$(jq -r '.window.expiresAt // empty' "$CHECKLIST_FILE")"
+if [[ -z "$WINDOW_START" || -z "$WINDOW_END" ]]; then
+  fail_gate "CHECKLIST_INVALID" "Checklist must include window.startsAt and window.expiresAt."
+fi
+
+if ! START_TS="$(parse_timestamp "$WINDOW_START" 2>/dev/null)"; then
+  fail_gate "CHECKLIST_INVALID" "window.startsAt is not a valid RFC 3339 timestamp."
+fi
+
+if ! END_TS="$(parse_timestamp "$WINDOW_END" 2>/dev/null)"; then
+  fail_gate "CHECKLIST_INVALID" "window.expiresAt is not a valid RFC 3339 timestamp."
+fi
+
+NOW_VALUE="${NOW_OVERRIDE:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}"
+if ! NOW_TS="$(parse_timestamp "$NOW_VALUE" 2>/dev/null)"; then
+  fail_gate "CHECKLIST_INVALID" "Current gate time is not a valid RFC 3339 timestamp: $NOW_VALUE."
+fi
+
+if (( NOW_TS < START_TS )); then
+  fail_gate "CHECKLIST_WINDOW_NOT_OPEN" "Checklist approval window does not open until $WINDOW_START."
+fi
+
+if (( NOW_TS > END_TS )); then
+  fail_gate "CHECKLIST_EXPIRED" "Checklist approval window expired at $WINDOW_END."
+fi
+
+APPROVER_NAME="$(jq -r '.approver.name // empty' "$CHECKLIST_FILE")"
+APPROVER_EMAIL="$(jq -r '.approver.email // empty' "$CHECKLIST_FILE")"
+APPROVED_AT="$(jq -r '.approver.approvedAt // empty' "$CHECKLIST_FILE")"
+if [[ -z "$APPROVER_NAME" || -z "$APPROVER_EMAIL" || -z "$APPROVED_AT" ]]; then
+  fail_gate "APPROVER_SIGNOFF_MISSING" "Checklist must include approver.name, approver.email, and approver.approvedAt."
+fi
+
+if ! APPROVED_TS="$(parse_timestamp "$APPROVED_AT" 2>/dev/null)"; then
+  fail_gate "CHECKLIST_INVALID" "approver.approvedAt is not a valid RFC 3339 timestamp."
+fi
+
+if (( APPROVED_TS < START_TS || APPROVED_TS > END_TS )); then
+  fail_gate "APPROVER_SIGNOFF_INVALID" "approver.approvedAt must fall within the approval window."
+fi
+
+REQUIRED_COUNT="$(jq '[.items[]? | select((.required // false) == true)] | length' "$CHECKLIST_FILE")"
+if [[ "$REQUIRED_COUNT" == "0" ]]; then
+  fail_gate "CHECKLIST_INVALID" "Checklist must define at least one required item."
+fi
+
+INCOMPLETE_ITEMS="$(jq -r '[.items[]? | select((.required // false) == true and (.passed // false) != true) | .id // .title // "unnamed-item"] | join(",")' "$CHECKLIST_FILE")"
+if [[ -n "$INCOMPLETE_ITEMS" ]]; then
+  fail_gate "CHECKLIST_ITEMS_INCOMPLETE" "Required checklist items are not passed: $INCOMPLETE_ITEMS."
+fi
+
+ITEMS_WITHOUT_EVIDENCE="$(jq -r '[.items[]? | select((.required // false) == true and (((.evidence // []) | type) != "array" or ((.evidence // []) | length) == 0)) | .id // .title // "unnamed-item"] | join(",")' "$CHECKLIST_FILE")"
+if [[ -n "$ITEMS_WITHOUT_EVIDENCE" ]]; then
+  fail_gate "EVIDENCE_MISSING" "Required checklist items are missing evidence: $ITEMS_WITHOUT_EVIDENCE."
+fi
+
+write_outputs "approved" "APPROVED" "Checklist is approved and within the active re-enable window."
