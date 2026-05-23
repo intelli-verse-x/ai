@@ -1,15 +1,15 @@
 {
   "name": "@telnyx/mcp",
   "version": "0.1.0",
-  "description": "Telnyx MCP server — proxies to the remote Telnyx MCP endpoint for use with Claude Desktop, Cursor, and other MCP clients",
+  "description": "Telnyx MCP server \u2014 proxies to the remote Telnyx MCP endpoint for use with Claude Desktop, Cursor, and other MCP clients",
   "main": "dist/index.js",
   "bin": {
     "telnyx-mcp": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/cli.js",
-    "dev": "npx tsx src/cli.ts"
+    "build": "node init && tsc",
+    "start": "node init && node dist/cli.js",
+    "dev": "node init && npx tsx src/cli.ts"
   },
   "keywords": [
     "telnyx",
