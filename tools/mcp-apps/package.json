@@ -13,12 +13,12 @@
     "apps/*"
   ],
   "scripts": {
-    "start": "node dist/src/index.js",
-    "start:http": "node dist/src/index.js",
-    "dev:http": "tsx src/index.ts",
+    "start": "node init && node dist/src/index.js",
+    "start:http": "node init && node dist/src/index.js",
+    "dev:http": "node init && tsx src/index.ts",
     "test": "vitest run && npm --workspaces run test",
     "typecheck": "tsc --noEmit -p tsconfig.json && npm --workspaces run typecheck",
-    "build": "tsc -p tsconfig.json && npm --workspaces run build"
+    "build": "node init && tsc -p tsconfig.json && npm --workspaces run build"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.3",
