@@ -210,6 +210,8 @@ Curl-first operational guides for common Telnyx workflows — SMS messaging, voi
 
 For Edge Compute specifically, the goal is to make the handoff testable fast: start from a real `telnyx-edge` example, deploy it, and let `team-telnyx/ai` orchestrate against that live endpoint.
 
+For the managed-agent packaging pattern that ties discovery, skills, MCP apps, and least-privilege operations together, see [Managed Telecom Agents](/managed-telecom-agents.md).
+
 See [Guides](/guides) for the full list.
 
 ## Edge Compute
