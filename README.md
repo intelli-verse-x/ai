@@ -202,6 +202,7 @@ Use MCP Apps when the agent should stay on a read-first or preview-first contrac
 
 Current apps:
 
+- Governed Communications (`tools/mcp-apps/apps/governed-communications`)
 - Number Intelligence (`tools/mcp-apps/apps/number-intelligence`)
 - Usage & Cost Explorer (`tools/mcp-apps/apps/usage-cost-explorer`)
 - Voice Monitor (`tools/mcp-apps/apps/voice-monitor`)
@@ -214,6 +215,8 @@ The public docs-facing MCP Apps discovery contract is intended to live on `https
 - `https://developers.telnyx.com/.well-known/mcp-apps.json`
 - `https://developers.telnyx.com/apps/number-intelligence`
 - `https://developers.telnyx.com/apps/number-intelligence/mcp`
+
+The registry and per-app discovery document are meant to stay machine-readable and lightweight: they expose bearer-auth expectations, exact MCP URLs, tool names, and `ui://` resources without requiring an agent to parse the heavier docs shell first.
 
 From the repo root, `npm run verify:live-docs-mcp-apps` probes that hosted surface and reports whether the public registry, per-app discovery document, tool annotations, and `ui://` resources are actually visible end-to-end.
 
