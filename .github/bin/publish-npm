@@ -22,6 +22,7 @@ cd "$REPO_ROOT/$PACKAGE_DIR"
 PACKAGE_NAME="$(jq -r -e '.name' ./package.json)"
 VERSION="$(jq -r -e '.version' ./package.json)"
 RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-team-telnyx/ai}/actions/runs/${GITHUB_RUN_ID:-0}"
+REPO_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 TMP_DIR="$(mktemp -d)"
 SCAN_REPORT_PATH="$TMP_DIR/scan-report.json"
 HANDOFF_DIR="$TMP_DIR/evidence-handoff"
@@ -30,6 +31,12 @@ HANDOFF_PATH="$HANDOFF_DIR/$(basename "$PACKAGE_DIR")-${PUBLISH_NPM_GATE_STATE}.
 emit_handoff_payload() {
   local mode="$1"
   shift
+  local credential_source="unknown"
+  if [[ -n "${NPM_TOKEN:-}" ]]; then
+    credential_source="npm_token"
+  elif [[ -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+    credential_source="github_actions_oidc"
+  fi
   env \
     EVIDENCE_PACKAGE_NAME="$PACKAGE_NAME" \
     EVIDENCE_PACKAGE_DIR="$PACKAGE_DIR" \
@@ -45,6 +52,13 @@ emit_handoff_payload() {
     EVIDENCE_WORKFLOW_SUMMARY_PATH="${GITHUB_STEP_SUMMARY:-}" \
     EVIDENCE_AUDIT_LOG_PATH="$TMP_DIR/publish-audit-log.txt" \
     EVIDENCE_SCAN_REPORT_PATH="$SCAN_REPORT_PATH" \
+    EVIDENCE_WORKSPACE_ID="${GITHUB_WORKSPACE:-$REPO_ROOT}" \
+    EVIDENCE_REPOSITORY_ROOT="$REPO_ROOT" \
+    EVIDENCE_REPO_SHA="$REPO_SHA" \
+    EVIDENCE_CREDENTIAL_SOURCE="$credential_source" \
+    EVIDENCE_REGISTRY_WEBHOOK="${EVIDENCE_REGISTRY_WEBHOOK:-}" \
+    EVIDENCE_PROVENANCE_URL="${EVIDENCE_PROVENANCE_URL:-}" \
+    EVIDENCE_VERIFICATION_COMMANDS="$(printf 'git -C %s rev-parse HEAD\ngit -C %s checkout %s\ngit -C %s status --short' "$REPO_ROOT" "$REPO_ROOT" "$REPO_SHA" "$REPO_ROOT")" \
     EVIDENCE_OUTPUT_PATH="$HANDOFF_PATH" \
     npx --yes tsx "$REPO_ROOT/scripts/evidence-handoff-cli.ts" "$mode" "$@"
 }
@@ -67,6 +81,8 @@ if [[ "$PUBLISH_NPM_ENABLED" != "true" || "$PUBLISH_NPM_GATE_STATE" == "disabled
       echo "- package: \`$PACKAGE_NAME\`"
       echo "- incident: \`${PUBLISH_DISABLE_INCIDENT_ID:-${GITHUB_RUN_ID:-manual}}\`"
       echo "- reason: ${PUBLISH_DISABLE_REASON:-publish gate triggered}"
+      echo "- workspace: \`${GITHUB_WORKSPACE:-$REPO_ROOT}\`"
+      echo "- repo sha: \`$REPO_SHA\`"
       echo "- evidence payload: \`$HANDOFF_PATH\`"
     } >> "$GITHUB_STEP_SUMMARY"
   fi
@@ -83,6 +99,8 @@ if [[ "$PUBLISH_NPM_GATE_STATE" == "override" ]]; then
       echo "- package: \`$PACKAGE_NAME\`"
       echo "- incident: \`${PUBLISH_DISABLE_INCIDENT_ID:-${GITHUB_RUN_ID:-manual}}\`"
       echo "- reason: ${PUBLISH_DISABLE_REASON:-publish gate override recorded}"
+      echo "- workspace: \`${GITHUB_WORKSPACE:-$REPO_ROOT}\`"
+      echo "- repo sha: \`$REPO_SHA\`"
       echo "- evidence payload: \`$HANDOFF_PATH\`"
     } >> "$GITHUB_STEP_SUMMARY"
   fi
@@ -112,6 +130,8 @@ if ! (cd "$REPO_ROOT" && npx --yes tsx scripts/publish-secret-scan.ts --ci "$PAC
       echo "- package: \`$PACKAGE_NAME\`"
       echo "- incident: \`${PUBLISH_DISABLE_INCIDENT_ID}\`"
       echo "- report: \`$SCAN_REPORT_PATH\`"
+      echo "- workspace: \`${GITHUB_WORKSPACE:-$REPO_ROOT}\`"
+      echo "- repo sha: \`$REPO_SHA\`"
       echo "- evidence payload: \`$HANDOFF_PATH\`"
     } >> "$GITHUB_STEP_SUMMARY"
   fi

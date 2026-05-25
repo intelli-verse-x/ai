@@ -6,6 +6,7 @@ import {
   buildSecretExposurePayload,
   resolveOwner,
 } from "../scripts/evidence-handoff.ts";
+import { assessWorkspaceIntegrity } from "../scripts/evidence-escalation.ts";
 import type { ScanReport } from "../scripts/publish-secret-scan.ts";
 import { scanPaths } from "../scripts/publish-secret-scan.ts";
 
@@ -32,6 +33,14 @@ describe("evidence handoff payload builder", () => {
       workflowSummaryPath: "/tmp/summary.md",
       auditLogPath: "/tmp/publish-audit-log.txt",
       runUrl: "https://github.com/team-telnyx/ai/actions/runs/123",
+      sourceIssueId: "TEL-116",
+      workspaceIdentity: "paperclip-workspace-123",
+      repoSha: "2a35f387abcd1234abcd1234abcd1234abcd1234",
+      repositoryRoot: "/repo",
+      verificationCommands: [
+        "git -C /repo rev-parse HEAD",
+        "git -C /repo checkout 2a35f387abcd1234abcd1234abcd1234abcd1234",
+      ],
     });
 
     assert.equal(payload.incidentClass, "publish_path");
@@ -44,6 +53,16 @@ describe("evidence handoff payload builder", () => {
     assert.equal(payload.routing.nextEscalationAtUtc, "2026-05-22T12:10:00.000Z");
     assert.equal(payload.routing.notificationTargets.onCall.contactTarget, "group:release-oncall");
     assert.equal(payload.metadata.gateState, "disabled");
+    assert.equal(payload.metadata.registryOwnerSnapshot.owner.id, "aisling404");
+    assert.equal(payload.metadata.registryOwnerSnapshot.resolutionState, "resolved_owner");
+    assert.equal(payload.metadata.containment.state, "publish_disabled");
+    assert.equal(payload.metadata.containment.status, "active");
+    assert.equal(payload.metadata.dependencyAvailability.credentialSource, "unknown");
+    assert.equal(payload.metadata.dependencyAvailability.missingCredentialSource, true);
+    assert.equal(payload.snapshot.sourceIssueId, "TEL-116");
+    assert.equal(payload.snapshot.workspaceIdentity, "paperclip-workspace-123");
+    assert.equal(payload.snapshot.repoSha, "2a35f387abcd1234abcd1234abcd1234abcd1234");
+    assert.equal(payload.metadata.workspaceIntegrity.dedupeKey, "workspace-integrity:TEL-116");
     assert.equal(payload.evidenceReferences.length, 2);
   });
 
@@ -62,12 +81,22 @@ describe("evidence handoff payload builder", () => {
       codeownersText,
       workflowSummaryPath: "/tmp/summary.md",
       auditLogPath: "/tmp/publish-audit-log.txt",
+      sourceIssueId: "TEL-116",
+      workspaceIdentity: "paperclip-workspace-123",
+      repoSha: "2a35f387abcd1234abcd1234abcd1234abcd1234",
+      repositoryRoot: "/repo",
+      verificationCommands: [
+        "git -C /repo rev-parse HEAD",
+        "git -C /repo checkout 2a35f387abcd1234abcd1234abcd1234abcd1234",
+      ],
     });
 
     assert.equal(payload.routing.escalationState, "oncall_notified");
     assert.equal(payload.routing.ackDeadlineUtc, "2026-05-22T12:20:00.000Z");
     assert.equal(payload.routing.nextEscalationState, "cto_notified");
     assert.equal(payload.routing.owner.id, "aaronjo-Telnyx");
+    assert.equal(payload.metadata.containment.state, "publish_override");
+    assert.equal(payload.metadata.containment.status, "partial");
   });
 
   it("builds secret-exposure payloads without leaking raw findings and escalates to CTO for live critical findings", () => {
@@ -87,6 +116,14 @@ describe("evidence handoff payload builder", () => {
       scanReportPath: "/tmp/scan-report.json",
       runUrl: "https://github.com/team-telnyx/ai/actions/runs/456",
       report,
+      sourceIssueId: "TEL-116",
+      workspaceIdentity: "paperclip-workspace-123",
+      repoSha: "2a35f387abcd1234abcd1234abcd1234abcd1234",
+      repositoryRoot: "/repo",
+      verificationCommands: [
+        "git -C /repo rev-parse HEAD",
+        "git -C /repo checkout 2a35f387abcd1234abcd1234abcd1234abcd1234",
+      ],
     });
 
     assert.equal(payload.incidentClass, "secret_exposure");
@@ -95,6 +132,8 @@ describe("evidence handoff payload builder", () => {
     assert.equal(payload.routing.ackDeadlineUtc, "2026-05-22T12:00:00.000Z");
     assert.equal(payload.routing.nextEscalationState, undefined);
     assert.equal(payload.confidence.source, "publish_secret_scan");
+    assert.equal(payload.metadata.containment.state, "secret_rotation_required");
+    assert.equal(payload.metadata.containment.status, "active");
     assert.ok(payload.evidenceReferences.some((reference) => reference.type === "secret_finding"));
 
     const json = JSON.stringify(payload);
@@ -142,6 +181,14 @@ describe("evidence handoff payload builder", () => {
       onCallGroupId: "release-oncall",
       codeownersText,
       report,
+      sourceIssueId: "TEL-116",
+      workspaceIdentity: "paperclip-workspace-123",
+      repoSha: "2a35f387abcd1234abcd1234abcd1234abcd1234",
+      repositoryRoot: "/repo",
+      verificationCommands: [
+        "git -C /repo rev-parse HEAD",
+        "git -C /repo checkout 2a35f387abcd1234abcd1234abcd1234abcd1234",
+      ],
     });
 
     assert.equal(payload.routing.escalationState, "oncall_notified");
@@ -161,5 +208,27 @@ describe("evidence handoff payload builder", () => {
     assert.equal(resolution.owner.id, "aaronjo-Telnyx");
     assert.equal(resolution.owner.contactTarget, "github:@aaronjo-Telnyx");
     assert.match(resolution.reason || "", /invalid explicit owner/i);
+  });
+
+  it("emits one workspace-integrity blocker path for reviewer snapshot mismatches", () => {
+    const assessment = assessWorkspaceIntegrity({
+      sourceIssueId: "TEL-116",
+      evidenceSnapshot: {
+        workspaceIdentity: "paperclip-workspace-123",
+        repoSha: "2a35f387abcd1234abcd1234abcd1234abcd1234",
+      },
+      reviewerSnapshot: {
+        workspaceIdentity: "paperclip-workspace-456",
+        repoSha: "d7ec0520abcd1234abcd1234abcd1234abcd1234",
+      },
+      activeBlockerIssueId: "TEL-254",
+    });
+
+    assert.equal(assessment.status, "mismatch");
+    assert.deepEqual(assessment.mismatchFields, ["workspaceIdentity", "repoSha"]);
+    assert.equal(assessment.blocker.dedupeKey, "workspace-integrity:TEL-116");
+    assert.equal(assessment.blocker.shouldCreateBlocker, false);
+    assert.equal(assessment.blocker.activeBlockerIssueId, "TEL-254");
+    assert.equal(assessment.blocker.suppressCorrectiveChildren, true);
   });
 });

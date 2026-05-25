@@ -1,7 +1,9 @@
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import type { ScanReport, SecretFinding } from "./publish-secret-scan.ts";
-import { buildEscalationRoute } from "./evidence-escalation.ts";
+import { assessWorkspaceIntegrity, buildEscalationRoute } from "./evidence-escalation.ts";
 
 export type IncidentClass = "publish_path" | "secret_exposure";
 export type EscalationState = "owner_notified" | "oncall_notified" | "cto_notified";
@@ -40,6 +42,15 @@ export interface EvidenceReference {
   confidence?: SecretFinding["confidence"];
 }
 
+export interface ExecutionSnapshot {
+  sourceIssueId: string;
+  workspaceIdentity: string;
+  repoSha: string;
+  repositoryRoot: string;
+  packageDir: string;
+  verificationCommands: string[];
+}
+
 export interface EvidenceHandoffPayload {
   schemaVersion: "1";
   incidentClass: IncidentClass;
@@ -73,10 +84,35 @@ export interface EvidenceHandoffPayload {
   };
   confidence: ConfidenceMetadata;
   evidenceReferences: EvidenceReference[];
+  snapshot: ExecutionSnapshot;
   metadata: {
     fallbackOwnerUsed: boolean;
     ownerResolutionReason?: string;
     gateState?: "enabled" | "disabled" | "override";
+    registryOwnerSnapshot: {
+      owner: OwnerIdentity;
+      resolutionState: OwnerResolutionState;
+      resolutionSource: OwnerResolution["source"];
+      missingOwnerContactTarget: boolean;
+    };
+    containment: {
+      state: "publish_disabled" | "publish_override" | "publish_enabled" | "secret_rotation_required";
+      status: "active" | "partial" | "none";
+      summary: string;
+    };
+    dependencyAvailability: {
+      credentialSource: string;
+      missingCredentialSource: boolean;
+      registryWebhook: string;
+      missingRegistryWebhook: boolean;
+      provenanceUrl: string;
+      missingProvenanceUrl: boolean;
+    };
+    workspaceIntegrity: {
+      dedupeKey: string;
+      suppressCorrectiveChildrenWhileBlocked: boolean;
+      reviewerAction: string;
+    };
     summary?: Record<string, number | string | boolean>;
   };
 }
@@ -97,6 +133,14 @@ export interface PublishPathPayloadInput {
   workflowSummaryPath?: string;
   auditLogPath?: string;
   runUrl?: string;
+  credentialSource?: string;
+  registryWebhook?: string;
+  provenanceUrl?: string;
+  sourceIssueId?: string;
+  workspaceIdentity?: string;
+  repoSha?: string;
+  repositoryRoot?: string;
+  verificationCommands?: string[];
 }
 
 export interface SecretExposurePayloadInput {
@@ -114,6 +158,14 @@ export interface SecretExposurePayloadInput {
   codeownersText?: string;
   runUrl?: string;
   scanReportPath?: string;
+  credentialSource?: string;
+  registryWebhook?: string;
+  provenanceUrl?: string;
+  sourceIssueId?: string;
+  workspaceIdentity?: string;
+  repoSha?: string;
+  repositoryRoot?: string;
+  verificationCommands?: string[];
 }
 
 const DEFAULT_ONCALL_GROUP_ID = "release-oncall";
@@ -126,6 +178,78 @@ type CodeownerEntry = {
   pattern: string;
   owners: string[];
 };
+
+type SnapshotInput = {
+  sourceIssueId?: string;
+  workflow: string;
+  incidentId: string;
+  packageDir: string;
+  workspaceIdentity?: string;
+  repoSha?: string;
+  repositoryRoot?: string;
+  verificationCommands?: string[];
+};
+
+type DependencyAvailability = EvidenceHandoffPayload["metadata"]["dependencyAvailability"];
+
+function withPlaceholder(value: string | undefined, placeholder: string): { value: string; missing: boolean } {
+  if (value && value.trim().length > 0) {
+    return { value, missing: false };
+  }
+  return { value: placeholder, missing: true };
+}
+
+function buildDependencyAvailability(input: {
+  credentialSource?: string;
+  registryWebhook?: string;
+  provenanceUrl?: string;
+}): DependencyAvailability {
+  const credentialSource = withPlaceholder(input.credentialSource, "unknown");
+  const registryWebhook = withPlaceholder(input.registryWebhook, "unknown");
+  const provenanceUrl = withPlaceholder(input.provenanceUrl, "unknown");
+
+  return {
+    credentialSource: credentialSource.value,
+    missingCredentialSource: credentialSource.missing,
+    registryWebhook: registryWebhook.value,
+    missingRegistryWebhook: registryWebhook.missing,
+    provenanceUrl: provenanceUrl.value,
+    missingProvenanceUrl: provenanceUrl.missing,
+  };
+}
+
+function buildContainmentMetadata(input: {
+  incidentClass: IncidentClass;
+  gateState?: "enabled" | "disabled" | "override";
+}): EvidenceHandoffPayload["metadata"]["containment"] {
+  if (input.incidentClass === "publish_path") {
+    if (input.gateState === "disabled") {
+      return {
+        state: "publish_disabled",
+        status: "active",
+        summary: "Publish remains blocked while the incident is triaged.",
+      };
+    }
+    if (input.gateState === "override") {
+      return {
+        state: "publish_override",
+        status: "partial",
+        summary: "A publish override is active and requires escalated review.",
+      };
+    }
+    return {
+      state: "publish_enabled",
+      status: "none",
+      summary: "No automated publish containment is currently active.",
+    };
+  }
+
+  return {
+    state: "secret_rotation_required",
+    status: "active",
+    summary: "Further publish must stay blocked until exposed credentials are revoked or rotated.",
+  };
+}
 
 function normalizePath(path: string): string {
   return path.replaceAll("\\", "/").replace(/\/+/g, "/").replace(/^\.?\//, "");
@@ -180,6 +304,49 @@ function codeownersPatternMatches(pattern: string, path: string): boolean {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function runGit(args: string[], cwd: string): string | undefined {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return undefined;
+  }
+}
+
+function buildExecutionSnapshot(input: SnapshotInput): ExecutionSnapshot {
+  const repositoryRoot = input.repositoryRoot
+    ? resolve(input.repositoryRoot)
+    : runGit(["rev-parse", "--show-toplevel"], process.cwd()) ?? process.cwd();
+  const repoSha = input.repoSha ?? runGit(["rev-parse", "HEAD"], repositoryRoot);
+
+  if (!repoSha) {
+    throw new Error("Unable to resolve repository SHA for evidence snapshot");
+  }
+
+  const workspaceIdentity = input.workspaceIdentity
+    ?? process.env.PAPERCLIP_TASK_ID
+    ?? process.env.GITHUB_WORKSPACE
+    ?? repositoryRoot;
+
+  const verificationCommands = input.verificationCommands?.filter(Boolean) ?? [
+    `git -C ${repositoryRoot} rev-parse HEAD`,
+    `git -C ${repositoryRoot} checkout ${repoSha}`,
+    `git -C ${repositoryRoot} status --short`,
+  ];
+
+  return {
+    sourceIssueId: input.sourceIssueId ?? input.incidentId,
+    workspaceIdentity,
+    repoSha,
+    repositoryRoot,
+    packageDir: normalizePath(input.packageDir).replace(/\/$/, ""),
+    verificationCommands,
+  };
 }
 
 function resolveOwnerFromCodeowners(packageDir: string, codeownersText?: string): OwnerResolution | null {
@@ -270,6 +437,8 @@ function buildBasePayload(input: {
   codeownersText?: string;
   confidence: ConfidenceMetadata;
   evidenceReferences: EvidenceReference[];
+  snapshot: SnapshotInput;
+  dependencyAvailability?: DependencyAvailability;
   metadata?: EvidenceHandoffPayload["metadata"];
 }): EvidenceHandoffPayload {
   const timestampUtc = input.timestampUtc ?? new Date().toISOString();
@@ -287,6 +456,23 @@ function buildBasePayload(input: {
     onCallGroupId,
     confidenceLevel: input.confidence.level,
     publishGateState: input.metadata?.gateState,
+  });
+  const snapshot = buildExecutionSnapshot(input.snapshot);
+  const workspaceIntegrity = assessWorkspaceIntegrity({
+    sourceIssueId: snapshot.sourceIssueId,
+    evidenceSnapshot: {
+      workspaceIdentity: snapshot.workspaceIdentity,
+      repoSha: snapshot.repoSha,
+    },
+    reviewerSnapshot: {
+      workspaceIdentity: snapshot.workspaceIdentity,
+      repoSha: snapshot.repoSha,
+    },
+  });
+  const dependencyAvailability = input.dependencyAvailability ?? buildDependencyAvailability({});
+  const containment = input.metadata?.containment ?? buildContainmentMetadata({
+    incidentClass: input.incidentClass,
+    gateState: input.metadata?.gateState,
   });
 
   const payload: EvidenceHandoffPayload = {
@@ -312,9 +498,23 @@ function buildBasePayload(input: {
     },
     confidence: input.confidence,
     evidenceReferences: input.evidenceReferences,
+    snapshot,
     metadata: {
       fallbackOwnerUsed: ownerResolution.state === "fallback_owner",
       ownerResolutionReason: ownerResolution.reason,
+      registryOwnerSnapshot: {
+        owner: ownerResolution.owner,
+        resolutionState: ownerResolution.state,
+        resolutionSource: ownerResolution.source,
+        missingOwnerContactTarget: !isValidContactTarget(ownerResolution.owner.contactTarget),
+      },
+      containment,
+      dependencyAvailability,
+      workspaceIntegrity: {
+        dedupeKey: workspaceIntegrity.blocker.dedupeKey,
+        suppressCorrectiveChildrenWhileBlocked: workspaceIntegrity.blocker.suppressCorrectiveChildren,
+        reviewerAction: workspaceIntegrity.blocker.action,
+      },
       ...input.metadata,
     },
   };
@@ -359,6 +559,21 @@ export function buildPublishPathPayload(input: PublishPathPayloadInput): Evidenc
       score: input.gateState === "override" ? 1 : 0.95,
     },
     evidenceReferences,
+    dependencyAvailability: buildDependencyAvailability({
+      credentialSource: input.credentialSource,
+      registryWebhook: input.registryWebhook,
+      provenanceUrl: input.provenanceUrl,
+    }),
+    snapshot: {
+      sourceIssueId: input.sourceIssueId,
+      workflow: input.workflow,
+      incidentId: input.incidentId,
+      packageDir: input.packageDir,
+      workspaceIdentity: input.workspaceIdentity,
+      repoSha: input.repoSha,
+      repositoryRoot: input.repositoryRoot,
+      verificationCommands: input.verificationCommands,
+    },
     metadata: {
       gateState: input.gateState,
       summary: {
@@ -420,6 +635,21 @@ export function buildSecretExposurePayload(input: SecretExposurePayloadInput): E
       score: findings.length > 0 ? 0.95 : 0.5,
     },
     evidenceReferences,
+    dependencyAvailability: buildDependencyAvailability({
+      credentialSource: input.credentialSource,
+      registryWebhook: input.registryWebhook,
+      provenanceUrl: input.provenanceUrl,
+    }),
+    snapshot: {
+      sourceIssueId: input.sourceIssueId,
+      workflow: input.workflow,
+      incidentId: input.incidentId,
+      packageDir: input.packageDir,
+      workspaceIdentity: input.workspaceIdentity,
+      repoSha: input.repoSha,
+      repositoryRoot: input.repositoryRoot,
+      verificationCommands: input.verificationCommands,
+    },
     metadata: {
       summary: {
         filesScanned: input.report.summary.filesScanned,
@@ -458,6 +688,21 @@ export function validateEvidenceHandoffPayload(payload: EvidenceHandoffPayload):
   }
   if (Number.isNaN(Date.parse(payload.timestampUtc)) || Number.isNaN(Date.parse(payload.routing.ackDeadlineUtc))) {
     throw new Error("Evidence handoff payload contains invalid timestamps");
+  }
+  if (!payload.snapshot.sourceIssueId || !payload.snapshot.workspaceIdentity || !payload.snapshot.repositoryRoot) {
+    throw new Error("Evidence handoff payload is missing required snapshot metadata");
+  }
+  if (!/^[0-9a-f]{7,40}$/i.test(payload.snapshot.repoSha)) {
+    throw new Error(`Invalid snapshot repo SHA: ${payload.snapshot.repoSha}`);
+  }
+  if (!Array.isArray(payload.snapshot.verificationCommands) || payload.snapshot.verificationCommands.length === 0) {
+    throw new Error("Evidence handoff payload must include snapshot verification commands");
+  }
+  if (!payload.metadata.registryOwnerSnapshot.owner.id || !payload.metadata.containment.summary) {
+    throw new Error("Evidence handoff payload is missing required owner snapshot or containment metadata");
+  }
+  if (!payload.metadata.dependencyAvailability.credentialSource || !payload.metadata.dependencyAvailability.registryWebhook || !payload.metadata.dependencyAvailability.provenanceUrl) {
+    throw new Error("Evidence handoff payload is missing dependency availability placeholders");
   }
   if (!Array.isArray(payload.evidenceReferences) || payload.evidenceReferences.length === 0) {
     throw new Error("Evidence handoff payload must include at least one evidence reference");
