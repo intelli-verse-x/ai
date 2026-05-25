@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, it } from "node:test";
+import { execFileSync } from "node:child_process";
 
 import type { EvidenceHandoffPayload } from "../scripts/evidence-handoff.ts";
 
@@ -13,6 +14,7 @@ const __dirname = typeof import.meta.dirname === "string"
   : dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
 const SCRIPT = join(REPO_ROOT, ".github", "bin", "publish-npm");
+const REPO_SHA = execFileSync("git", ["-C", REPO_ROOT, "rev-parse", "HEAD"], { encoding: "utf8" }).trim();
 
 const temporaryPaths = new Set<string>();
 
@@ -109,8 +111,16 @@ describe("publish-npm evidence bundle verification", () => {
     assert.equal(payload.routing.escalationState, "owner_notified");
     assert.equal(payload.metadata.gateState, "disabled");
     assert.equal(payload.routing.owner.id, "aisling404");
+    assert.equal(payload.metadata.registryOwnerSnapshot.owner.id, "aisling404");
+    assert.equal(payload.metadata.containment.state, "publish_disabled");
+    assert.equal(payload.metadata.dependencyAvailability.credentialSource, "unknown");
+    assert.equal(payload.metadata.dependencyAvailability.missingRegistryWebhook, true);
+    assert.equal(payload.metadata.dependencyAvailability.missingProvenanceUrl, true);
+    assert.equal(payload.snapshot.repoSha, REPO_SHA);
+    assert.equal(payload.snapshot.workspaceIdentity, REPO_ROOT);
     assert.match(summary, /Publish gate disabled/);
     assert.match(summary, /INC-123/);
+    assert.match(summary, new RegExp(REPO_SHA));
   });
 
   it("preserves publish-path evidence when the gate is overridden", () => {
@@ -148,6 +158,10 @@ describe("publish-npm evidence bundle verification", () => {
     assert.equal(payload.routing.escalationState, "oncall_notified");
     assert.equal(payload.metadata.gateState, "override");
     assert.equal(payload.routing.owner.id, "aaronjo-Telnyx");
+    assert.equal(payload.metadata.containment.state, "publish_override");
+    assert.equal(payload.metadata.dependencyAvailability.credentialSource, "npm_token");
+    assert.equal(payload.metadata.dependencyAvailability.missingCredentialSource, false);
+    assert.equal(payload.snapshot.repoSha, REPO_SHA);
     assert.match(summary, /Publish gate override recorded/);
     assert.match(combinedOutput, /Publishing @telnyx\/opencode@/);
   });
