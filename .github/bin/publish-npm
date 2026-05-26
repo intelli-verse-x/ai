@@ -21,6 +21,7 @@ PACKAGE_NAME=""
 VERSION=""
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 EVIDENCE_DIR="$REPO_ROOT/.github/artifacts/publish-alert-evidence"
+MANIFEST_ROOT="$REPO_ROOT/.github/artifacts/release-manifests"
 MISSING_MAINTAINERS_JSON='[]'
 
 write_evidence_bundle() {
@@ -59,11 +60,22 @@ fi
 # Get package info
 PACKAGE_NAME="$(jq -r -e '.name' ./package.json)"
 VERSION="$(jq -r -e '.version' ./package.json)"
+SAFE_PACKAGE_NAME="${PACKAGE_NAME//@/}"
+SAFE_PACKAGE_NAME="${SAFE_PACKAGE_NAME//\//-}"
 
 echo "Publishing $PACKAGE_NAME@$VERSION"
 
 # Build (CLI has a no-op build, TS SDK compiles)
 npm run build
+
+PACK_DIR="$MANIFEST_ROOT/$SAFE_PACKAGE_NAME/$VERSION/payload"
+MANIFEST_DIR="$MANIFEST_ROOT/$SAFE_PACKAGE_NAME/$VERSION"
+rm -rf "$PACK_DIR"
+mkdir -p "$PACK_DIR"
+
+PACK_RESULT_JSON="$(npm pack --json --pack-destination "$PACK_DIR")"
+PACK_FILENAME="$(echo "$PACK_RESULT_JSON" | jq -r -e '.[0].filename')"
+PACK_TARBALL="$PACK_DIR/$PACK_FILENAME"
 
 # Best-effort registry owner snapshot for the evidence bundle.
 if MAINTAINERS_JSON="$(npm view "$PACKAGE_NAME" maintainers --json 2>/dev/null || true)"; then
@@ -104,3 +116,12 @@ fi
 # Use the system npm (Node 24 ships npm 11+) for OIDC provenance
 npm publish --access public --no-git-checks --tag "$TAG"
 PUBLISH_RESULT="success"
+
+if [[ -n "${RELEASE_TAG:-}" ]]; then
+  node "$REPO_ROOT/.github/scripts/release-manifest.mjs" \
+    "$PACKAGE_DIR" \
+    "$MANIFEST_DIR" \
+    "$PACK_TARBALL"
+else
+  echo "RELEASE_TAG is not set; skipping release manifest generation."
+fi

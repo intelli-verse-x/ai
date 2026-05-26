@@ -5,15 +5,34 @@ Agent-friendly CLI for Telnyx API v2 — composite setup commands that reduce mu
 ## Quick Start
 
 ```bash
+# Install the published package
+npm install -g @telnyx/agent-cli
+
 # Set your API key
 export TELNYX_API_KEY="KEY_xxx"
 
 # Check account status
-npx tsx bin/telnyx-agent.ts status
+telnyx-agent status
 
 # See all capabilities
-npx tsx bin/telnyx-agent.ts capabilities
+telnyx-agent capabilities
 ```
+
+## Verify a Tagged Release
+
+Use immutable versioned URLs for both the npm tarball and the release sidecars:
+
+```bash
+VERSION=0.3.0
+TAG=v${VERSION}
+curl -fsSLO "https://github.com/team-telnyx/ai/releases/download/${TAG}/telnyx-agent-cli-${VERSION}.release-manifest.json"
+curl -fsSLO "https://github.com/team-telnyx/ai/releases/download/${TAG}/telnyx-agent-cli-${VERSION}.SHA256SUMS"
+curl -fsSLo "telnyx-agent-cli-${VERSION}.tgz" "https://registry.npmjs.org/@telnyx/agent-cli/-/agent-cli-${VERSION}.tgz"
+sha256sum -c --ignore-missing "telnyx-agent-cli-${VERSION}.SHA256SUMS"
+jq -r '.files[] | select(.path == "telnyx-agent-cli-'"${VERSION}"'.tgz") | .url' "telnyx-agent-cli-${VERSION}.release-manifest.json"
+```
+
+The final `jq` check should print the exact versioned npm tarball URL rather than a mutable selector such as `latest` or a branch.
 
 ## Commands
 

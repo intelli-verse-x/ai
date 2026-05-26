@@ -21,6 +21,22 @@ npm install ai zod                    # For Vercel AI SDK
 npm install @langchain/core zod       # For LangChain.js
 ```
 
+## Verify a Tagged Release
+
+Use immutable versioned URLs for both the npm tarball and the release sidecars:
+
+```bash
+VERSION=0.2.0
+TAG=v${VERSION}
+curl -fsSLO "https://github.com/team-telnyx/ai/releases/download/${TAG}/telnyx-agent-toolkit-${VERSION}.release-manifest.json"
+curl -fsSLO "https://github.com/team-telnyx/ai/releases/download/${TAG}/telnyx-agent-toolkit-${VERSION}.SHA256SUMS"
+curl -fsSLo "telnyx-agent-toolkit-${VERSION}.tgz" "https://registry.npmjs.org/@telnyx/agent-toolkit/-/agent-toolkit-${VERSION}.tgz"
+sha256sum -c --ignore-missing "telnyx-agent-toolkit-${VERSION}.SHA256SUMS"
+jq -r '.files[] | select(.path == "telnyx-agent-toolkit-'"${VERSION}"'.tgz") | .url' "telnyx-agent-toolkit-${VERSION}.release-manifest.json"
+```
+
+The final `jq` check should print the exact versioned npm tarball URL rather than a mutable selector such as `latest` or a branch.
+
 ## Quick Start
 
 ### OpenAI

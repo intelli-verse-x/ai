@@ -25,6 +25,10 @@ on:
           - cli
           - mcp
           - opencode
+      release_tag:
+        description: 'Optional immutable git tag for release-manifest asset upload (for example v1.2.3)'
+        required: false
+        type: string
   release:
     types: [published]
 
@@ -36,11 +40,13 @@ jobs:
       github.repository == 'team-telnyx/ai' &&
       (github.event_name == 'release' || github.event.inputs.package == 'all' || github.event.inputs.package == 'typescript')
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check publish re-enable gate
         run: bash ./.github/bin/check-publish-gate
@@ -54,7 +60,29 @@ jobs:
         run: npm ci
 
       - name: Publish @telnyx/agent-toolkit
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
         run: bash ./.github/bin/publish-npm tools/typescript
+
+      - name: Upload release manifest assets to GitHub Release
+        if: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
+        run: |
+          VERSION=$(jq -r '.version' tools/typescript/package.json)
+          gh release upload "$RELEASE_TAG" \
+            ".github/artifacts/release-manifests/telnyx-agent-toolkit/$VERSION/telnyx-agent-toolkit-$VERSION.release-manifest.json" \
+            ".github/artifacts/release-manifests/telnyx-agent-toolkit/$VERSION/telnyx-agent-toolkit-$VERSION.SHA256SUMS" \
+            --clobber
+
+      - name: Upload release manifest bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifests-typescript
+          path: .github/artifacts/release-manifests/telnyx-agent-toolkit/**
+          if-no-files-found: ignore
 
       - name: Upload publish evidence bundle
         if: always()
@@ -71,11 +99,13 @@ jobs:
       github.repository == 'team-telnyx/ai' &&
       (github.event_name == 'release' || github.event.inputs.package == 'all' || github.event.inputs.package == 'cli')
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Check publish re-enable gate
         run: bash ./.github/bin/check-publish-gate
@@ -89,7 +119,29 @@ jobs:
         run: npm ci
 
       - name: Publish @telnyx/agent-cli
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
         run: bash ./.github/bin/publish-npm cli
+
+      - name: Upload release manifest assets to GitHub Release
+        if: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.release_tag }}
+        run: |
+          VERSION=$(jq -r '.version' cli/package.json)
+          gh release upload "$RELEASE_TAG" \
+            ".github/artifacts/release-manifests/telnyx-agent-cli/$VERSION/telnyx-agent-cli-$VERSION.release-manifest.json" \
+            ".github/artifacts/release-manifests/telnyx-agent-cli/$VERSION/telnyx-agent-cli-$VERSION.SHA256SUMS" \
+            --clobber
+
+      - name: Upload release manifest bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifests-cli
+          path: .github/artifacts/release-manifests/telnyx-agent-cli/**
+          if-no-files-found: ignore
 
       - name: Upload publish evidence bundle
         if: always()
