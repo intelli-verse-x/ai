@@ -240,6 +240,8 @@ Validation note: what is public is the docs-hosted registry, app catalog, per-ap
 
 Curl-first operational guides for common Telnyx workflows — SMS messaging, voice call control, AI assistants, phone numbers, porting, verification, webhooks, 10DLC registration, WireGuard networking, x402 payments, Edge Compute handoff patterns, and [evidence handoff / escalation runbooks](/guides/evidence-handoff.md).
 
+For the first live Telnyx voice-agent evaluation path, start with [Production Voice-Agent Onboarding](/guides/voice-agent-onboarding.md).
+
 For Edge Compute specifically, the goal is to make the handoff testable fast: start from a real `telnyx-edge` example, deploy it, and let `team-telnyx/ai` orchestrate against that live endpoint.
 
 For the managed-agent packaging pattern that ties discovery, skills, MCP apps, and least-privilege operations together, see [Managed Telecom Agents](/managed-telecom-agents.md).

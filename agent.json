@@ -73,6 +73,14 @@
       "requires": ["phone_number"]
     },
     {
+      "id": "voice_agent_onboarding",
+      "name": "Production Voice-Agent Onboarding",
+      "description": "Follow the paved-road first-evaluation flow for Telnyx voice agents, including assistant answer webhook wiring, conversation tracking, message history reuse, and Voice Monitor debugging.",
+      "guide": "/guides/voice-agent-onboarding.md",
+      "api": "POST /v2/ai/assistants",
+      "requires": ["ai_assistants", "voice", "webhooks"]
+    },
+    {
       "id": "ai_inference",
       "name": "AI Inference",
       "description": "LLM chat completions and embeddings via OpenAI-compatible API.",
