@@ -8,25 +8,77 @@
 - Telnyx API key ([get one free](https://telnyx.com))
 - `agent-framework` and `agent-framework-openai` packages
 
-## Installation
+## Quick Start
 
 ```bash
+# Install dependencies
 pip install agent-framework agent-framework-openai python-dotenv
+
+# Set environment variables
+export TELNYX_API_KEY=your_api_key_here
+export TELNYX_MODEL=moonshotai/Kimi-K2.6
 ```
 
-## Configuration
-
-Create a `.env` file:
+Send your first chat completion using Telnyx as the inference backend:
 
 ```bash
-TELNYX_API_KEY=your_api_key_here
-TELNYX_MODEL=moonshotai/Kimi-K2.6
-TELNYX_EMBEDDING_MODEL=thenlper/gte-large
+curl -X POST "https://api.telnyx.com/v2/ai/openai/chat/completions" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "moonshotai/Kimi-K2.6",
+    "messages": [{"role": "user", "content": "Hello, how are you?"}]
+  }'
 ```
 
-Telnyx provides an OpenAI-compatible API at `https://api.telnyx.com/v2/ai/openai` that supports chat completions, embeddings, and function/tool calling. No custom provider package is needed — just configure the `base_url` on the standard OpenAI clients.
+Generate embeddings:
 
-## Chat Completion
+```bash
+curl -X POST "https://api.telnyx.com/v2/ai/openai/embeddings" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "thenlper/gte-large",
+    "input": "Telnyx provides telecom infrastructure for AI agents."
+  }'
+```
+
+## API Reference
+
+Telnyx provides an OpenAI-compatible API at `https://api.telnyx.com/v2/ai/openai` that supports chat completions, embeddings, and function/tool calling. No custom provider package is needed — configure the `base_url` on the standard OpenAI clients.
+
+### Chat Completions
+
+**`POST /v2/ai/openai/chat/completions`**
+
+```bash
+curl -X POST "https://api.telnyx.com/v2/ai/openai/chat/completions" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "moonshotai/Kimi-K2.6",
+    "messages": [{"role": "user", "content": "What is the capital of France?"}],
+    "stream": false
+  }'
+```
+
+### Embeddings
+
+**`POST /v2/ai/openai/embeddings`**
+
+```bash
+curl -X POST "https://api.telnyx.com/v2/ai/openai/embeddings" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "thenlper/gte-large",
+    "input": ["First text", "Second text"]
+  }'
+```
+
+## Python Examples
+
+### Chat Completion
 
 ```python
 import asyncio
@@ -63,7 +115,7 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
-## Embeddings
+### Embeddings
 
 ```python
 import asyncio
@@ -96,6 +148,42 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+## TypeScript Examples
+
+Agent Framework also supports TypeScript. Use the OpenAI-compatible endpoint with the OpenAI SDK:
+
+```typescript
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.TELNYX_API_KEY,
+  baseURL: "https://api.telnyx.com/v2/ai/openai",
+});
+
+async function main() {
+  // Chat completion
+  const response = await client.chat.completions.create({
+    model: process.env.TELNYX_MODEL || "moonshotai/Kimi-K2.6",
+    messages: [{ role: "user", content: "What is the capital of France?" }],
+  });
+
+  console.log(response.choices[0]?.message?.content);
+
+  // Streaming
+  const stream = await client.chat.completions.create({
+    model: process.env.TELNYX_MODEL || "moonshotai/Kimi-K2.6",
+    messages: [{ role: "user", content: "Explain quantum computing." }],
+    stream: true,
+  });
+
+  for await (const chunk of stream) {
+    process.stdout.write(chunk.choices[0]?.delta?.content || "");
+  }
+}
+
+main();
+```
+
 ## Available Models
 
 | Model | Type | Description |
@@ -119,7 +207,7 @@ Telnyx provides FunctionTools for agent frameworks that give your agents telecom
 - **Number Lookup** — Carrier and line-type identification
 - **Phone Verification** — OTP verification via SMS/voice
 
-## References
+## Resources
 
 - [Microsoft Agent Framework](https://github.com/microsoft/agent-framework)
 - [Telnyx AI API](https://developers.telnyx.com/api/ai)
