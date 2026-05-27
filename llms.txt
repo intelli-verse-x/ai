@@ -30,6 +30,6 @@ Repo mirrors
 Recommended path
 1. Start at https://telnyx.com/agents/start
 2. Read https://telnyx.com/auth.md
-3. Use https://telnyx.com/.well-known/agent-access.json if you need onboarding
+3. Use https://telnyx.com/.well-known/agent-access.json for the demo-first path and current signup contract
 4. Use https://api.telnyx.com/v2/mcp for MCP or https://telnyx.com/.well-known/openapi.json for REST discovery
 5. Read https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks before implementing inbound webhook handlers

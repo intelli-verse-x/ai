@@ -1,0 +1,110 @@
+{
+  "version": "1",
+  "provider": {
+    "name": "Telnyx",
+    "url": "https://telnyx.com"
+  },
+  "agent_onboarding": {
+    "url": "https://telnyx.com/agent-signup.md",
+    "format": "text/markdown",
+    "intended_for": [
+      "ai_agents",
+      "coding_assistants",
+      "autonomous_tools"
+    ]
+  },
+  "documentation": {
+    "account_creation": "https://developers.telnyx.com/docs/account-setup/create-account",
+    "toolkit_getting_started": "https://github.com/team-telnyx/telnyx-toolkit/tree/main/getting-started",
+    "bot_signup_skill": "https://github.com/team-telnyx/telnyx-toolkit/tree/main/getting-started/telnyx-bot-signup"
+  },
+  "signup": {
+    "type": "api_guided",
+    "browser_signup_url": "https://telnyx.com/sign-up",
+    "api_base": "https://api.telnyx.com/v2",
+    "entrypoints": [
+      {
+        "name": "bot_challenge",
+        "method": "POST",
+        "url": "https://api.telnyx.com/v2/bot_challenge"
+      },
+      {
+        "name": "bot_signup",
+        "method": "POST",
+        "url": "https://api.telnyx.com/v2/bot_signup"
+      },
+      {
+        "name": "resend_magic_link",
+        "method": "POST",
+        "url": "https://api.telnyx.com/v2/bot_signup/resend_magic_link"
+      },
+      {
+        "name": "create_api_key",
+        "method": "POST",
+        "url": "https://api.telnyx.com/v2/api_keys"
+      }
+    ]
+  },
+  "fast_path": {
+    "description": "Try the API immediately. No signup, API key, or email is required for these demo endpoints. They are proxied through telnyx.com with server-side authentication and rate limits.",
+    "demo_endpoints": [
+      {
+        "name": "send_sms",
+        "method": "POST",
+        "url": "https://telnyx.com/api/demo/send-sms",
+        "note": "Send a test SMS. No auth required. Test numbers only."
+      },
+      {
+        "name": "inference",
+        "method": "POST",
+        "url": "https://telnyx.com/api/inference",
+        "note": "AI chat completions. No auth required."
+      },
+      {
+        "name": "tts_demo",
+        "method": "POST",
+        "url": "https://telnyx.com/api/tts-demo",
+        "note": "Text-to-speech synthesis. No auth required."
+      },
+      {
+        "name": "stt_demo",
+        "method": "POST",
+        "url": "https://telnyx.com/api/stt-demo",
+        "note": "Speech-to-text transcription. No auth required."
+      },
+      {
+        "name": "number_lookup",
+        "method": "GET",
+        "url": "https://telnyx.com/api/number-lookup",
+        "note": "Carrier lookup. Requires hCaptcha token, so it is not fully autonomous."
+      },
+      {
+        "name": "voice_ai_register_web_caller",
+        "method": "POST",
+        "url": "https://telnyx.com/api/voice-ai-agent/register-web-caller",
+        "note": "Registers a web caller for the Voice AI demo. Requires session_id and email in the body."
+      }
+    ],
+    "next_step": "Use these demo endpoints first. Only enter the production signup flow if you need real account resources such as API keys, purchased numbers, or authenticated MCP access."
+  },
+  "production_signup": {
+    "current_flow": [
+      "bot_challenge",
+      "bot_signup",
+      "email_magic_link",
+      "create_api_key"
+    ],
+    "fully_autonomous_no_email_supported": false,
+    "repo_owned_status": "documented",
+    "upstream_dependency": {
+      "owner": "Telnyx API / account platform",
+      "required_change": "Return a temporary session token directly from POST /v2/bot_signup for bot accounts so they can create an API key without reading email.",
+      "proposed_response_field": "data.api_v2_token"
+    }
+  },
+  "notes": [
+    "Programmatic bot signup uses an obfuscated math challenge from POST /v2/bot_challenge that an LLM can solve without an external solver.",
+    "The demo-first fast path is the only no-email autonomous path available today.",
+    "Production bot signup still depends on a single-use email magic link unless the upstream account-platform change described in production_signup ships."
+  ]
+}

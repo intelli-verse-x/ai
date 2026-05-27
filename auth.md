@@ -58,13 +58,14 @@ Choose one of these paths:
 1. You already have a Telnyx API key.
 Use it directly.
 
-2. You need a new key and can complete an email sign-in loop.
+2. You need a zero-auth evaluation path.
+Fetch `https://telnyx.com/.well-known/agent-access.json` and start with `fast_path.demo_endpoints`.
+
+3. You need a new key and can complete an email sign-in loop.
 Follow the programmatic bot-signup flow at `https://telnyx.com/agent-signup.md`.
 
-3. You need a new key and a human can use the portal.
+4. You need a new key and a human can use the portal.
 Use `https://portal.telnyx.com` to create or rotate a key interactively.
-
-If you only need a zero-auth trial path, fetch `https://telnyx.com/.well-known/agent-access.json` and inspect `fast_path.demo_endpoints` before starting the full signup flow.
 
 ## 3. Register or Obtain a Key
 
@@ -77,6 +78,8 @@ For programmatic signup, the current production sequence is:
 3. `POST https://api.telnyx.com/v2/bot_signup`
 4. Retrieve the single-use email link
 5. `POST https://api.telnyx.com/v2/api_keys`
+
+That email retrieval step is still the blocker for fully autonomous no-mailbox agents. The repo-owned public contract now documents the intended upstream fix in `https://telnyx.com/agent-signup.md` and `https://telnyx.com/.well-known/agent-access.json`: the account platform should return a temporary session token directly from `POST /v2/bot_signup` for bot accounts.
 
 Telnyx's current automated signup flow issues an API key, not an OAuth access token. Present the resulting credential as a bearer token in the `Authorization` header.
 
@@ -119,7 +122,7 @@ If a previously-working key starts returning `401`, discard it and restart at di
 | --- | --- | --- |
 | Missing credentials | REST or MCP probe returns `401` | Read `WWW-Authenticate` when present, fetch protected-resource metadata, then obtain or reuse an API key |
 | Route not found | Probe returns Telnyx error code `10005` | Confirm the HTTP method and path; `GET https://api.telnyx.com/v2/mcp` is not the MCP initialize flow |
-| Email loop unavailable | Bot signup reaches the sign-in link step | Hand off to a human mailbox owner or use the portal path |
+| Email loop unavailable | Bot signup reaches the sign-in link step | Use the demo-first path for no-auth evaluation, or hand off to a human mailbox owner for production signup |
 | Rate limiting | Demo or signup surfaces throttle | Back off and retry later; do not spam challenge endpoints |
 
 ## 6. Revocation and Rotation

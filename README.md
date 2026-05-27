@@ -26,13 +26,13 @@ This repo is the one-stop shop for AI Agents and AI-first developers building wi
 
 Start agent discovery at `https://telnyx.com/agents/start`. The surfaces below are the canonical repo-owned or repo-linked entry points that agents should use without guessing.
 
-The repo-owned source mirrors for that public path live in [`agents/start.md`](/agents/start.md), [`agent.json`](/agent.json), [`auth.md`](/auth.md), [`AGENTS.md`](/AGENTS.md), and [`llms.txt`](/llms.txt). The corresponding public mirrors are `https://telnyx.com/AGENTS.md` and `https://telnyx.com/llms.txt`.
+The repo-owned source mirrors for that public path live in [`agents/start.md`](/agents/start.md), [`agent.json`](/agent.json), [`auth.md`](/auth.md), [`agent-signup.md`](/agent-signup.md), [`/.well-known/agent-access.json`](/.well-known/agent-access.json), [`AGENTS.md`](/AGENTS.md), and [`llms.txt`](/llms.txt). The corresponding public mirrors are `https://telnyx.com/AGENTS.md` and `https://telnyx.com/llms.txt`.
 
 | Surface | URL | What it is for |
 | --- | --- | --- |
 | Agent fast path | `https://telnyx.com/agents/start` | Primary discovery entry point for runtime agents |
 | Agent manifest | `https://telnyx.com/.well-known/agent-card.json` | Agent identity, capabilities, and links |
-| Agent access | `https://telnyx.com/.well-known/agent-access.json` | Signup and auth contract |
+| Agent access | `https://telnyx.com/.well-known/agent-access.json` | Machine-readable demo-first and signup contract, including the current no-email production gap |
 | Agent skills index | `https://telnyx.com/.well-known/agent-skills/index.json` | Published skill catalog |
 | Auth guide | `https://telnyx.com/auth.md` | Root agent auth walkthrough that pairs with protected-resource metadata |
 | OAuth authorization server | `https://api.telnyx.com/.well-known/oauth-authorization-server` | Auth-server metadata for delegated auth and agent onboarding pointers |
@@ -48,7 +48,7 @@ The repo-owned source mirrors for that public path live in [`agents/start.md`](/
 | Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability map |
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
 | Telnyx webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live webhook configuration, signature verification, payload structure, and delivery debugging |
-| Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic API-key signup for agents |
+| Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
 
 ## Plugins
 

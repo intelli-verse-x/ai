@@ -10,7 +10,7 @@ This page is the single public entrypoint for the agent-facing Telnyx surfaces t
 | --- | --- | --- |
 | Agent fast path | `https://telnyx.com/agents/start` | Primary public entrypoint for agents |
 | Agent manifest | `https://telnyx.com/.well-known/agent-card.json` | Machine-readable identity, capabilities, and links |
-| Agent access | `https://telnyx.com/.well-known/agent-access.json` | Machine-readable signup and auth contract |
+| Agent access | `https://telnyx.com/.well-known/agent-access.json` | Machine-readable demo-first and signup contract, including the current no-email production gap |
 | Agent skills index | `https://telnyx.com/.well-known/agent-skills/index.json` | Published skill catalog |
 | Auth guide | `https://telnyx.com/auth.md` | Bearer-auth and protected-resource discovery walkthrough |
 | OAuth authorization server | `https://api.telnyx.com/.well-known/oauth-authorization-server` | OAuth metadata and agent onboarding pointers |
@@ -26,11 +26,13 @@ This page is the single public entrypoint for the agent-facing Telnyx surfaces t
 | Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability catalog |
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
 | Telnyx webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live Telnyx webhooks documentation for setup, signature verification, payloads, and retry behavior |
-| Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic API-key signup flow |
+| Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
 
 ## Repo-owned mirrors and operating files
 
 - Local manifest mirror: [`/agent.json`](/agent.json)
+- Local signup guide mirror: [`/agent-signup.md`](/agent-signup.md)
+- Local agent access mirror: [`/.well-known/agent-access.json`](/.well-known/agent-access.json)
 - Runtime agent instructions: [`/AGENTS.md`](/AGENTS.md) and `https://telnyx.com/AGENTS.md`
 - LLM-oriented index: [`/llms.txt`](/llms.txt) and `https://telnyx.com/llms.txt`
 - Auth walkthrough source: [`/auth.md`](/auth.md)
@@ -53,7 +55,7 @@ That guide is the crawlable named entrypoint for:
 
 1. Start at `https://telnyx.com/agents/start`.
 2. Read `https://telnyx.com/auth.md`.
-3. Fetch `https://telnyx.com/.well-known/agent-access.json` if you need onboarding.
+3. Fetch `https://telnyx.com/.well-known/agent-access.json` for the demo-first path and the current signup contract.
 4. Fetch `https://telnyx.com/.well-known/agent-card.json` or local `/agent.json` for the capability map.
 5. Use `https://api.telnyx.com/v2/mcp` or `https://telnyx.com/.well-known/openapi.json` depending on whether you need MCP or REST.
 6. Read `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` before building inbound event handlers.
