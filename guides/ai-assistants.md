@@ -215,6 +215,119 @@ curl "https://api.telnyx.com/v2/ai/conversations/{conversation_id}" \
   -H "Authorization: Bearer $TELNYX_API_KEY"
 ```
 
+## Production Voice AI Operations
+
+Use the first-call bootstrap from [Production Voice-Agent Onboarding](/guides/voice-agent-onboarding.md) to prove the assistant can answer one live call. After that, treat production changes as a four-part loop: version, evaluate, canary, then monitor.
+
+### 1. Version before rollout
+Before you change instructions, model, tools, or voice settings, capture the current assistant state and list versions:
+
+```bash
+curl "https://api.telnyx.com/v2/ai/assistants/{assistant_id}" \
+  -H "Authorization: Bearer $TELNYX_API_KEY"
+
+curl "https://api.telnyx.com/v2/ai/assistants/{assistant_id}/versions" \
+  -H "Authorization: Bearer $TELNYX_API_KEY"
+```
+
+Use a specific `version_id` as the unit you promote, test, or roll back. This keeps rollback concrete when latency, tool behavior, or turn-taking degrades after a change.
+
+### 2. Turn expected behavior into assistant tests
+Create assistant tests for the narrow scenarios you cannot afford to regress: first response latency, authentication, order lookup accuracy, safe refusal, voicemail handling, and escalation behavior.
+
+```bash
+curl -X POST "https://api.telnyx.com/v2/ai/assistants/tests" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Support refund escalation",
+    "destination": "+15551234567",
+    "instructions": "Act as a frustrated customer asking for a refund on a damaged order. Escalate if the assistant refuses or invents policy.",
+    "test_suite": "voice-prod",
+    "max_duration_seconds": 120,
+    "rubric": [
+      { "name": "Identity", "criteria": "Assistant identifies itself and the company truthfully." },
+      { "name": "Refund policy", "criteria": "Assistant states the refund policy without inventing steps or guarantees." },
+      { "name": "Escalation", "criteria": "Assistant offers human escalation when it cannot complete the request safely." }
+    ]
+  }'
+```
+
+Run that test against the exact version you plan to promote:
+
+```bash
+curl -X POST "https://api.telnyx.com/v2/ai/assistants/tests/{test_id}/runs" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "destination_version_id": "your-version-id"
+  }'
+```
+
+Inspect run history until you have a stable pass/fail signal and preserve the returned `conversation_id` and `conversation_insights_id` for later debugging:
+
+```bash
+curl "https://api.telnyx.com/v2/ai/assistants/tests/{test_id}/runs" \
+  -H "Authorization: Bearer $TELNYX_API_KEY"
+
+curl "https://api.telnyx.com/v2/ai/assistants/tests/test-suites/voice-prod/runs" \
+  -H "Authorization: Bearer $TELNYX_API_KEY"
+```
+
+If you run a suite instead of a single test, send `destination_version_id` with the suite run so every scenario measures the same candidate version.
+
+### 3. Canary a new version instead of switching all traffic at once
+Telnyx assistants expose canary deploy operations. Use them when the change could affect speech timing, tool choice, or call containment.
+
+```bash
+curl "https://api.telnyx.com/v2/ai/assistants/{assistant_id}/canary-deploys" \
+  -H "Authorization: Bearer $TELNYX_API_KEY"
+
+curl -X POST "https://api.telnyx.com/v2/ai/assistants/{assistant_id}/canary-deploys" \
+  -H "Authorization: Bearer $TELNYX_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "versions": [
+      { "version_id": "stable-version-id" },
+      { "version_id": "candidate-version-id" }
+    ]
+  }'
+```
+
+Keep one known-good version available while the candidate warms up on a smaller traffic slice. Use the same eval suite on both stable and candidate versions before increasing the canary, and roll back by restoring the prior version mix or removing the canary deploy if live calls show worse latency, tool misuse, or transfer failures.
+
+### 4. Define the human handoff contract before go-live
+Voice AI failures are operational failures, not just prompt failures. Decide in advance when the assistant must stop trying and hand the call to a person or queue. Use these two Telnyx primitives differently:
+
+- `POST /v2/calls/{call_control_id}/actions/transfer` when the AI leg should leave the call and the caller should move to a human destination or queue.
+- `POST /v2/calls/{call_control_id}/actions/ai_assistant_join` when you need an additional participant joined to the existing `conversation_id` and want continuity inside the same call flow.
+
+The minimum handoff bundle to preserve in logs, webhook payloads, or CRM notes is `assistant_id`, `version_id`, `conversation_id`, `call_control_id`, `call_session_id`, the last user request, and the exact reason for escalation.
+
+If the assistant is uncertain about identity, payment, compliance, or tool results, escalate instead of continuing optimistically. A clean transfer is better than a confident hallucination on a live phone call.
+### 5. Monitor post-call evidence, not just subjective call quality
+For every production rollout, inspect the same minimum evidence set after live traffic starts:
+
+- webhook success and failure rates for the assistant answer path
+- `call.conversation.ended` fields such as `assistant_id`, `call_control_id`, `call_session_id`, `conversation_id`, `llm_model`, `stt_model`, `tts_provider`, and `tts_voice_id`
+- test run status, logs, and trend changes by `test_suite`
+- live call event gaps, terminal hangup causes, and provider usage in Voice Monitor
+
+The paved-road debugger is the read-only Voice Monitor MCP app at [`tools/mcp-apps/apps/voice-monitor/README.md`](/tools/mcp-apps/apps/voice-monitor/README.md). Its `voice_monitor_debug_report` is built for the first questions operators ask after a rollout: did webhook delivery fail, did latency spike, which model and voice handled the call, and how did the call terminate?
+
+### Live-account verification path
+This is the smallest production-style verification that proves the loop works with a real account: create or update the assistant and record the target `version_id`, create one rubric-backed assistant test, trigger `POST /v2/ai/assistants/tests/{test_id}/runs` with `destination_version_id`, configure or update the canary deploy, place one real phone call through the answer webhook path from [Production Voice-Agent Onboarding](/guides/voice-agent-onboarding.md), then inspect `call.conversation.ended`, the stored `conversation_id`, and a Voice Monitor debug report for that call.
+
+If any of those steps fail, do not increase traffic. Fix the regression on the candidate version, rerun the test, and only then adjust the canary.
+
+### Reliability and security guardrails
+- Re-test after every model, tool, webhook, or voice change. In voice AI, small configuration edits can change turn-taking, latency, and failure modes.
+- Keep the assistant answer webhook and any function-calling webhooks idempotent. Duplicate delivery is survivable; non-idempotent side effects are not.
+- Store API keys, external LLM credentials, and tool secrets outside the assistant prompt. Use configuration references, not embedded secrets.
+- Keep outbound calling destinations and any payment- or account-changing tools narrowly scoped and auditable.
+- Put AI disclosure, recording disclosure, and escalation policy in the call flow itself, not only in internal docs.
+- Preserve correlation IDs in every handoff or incident note. Telecom incidents are debugged from `call_control_id`, `call_session_id`, and `conversation_id`, not from summaries alone.
+
 ## Python Examples
 
 ```python
