@@ -20,7 +20,7 @@ Create a `.env` file:
 
 ```bash
 TELNYX_API_KEY=your_api_key_here
-TELNYX_MODEL=moonshotai/Kimi-K2.5
+TELNYX_MODEL=moonshotai/Kimi-K2.6
 TELNYX_EMBEDDING_MODEL=thenlper/gte-large
 ```
 
@@ -42,7 +42,7 @@ async def main() -> None:
     client = OpenAIChatClient(
         api_key=os.getenv("TELNYX_API_KEY"),
         base_url="https://api.telnyx.com/v2/ai/openai",
-        model=os.getenv("TELNYX_MODEL", "moonshotai/Kimi-K2.5"),
+        model=os.getenv("TELNYX_MODEL", "moonshotai/Kimi-K2.6"),
     )
 
     agent = Agent(
@@ -100,11 +100,16 @@ asyncio.run(main())
 
 | Model | Type | Description |
 |-------|------|-------------|
-| `moonshotai/Kimi-K2.5` | Chat | General-purpose LLM |
-| `GLM-5.1-FP8` | Chat | Zhipu AI model |
-| `MiniMax-M2.7` | Chat | MiniMax model |
-| `Qwen3-235B-A22B` | Chat | Alibaba Qwen3 model |
+| `moonshotai/Kimi-K2.6` | Chat | General-purpose LLM (recommended) |
+| `moonshotai/Kimi-K2.5` | Chat | Previous generation |
+| `zai-org/GLM-5.1-FP8` | Chat | Zhipu AI model |
+| `MiniMaxAI/MiniMax-M2.7` | Chat | MiniMax model |
+| `Qwen/Qwen3-235B-A22B` | Chat | Alibaba Qwen3 model |
+| `openai/gpt-4o` | Chat | OpenAI GPT-4o |
+| `openai/gpt-5` | Chat | OpenAI GPT-5 |
 | `thenlper/gte-large` | Embeddings | 1024-dim text embeddings |
+
+> See the [full model list](https://developers.telnyx.com/docs/ai/models) for all available models.
 
 ## Telecom Tools (Coming Soon)
 
