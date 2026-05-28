@@ -90,10 +90,14 @@ telnyx-agent setup-ai --name "Support Bot" --json
 
 Output: `{ assistant_id, phone_number, test_command }`
 
+This command is intentionally bootstrap-first rather than model-marketing-first. It should pick a working assistant setup for the current account instead of assuming one specific hosted model is available everywhere.
+
+If you want the current Telnyx-hosted OpenAI assistant example path, use [`/guides/ai-assistants.md`](/guides/ai-assistants.md) and [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md). Those assistant docs use `openai/gpt-5.4` in the first-run hosted examples.
+
 ### Edge Compute handoff commands
 
 These are **thin executable bridges**, not native Edge lifecycle support.
-They make Edge Compute usable from `telnyx-agent` while keeping real deploy/auth/secrets/bindings ownership in `telnyx-edge`. They now prefer API-key auth for agent use when the installed Edge CLI supports it.
+They make Edge Compute usable from `telnyx-agent` while keeping real deploy/auth/secrets/bindings ownership in `telnyx-edge`. They only suggest API-key auth when the installed Edge CLI actually exposes it; the public upstream README for `edge-compute` `v0.1.1` still leads with `telnyx-edge auth login`.
 
 ```bash
 telnyx-agent edge-doctor --json
@@ -104,7 +108,8 @@ telnyx-agent setup-edge-webhook --name my-webhook --json
 What they do:
 - validate that `telnyx-edge` is available
 - check whether Edge auth is already configured
-- prefer `telnyx-edge auth api-key set <your-api-key>` for agents when supported
+- use `telnyx-edge auth login` as the safe default when capability detection is unavailable
+- prefer `telnyx-edge auth api-key set <your-api-key>` for agents only when the installed CLI supports it
 - point you at a real Edge example
 - give you the concrete next deploy command
 - preserve an honest handoff instead of pretending `telnyx-agent` owns Edge lifecycle

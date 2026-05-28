@@ -189,6 +189,12 @@ telnyx-agent status            # Account health overview
 
 Every command supports `--json` for machine-readable output.
 
+For assistant-first discovery, use the CLI as the bootstrap path and the guides as the model-specific path:
+
+- [`/guides/ai-assistants.md`](/guides/ai-assistants.md) shows the current Telnyx-hosted OpenAI assistant examples with `openai/gpt-5.4`.
+- [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) shows the first live voice-agent path, including the assistant answer webhook.
+- `telnyx-agent setup-ai` stays bootstrap-oriented in the README because the CLI should optimize for a working account-level setup, not silently promise that one hosted model is available on every account.
+
 See [Agent CLI](/cli)
 
 
@@ -239,6 +245,8 @@ Validation note: what is public is the docs-hosted registry, app catalog, per-ap
 ## Guides
 
 Curl-first operational guides for common Telnyx workflows — SMS messaging, voice call control, AI assistants, phone numbers, porting, verification, webhooks, 10DLC registration, WireGuard networking, x402 payments, Edge Compute handoff patterns, and [evidence handoff / escalation runbooks](/guides/evidence-handoff.md).
+
+For current assistant examples, start with [AI Voice Assistants](/guides/ai-assistants.md). That guide uses `openai/gpt-5.4` in the hosted OpenAI assistant examples and links directly into the first-call voice bootstrap path.
 
 For the first live Telnyx voice-agent evaluation path, start with [Production Voice-Agent Onboarding](/guides/voice-agent-onboarding.md).
 

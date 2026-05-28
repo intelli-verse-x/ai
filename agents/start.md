@@ -9,6 +9,7 @@ If you only read one page before deciding whether Telnyx fits your agent workflo
 ## What agents can do with Telnyx
 
 - Build voice AI agents that need telephony, SIP, speech, and webhook delivery on one platform.
+- Start from first-run assistant guides that already surface the current Telnyx-hosted OpenAI assistant example model, `openai/gpt-5.4`.
 - Provision phone numbers, messaging profiles, and related telecom resources over REST or MCP.
 - Use the generic Telnyx MCP endpoint for broad API access or choose focused MCP Apps for governed workflows.
 - Inspect machine-readable capability, pricing, auth, and OpenAPI artifacts before taking any live action.
@@ -70,6 +71,13 @@ That guide is the named, crawlable entrypoint for:
 ### Prefer governed examples when raw toolkit power is not appropriate
 
 For external, approval-sensitive, or least-privilege workflows, review the governed examples under [`/tools/python/examples`](/tools/python/examples) before exposing broader toolkit or REST capabilities.
+
+### Start assistant discovery from the named guides
+
+When the workflow is specifically "build or evaluate a Telnyx voice assistant", start with these repo-owned guides instead of guessing from generic API references:
+
+- [`/guides/ai-assistants.md`](/guides/ai-assistants.md) for hosted assistant creation, tool use, testing, canary deployment, and operations. The first-run hosted OpenAI examples use `openai/gpt-5.4`.
+- [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) for the first live answer-webhook path, conversation capture, and Voice Monitor debugging.
 
 ## Repo-owned mirrors and operating files
 

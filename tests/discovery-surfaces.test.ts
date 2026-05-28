@@ -94,6 +94,8 @@ describe("agent discovery surfaces", () => {
       ...Object.values(canonicalDiscovery),
       "/agent.json",
       "/guides/webhooks.md",
+      "/guides/ai-assistants.md",
+      "/guides/voice-agent-onboarding.md",
       "/tools/python/examples"
     ]) {
       assert.match(AGENTS_START, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -107,7 +109,8 @@ describe("agent discovery surfaces", () => {
       "application/ld+json",
       "\"@type\": \"Article\"",
       "\"@type\": \"FAQPage\"",
-      "governed examples"
+      "governed examples",
+      "openai/gpt-5.4"
     ]) {
       assert.match(AGENTS_START, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
@@ -124,6 +127,8 @@ describe("agent discovery surfaces", () => {
       canonicalDiscovery.mcp_url,
       canonicalDiscovery.webhooks_guide,
       canonicalDiscovery.agents_md_url,
+      "https://telnyx.com/guides/ai-assistants.md",
+      "https://telnyx.com/guides/voice-agent-onboarding.md",
       "https://github.com/team-telnyx/ai/tree/main/tools/python/examples"
     ]) {
       assert.match(LLMS, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -134,7 +139,8 @@ describe("agent discovery surfaces", () => {
       "What an agent should learn first",
       "How to choose a surface",
       "Governed examples",
-      "without JavaScript"
+      "without JavaScript",
+      "openai/gpt-5.4"
     ]) {
       assert.match(LLMS, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
