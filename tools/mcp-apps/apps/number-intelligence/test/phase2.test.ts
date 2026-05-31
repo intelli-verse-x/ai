@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { analyzeBatchNumbers, analyzeNumber } from "../src/service.js";
 import { TelnyxReadOnlyClient } from "../src/telnyxClient.js";
 import type { NumberLookupClient, TelnyxNumberLookupResponse } from "../src/types.js";
+import { NUMBER_INTELLIGENCE_UI_HTML } from "../src/ui.js";
 
 const lookupResponse: TelnyxNumberLookupResponse = {
   data: {
@@ -175,6 +176,19 @@ describe("phase 2 batch analysis", () => {
       )
     ).rejects.toThrow("at most 2 numbers");
     expect(lookupCalls).toBe(0);
+  });
+});
+
+describe("Number Intelligence UI shell", () => {
+  it("declares explicit color-scheme metadata and a scoped embedding CSP", () => {
+    expect(NUMBER_INTELLIGENCE_UI_HTML).toContain("Number Intelligence");
+    expect(NUMBER_INTELLIGENCE_UI_HTML).toContain('<meta name="color-scheme" content="light dark" />');
+    expect(NUMBER_INTELLIGENCE_UI_HTML).toContain('<meta http-equiv="Content-Security-Policy" content="');
+    expect(NUMBER_INTELLIGENCE_UI_HTML).toContain("connect-src 'none'");
+    expect(NUMBER_INTELLIGENCE_UI_HTML).toContain("form-action 'none'");
+    expect(NUMBER_INTELLIGENCE_UI_HTML).toContain("frame-ancestors https://chatgpt.com https://chat.openai.com https://claude.ai");
+    expect(NUMBER_INTELLIGENCE_UI_HTML).toContain("script-src 'unsafe-inline'");
+    expect(NUMBER_INTELLIGENCE_UI_HTML).toContain("style-src 'unsafe-inline'");
   });
 });
 

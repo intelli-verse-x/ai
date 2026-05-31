@@ -1,8 +1,25 @@
+const HTML_SHELL_CSP = [
+  "default-src 'none'",
+  "base-uri 'none'",
+  "connect-src 'none'",
+  "font-src 'self' data:",
+  "form-action 'none'",
+  "frame-ancestors https://chatgpt.com https://chat.openai.com https://claude.ai",
+  "img-src 'self' data:",
+  "object-src 'none'",
+  "script-src 'unsafe-inline'",
+  "style-src 'unsafe-inline'"
+].join("; ");
+
+const HTML_SHELL_HEAD = String.raw`    <meta name="color-scheme" content="light dark" />
+    <meta http-equiv="Content-Security-Policy" content="${HTML_SHELL_CSP}" />`;
+
 export const NUMBER_INTELLIGENCE_UI_HTML = String.raw`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+${HTML_SHELL_HEAD}
     <title>Telnyx Number Intelligence</title>
     <style>
       :root {

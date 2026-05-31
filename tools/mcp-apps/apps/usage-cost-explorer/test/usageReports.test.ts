@@ -3,6 +3,16 @@ import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 import { AUTO_RECHARGE_SETUP_UI_HTML, STORED_PAYMENT_TOP_UP_UI_HTML, USAGE_COST_EXPLORER_UI_HTML } from "../src/ui.js";
 
+function expectSecureHtmlShell(html: string): void {
+  expect(html).toContain('<meta name="color-scheme" content="light dark" />');
+  expect(html).toContain('<meta http-equiv="Content-Security-Policy" content="');
+  expect(html).toContain("connect-src 'none'");
+  expect(html).toContain("form-action 'none'");
+  expect(html).toContain("frame-ancestors https://chatgpt.com https://chat.openai.com https://claude.ai");
+  expect(html).toContain("script-src 'unsafe-inline'");
+  expect(html).toContain("style-src 'unsafe-inline'");
+}
+
 describe("Usage Cost Explorer MCP server", () => {
   it("registers the expected tools and beta Usage Reports descriptions", () => {
     const server = createServer();
@@ -154,5 +164,8 @@ describe("Usage Cost Explorer MCP server", () => {
     expect(AUTO_RECHARGE_SETUP_UI_HTML).toContain("No direct payments");
     expect(STORED_PAYMENT_TOP_UP_UI_HTML).toContain("Top Up Balance");
     expect(STORED_PAYMENT_TOP_UP_UI_HTML).toContain("Submit payment");
+    expectSecureHtmlShell(USAGE_COST_EXPLORER_UI_HTML);
+    expectSecureHtmlShell(AUTO_RECHARGE_SETUP_UI_HTML);
+    expectSecureHtmlShell(STORED_PAYMENT_TOP_UP_UI_HTML);
   });
 });

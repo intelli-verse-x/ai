@@ -3,6 +3,16 @@ import { describe, expect, it } from "vitest";
 import { createServer } from "../src/server.js";
 import { VOICE_MONITOR_UI_HTML } from "../src/ui.js";
 
+function expectSecureHtmlShell(html: string): void {
+  expect(html).toContain('<meta name="color-scheme" content="light dark" />');
+  expect(html).toContain('<meta http-equiv="Content-Security-Policy" content="');
+  expect(html).toContain("connect-src 'none'");
+  expect(html).toContain("form-action 'none'");
+  expect(html).toContain("frame-ancestors https://chatgpt.com https://chat.openai.com https://claude.ai");
+  expect(html).toContain("script-src 'unsafe-inline'");
+  expect(html).toContain("style-src 'unsafe-inline'");
+}
+
 describe("Voice Monitor MCP server", () => {
   it("registers read-only tools with the Voice Monitor UI resource", () => {
     const server = createServer();
@@ -99,5 +109,6 @@ describe("Voice Monitor MCP server", () => {
     expect(VOICE_MONITOR_UI_HTML).toContain("idTypeSelect");
     expect(VOICE_MONITOR_UI_HTML).toContain("voice_monitor_debug_report");
     expect(VOICE_MONITOR_UI_HTML).toMatch(/manual JSON fallback/i);
+    expectSecureHtmlShell(VOICE_MONITOR_UI_HTML);
   });
 });

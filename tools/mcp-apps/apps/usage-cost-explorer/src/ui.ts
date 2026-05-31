@@ -1,8 +1,25 @@
+const HTML_SHELL_CSP = [
+  "default-src 'none'",
+  "base-uri 'none'",
+  "connect-src 'none'",
+  "font-src 'self' data:",
+  "form-action 'none'",
+  "frame-ancestors https://chatgpt.com https://chat.openai.com https://claude.ai",
+  "img-src 'self' data:",
+  "object-src 'none'",
+  "script-src 'unsafe-inline'",
+  "style-src 'unsafe-inline'"
+].join("; ");
+
+const HTML_SHELL_HEAD = String.raw`    <meta name="color-scheme" content="light dark" />
+    <meta http-equiv="Content-Security-Policy" content="${HTML_SHELL_CSP}" />`;
+
 export const USAGE_COST_EXPLORER_UI_HTML = String.raw`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+${HTML_SHELL_HEAD}
     <title>Telnyx Billing Dashboard</title>
     <style>
       :root { color-scheme: light dark; --bg: #f6f8fb; --panel: #fff; --soft: #eef3f7; --text: #111827; --muted: #5b6472; --line: #d7dde6; --accent: #00a3a3; --accent-strong: #057474; --good: #16803c; --warn: #a46000; --bad: #b42318; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -419,6 +436,7 @@ export const STORED_PAYMENT_TOP_UP_UI_HTML = String.raw`<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+${HTML_SHELL_HEAD}
     <title>Telnyx Stored Payment Top Up</title>
     <style>
       :root { color-scheme: light dark; --bg: #f6f8fb; --panel: #fff; --soft: #eef3f7; --text: #111827; --muted: #5b6472; --line: #d7dde6; --accent: #00a3a3; --accent-strong: #057474; --good: #16803c; --warn: #a46000; --bad: #b42318; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
@@ -606,6 +624,7 @@ export const AUTO_RECHARGE_SETUP_UI_HTML = String.raw`<!doctype html>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+${HTML_SHELL_HEAD}
     <title>Telnyx Auto Recharge Setup</title>
     <style>
       :root { color-scheme: light dark; --bg: #f6f8fb; --panel: #fff; --soft: #eef3f7; --text: #111827; --muted: #5b6472; --line: #d7dde6; --accent: #00a3a3; --accent-strong: #057474; --good: #16803c; --warn: #a46000; --bad: #b42318; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
