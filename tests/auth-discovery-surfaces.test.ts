@@ -50,6 +50,18 @@ describe("auth discovery artifacts", () => {
   });
 
   it("auth-server metadata exposes the current agent onboarding pointers", () => {
+    assert.equal(authServer.agent_auth.skill, agentJson.discovery.auth_md_url);
+    assert.equal(authServer.agent_auth.register_uri, "https://api.telnyx.com/v2/bot_signup");
+    assert.equal(authServer.agent_auth.claim_uri, "https://api.telnyx.com/v2/bot_signup/resend_magic_link");
+    assert.equal(authServer.agent_auth.challenge_uri, "https://api.telnyx.com/v2/bot_challenge");
+    assert.equal(authServer.agent_auth.agent_access_uri, agentJson.discovery.agent_access_url);
+    assert.equal(authServer.agent_auth.signup_guide_uri, agentJson.auth.signup_guide);
+    assert.deepEqual(authServer.agent_auth.identity_types_supported, ["anonymous"]);
+    assert.deepEqual(authServer.agent_auth.credential_types_supported, ["api_key"]);
+    assert.deepEqual(authServer.agent_auth.anonymous.credential_types_supported, ["api_key"]);
+    assert.deepEqual(authServer.agent_auth.anonymous.verification_methods_supported, ["email_magic_link"]);
+    assert.equal(authServer.agent_auth.anonymous.required_preflight_uri, "https://api.telnyx.com/v2/bot_challenge");
+    assert.deepEqual(authServer.agent_auth.events_supported, []);
     assert.equal(authServer.agent_onboarding.documentation_uri, agentJson.discovery.auth_md_url);
     assert.equal(authServer.agent_onboarding.agent_access_uri, agentJson.discovery.agent_access_url);
     assert.equal(authServer.agent_onboarding.signup_guide_uri, agentJson.auth.signup_guide);
@@ -57,5 +69,22 @@ describe("auth discovery artifacts", () => {
       "https://api.telnyx.com",
       "https://api.telnyx.com/v2/mcp"
     ]);
+  });
+
+  it("protected-resource metadata mirrors the agent auth entrypoints", () => {
+    for (const metadata of [protectedResource, mcpProtectedResource]) {
+      assert.equal(metadata.agent_auth.skill, agentJson.discovery.auth_md_url);
+      assert.equal(metadata.agent_auth.register_uri, authServer.agent_auth.register_uri);
+      assert.equal(metadata.agent_auth.claim_uri, authServer.agent_auth.claim_uri);
+      assert.equal(metadata.agent_auth.challenge_uri, authServer.agent_auth.challenge_uri);
+      assert.equal(metadata.agent_auth.agent_access_uri, agentJson.discovery.agent_access_url);
+      assert.equal(metadata.agent_auth.signup_guide_uri, agentJson.auth.signup_guide);
+      assert.deepEqual(metadata.agent_auth.identity_types_supported, ["anonymous"]);
+      assert.deepEqual(metadata.agent_auth.credential_types_supported, ["api_key"]);
+      assert.deepEqual(metadata.agent_auth.anonymous.credential_types_supported, ["api_key"]);
+      assert.deepEqual(metadata.agent_auth.anonymous.verification_methods_supported, ["email_magic_link"]);
+      assert.equal(metadata.agent_auth.anonymous.required_preflight_uri, "https://api.telnyx.com/v2/bot_challenge");
+      assert.deepEqual(metadata.agent_auth.events_supported, []);
+    }
   });
 });

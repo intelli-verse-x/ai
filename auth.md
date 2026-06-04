@@ -47,9 +47,9 @@ Then fetch the authorization-server metadata from `authorization_servers[0] + "/
 - `registration_endpoint`
 - `scopes_supported`
 - `protected_resources`
-- `agent_onboarding`
+- `agent_auth`
 
-`agent_onboarding` is the Telnyx extension that points agents at the current API-key onboarding surfaces. Telnyx does not currently expose WorkOS-style `/agent/auth`, `/agent/auth/claim`, or `/agent/auth/revoke` endpoints, so do not assume those routes exist.
+`agent_auth` is the machine-readable summary of Telnyx's current agent registration path. Today it advertises the live bot-signup endpoints (`register_uri`, `claim_uri`, `challenge_uri`) plus the human-readable `skill` and `signup_guide_uri` documents that explain the full sequence. Telnyx does not currently expose the full WorkOS-style `/agent/auth`, `/agent/auth/claim`, or `/agent/auth/revoke` endpoint family, so treat the published `agent_auth` block as an onboarding map for the current API-key flow rather than as a claim that those protocol routes exist.
 
 ## 2. Pick a Credential Path
 

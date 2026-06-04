@@ -50,6 +50,25 @@ export function checkJsonDocument(name: string, method: string, url: string, sta
   };
 }
 
+function hasExpectedAgentAuth(body: Record<string, unknown>): boolean {
+  const agentAuth = maybeRecord(body.agent_auth);
+  const anonymous = maybeRecord(agentAuth?.anonymous);
+  return agentAuth !== null
+    && String(agentAuth.skill) === "https://telnyx.com/auth.md"
+    && String(agentAuth.register_uri) === "https://api.telnyx.com/v2/bot_signup"
+    && String(agentAuth.claim_uri) === "https://api.telnyx.com/v2/bot_signup/resend_magic_link"
+    && String(agentAuth.challenge_uri) === "https://api.telnyx.com/v2/bot_challenge"
+    && String(agentAuth.agent_access_uri) === "https://telnyx.com/.well-known/agent-access.json"
+    && String(agentAuth.signup_guide_uri) === "https://telnyx.com/agent-signup.md"
+    && hasExactStringArray(agentAuth.identity_types_supported, ["anonymous"])
+    && hasExactStringArray(agentAuth.credential_types_supported, ["api_key"])
+    && anonymous !== null
+    && hasExactStringArray(anonymous.credential_types_supported, ["api_key"])
+    && hasExactStringArray(anonymous.verification_methods_supported, ["email_magic_link"])
+    && String(anonymous.required_preflight_uri) === "https://api.telnyx.com/v2/bot_challenge"
+    && hasExactStringArray(agentAuth.events_supported, []);
+}
+
 export function checkWwwAuthenticate(status: number, header: string | null): DiscoveryProbe {
   const expected = 'Bearer resource_metadata="https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp"';
   return {
@@ -138,9 +157,9 @@ export async function verifyLiveAgentDiscovery(): Promise<DiscoveryVerificationR
     "https://api.telnyx.com/.well-known/oauth-authorization-server",
     authServer.status,
     authServer.body,
-    (body) => String(body.issuer) === "https://api.telnyx.com" && Array.isArray(body.protected_resources),
-    "authorization-server metadata included issuer and protected resources",
-    "authorization-server metadata was missing issuer or protected resources"
+    (body) => String(body.issuer) === "https://api.telnyx.com" && Array.isArray(body.protected_resources) && hasExpectedAgentAuth(body),
+    "authorization-server metadata included issuer, protected resources, and the expected agent_auth block",
+    "authorization-server metadata was missing issuer, protected resources, or the expected agent_auth block"
   ));
 
   const mcpProtectedResource = await fetchJson("https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp");
@@ -150,9 +169,9 @@ export async function verifyLiveAgentDiscovery(): Promise<DiscoveryVerificationR
     "https://api.telnyx.com/.well-known/oauth-protected-resource/v2/mcp",
     mcpProtectedResource.status,
     mcpProtectedResource.body,
-    (body) => String(body.resource) === "https://api.telnyx.com/v2/mcp",
-    "protected-resource metadata matched the MCP endpoint",
-    "protected-resource metadata did not match the MCP endpoint"
+    (body) => String(body.resource) === "https://api.telnyx.com/v2/mcp" && hasExpectedAgentAuth(body),
+    "protected-resource metadata matched the MCP endpoint and exposed agent_auth discovery",
+    "protected-resource metadata did not match the MCP endpoint or was missing agent_auth discovery"
   ));
 
   const unauthenticatedMcp = await fetch("https://api.telnyx.com/v2/mcp", {
@@ -198,6 +217,19 @@ function asRecord(value: unknown): Record<string, unknown> {
     throw new Error(`Expected object but received ${typeof value}`);
   }
   return value;
+}
+
+function maybeRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return null;
+  }
+  return value;
+}
+
+function hasExactStringArray(value: unknown, expected: string[]): boolean {
+  return Array.isArray(value)
+    && value.length === expected.length
+    && value.every((entry, index) => typeof entry === "string" && entry === expected[index]);
 }
 
 async function main(): Promise<void> {

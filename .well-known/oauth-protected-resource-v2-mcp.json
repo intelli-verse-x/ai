@@ -8,5 +8,30 @@
     "header"
   ],
   "documentation_uri": "https://telnyx.com/auth.md",
-  "agent_access_uri": "https://telnyx.com/.well-known/agent-access.json"
+  "agent_access_uri": "https://telnyx.com/.well-known/agent-access.json",
+  "agent_auth": {
+    "skill": "https://telnyx.com/auth.md",
+    "register_uri": "https://api.telnyx.com/v2/bot_signup",
+    "claim_uri": "https://api.telnyx.com/v2/bot_signup/resend_magic_link",
+    "revocation_uri": "https://telnyx.com/auth.md#6-revocation-and-rotation",
+    "challenge_uri": "https://api.telnyx.com/v2/bot_challenge",
+    "agent_access_uri": "https://telnyx.com/.well-known/agent-access.json",
+    "signup_guide_uri": "https://telnyx.com/agent-signup.md",
+    "identity_types_supported": [
+      "anonymous"
+    ],
+    "credential_types_supported": [
+      "api_key"
+    ],
+    "anonymous": {
+      "credential_types_supported": [
+        "api_key"
+      ],
+      "verification_methods_supported": [
+        "email_magic_link"
+      ],
+      "required_preflight_uri": "https://api.telnyx.com/v2/bot_challenge"
+    },
+    "events_supported": []
+  }
 }
