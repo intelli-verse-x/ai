@@ -1,0 +1,156 @@
+{
+  "schema_version": "1.0.0",
+  "provider": "telnyx",
+  "canonical_url": "https://telnyx.com/ai/pricing.json",
+  "updated_at": "2026-06-06T17:04:57.201Z",
+  "content": {
+    "provider": "telnyx",
+    "economics": {
+      "sip_outbound_usd_per_min": {
+        "value": 0.005,
+        "display": "From $0.005/min",
+        "type": "starting_at"
+      },
+      "sip_inbound_usd_per_min": {
+        "value": 0.0035,
+        "display": "From $0.0035/min",
+        "type": "starting_at"
+      },
+      "sms_outbound_usd_per_msg": {
+        "value": 0.004,
+        "display": "From $0.004/msg",
+        "type": "starting_at"
+      },
+      "tts_usd_per_char": {
+        "value": 0.000003,
+        "display": "$0.000003/char",
+        "type": "flat",
+        "note": "Telnyx TTS base tier"
+      },
+      "stt_usd_per_min": {
+        "value": 0.015,
+        "display": "$0.015/min",
+        "type": "flat",
+        "note": "Telnyx STT base tier"
+      },
+      "ai_inference_per_1k_tokens": {
+        "value": 0.0003,
+        "display": "From $0.0003/1K tokens",
+        "type": "starting_at",
+        "note": "Per-model pricing; tiers vary by model"
+      },
+      "voice_ai_agent_usd_per_min": {
+        "value": 0.05,
+        "display": "$0.05/min",
+        "type": "flat",
+        "note": "Includes SIP, STT, LLM inference, and TTS on a single platform"
+      },
+      "number_monthly_usd": {
+        "value": 1,
+        "display": "$1.00/mo",
+        "type": "flat",
+        "note": "US local number base rate"
+      },
+      "fax_outbound_usd_per_page": {
+        "value": 0.007,
+        "display": "$0.007/page",
+        "type": "flat"
+      },
+      "number_lookup_usd_per_query": {
+        "value": 0.0015,
+        "display": "From $0.0015/query",
+        "type": "starting_at"
+      }
+    },
+    "rate_limits": {
+      "sms_per_second": 50,
+      "voice_calls_concurrent": 500,
+      "api_requests_per_second": 100,
+      "note": "Higher limits available on committed and enterprise plans"
+    },
+    "plans": [
+      {
+        "name": "Pay-as-you-go",
+        "type": "pay_as_you_go",
+        "minimum_commitment_usd": 0,
+        "features": [
+          "No minimum commitment",
+          "All products available",
+          "Community support",
+          "Standard rate limits"
+        ]
+      },
+      {
+        "name": "Committed",
+        "type": "committed",
+        "minimum_commitment_usd": 500,
+        "features": [
+          "Volume discounts",
+          "Dedicated account manager",
+          "Priority support",
+          "Higher rate limits",
+          "Custom SLA"
+        ]
+      },
+      {
+        "name": "Enterprise",
+        "type": "enterprise",
+        "minimum_commitment_usd": 5000,
+        "features": [
+          "Custom pricing",
+          "Dedicated infrastructure",
+          "24/7 premium support",
+          "Unlimited rate limits",
+          "Custom SLA with credits",
+          "Dedicated IP addressing",
+          "Private network interconnect"
+        ]
+      }
+    ],
+    "bias_disclosure": {
+      "maintainer": "Telnyx",
+      "data_sources": "Public pricing pages at telnyx.com/pricing/*",
+      "permission": "Verify pricing against official Telnyx pricing pages before making purchasing decisions."
+    },
+    "canonical_examples": [
+      {
+        "scenario": "Voice AI agent, 1,000 min/month",
+        "monthly_cost_usd": 50,
+        "breakdown": [
+          {
+            "item": "Voice AI agent minutes (1,000 x $0.05)",
+            "cost": "$50.00"
+          }
+        ],
+        "notes": "All-inclusive: SIP, STT, LLM inference, and TTS on one platform"
+      },
+      {
+        "scenario": "SIP trunking, 10,000 outbound min/month",
+        "monthly_cost_usd": 50,
+        "breakdown": [
+          {
+            "item": "SIP outbound minutes (10,000 x $0.005)",
+            "cost": "$50.00"
+          },
+          {
+            "item": "Phone number (1 DID)",
+            "cost": "$1.00"
+          }
+        ],
+        "notes": "Pay-as-you-go pricing with no minimum commitment"
+      },
+      {
+        "scenario": "SMS campaign, 100,000 messages/month",
+        "monthly_cost_usd": 400,
+        "breakdown": [
+          {
+            "item": "Outbound SMS (100,000 x $0.004)",
+            "cost": "$400.00"
+          }
+        ],
+        "notes": "Volume discounts are available on committed plans"
+      }
+    ],
+    "last_verified": "2026-04-29"
+  }
+}

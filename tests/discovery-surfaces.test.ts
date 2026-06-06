@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +16,8 @@ const AGENTS = read("AGENTS.md");
 const AGENTS_START = read("agents/start.md");
 const LLMS = read("llms.txt");
 const agentJson = JSON.parse(read("agent.json"));
+const capabilitiesJson = JSON.parse(read("ai/capabilities.json"));
+const pricingJson = JSON.parse(read("ai/pricing.json"));
 
 const canonicalDiscovery = {
   start_url: "https://telnyx.com/agents/start",
@@ -67,6 +69,26 @@ describe("agent discovery surfaces", () => {
 
   it("agent.json exposes the canonical discovery map", () => {
     assert.deepEqual(agentJson.discovery, canonicalDiscovery);
+  });
+
+  it("repo-owned machine-readable discovery assets exist locally", () => {
+    for (const path of [
+      ".well-known/agent-access.json",
+      "ai/capabilities.json",
+      "ai/pricing.json",
+      "llms.txt"
+    ]) {
+      assert.equal(existsSync(join(ROOT, path)), true, `${path} is missing`);
+    }
+  });
+
+  it("local capability and pricing mirrors match the canonical discovery URLs", () => {
+    assert.equal(capabilitiesJson.canonical_url, canonicalDiscovery.capabilities_url);
+    assert.equal(capabilitiesJson.provider, "telnyx");
+    assert.equal(capabilitiesJson.content.provider, "telnyx");
+    assert.equal(pricingJson.canonical_url, canonicalDiscovery.pricing_url);
+    assert.equal(pricingJson.provider, "telnyx");
+    assert.equal(pricingJson.content.provider, "telnyx");
   });
 
   it("agent.json auth matches the discovery access surface", () => {

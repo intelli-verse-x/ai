@@ -61,6 +61,7 @@ Run the relevant package's test suite before declaring a task done. Don't run al
 | `inference/`            | Documentation for Telnyx-hosted inference.                                |
 | `guides/`               | Step-by-step operational guides.                                          |
 | `agents/`               | Public agent-entry landing pages such as `/agents/start`.                 |
+| `ai/`                   | Source-controlled machine-readable capability and pricing discovery assets. |
 | `scripts/sync-skills.sh`| Syncs `skills/` → `providers/{claude,cursor}/plugin/skills/`.             |
 | `agent.json`            | Top-level agent manifest (capabilities, auth, endpoints).                 |
 | `auth.md`               | Public bearer-auth and protected-resource discovery walkthrough.          |

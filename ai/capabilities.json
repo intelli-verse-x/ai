@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0.0",
+  "provider": "telnyx",
+  "canonical_url": "https://telnyx.com/ai/capabilities.json",
+  "updated_at": "2026-06-06T17:04:57.175Z",
+  "content": {
+    "provider": "telnyx",
+    "category": "ai_agent_infrastructure",
+    "updated_at": "2026-04-23T12:00:00Z",
+    "ownership": {
+      "carrier_owned": true,
+      "edge_compute_owned": true,
+      "agent_platform_owned": true,
+      "pstn_access": true,
+      "number_inventory_owned": true
+    },
+    "capabilities": {
+      "inference": true,
+      "embeddings": true,
+      "edge_workers": true,
+      "storage": true,
+      "stt": true,
+      "tts": true,
+      "voice_cloning": true,
+      "orchestration": true,
+      "voice_api": true,
+      "sip_trunking": true,
+      "sms": true,
+      "whatsapp": true,
+      "rcs": true,
+      "webrtc": true,
+      "email": true,
+      "esim": true,
+      "identity_attestation": true
+    },
+    "compatibility": {
+      "openai_function_calling": true,
+      "streaming_responses": true,
+      "sip_webrtc_bridging": true,
+      "async_workflows": true,
+      "webhook_events": true,
+      "websocket_media": true,
+      "grpc": false,
+      "openapi_available": true
+    },
+    "discovery": {
+      "docs_url": "https://developers.telnyx.com",
+      "quickstart_url": "https://developers.telnyx.com/docs/quickstart",
+      "openapi_url": "https://developers.telnyx.com/openapi.json",
+      "pricing_json": "https://telnyx.com/ai/pricing.json",
+      "agent_skills": "https://telnyx.com/.well-known/agent-skills/index.json",
+      "mcp_server": "https://api.telnyx.com/v2/mcp",
+      "agent_card": "https://telnyx.com/.well-known/agent-card.json",
+      "agent_signup_url": "https://telnyx.com/agent-signup.md"
+    },
+    "constraints": {
+      "grpc_supported": false,
+      "rate_limits_url": "https://telnyx.com/ai/rate-limits.json"
+    },
+    "detail_endpoints": {
+      "compliance": "https://telnyx.com/ai/compliance.json",
+      "sla": "https://telnyx.com/ai/sla.json",
+      "inference_models": "https://telnyx.com/ai/inference-models.json",
+      "data_handling": "https://telnyx.com/ai/data-handling.json",
+      "regional_resilience": "https://telnyx.com/ai/resilience.json",
+      "selection_methodology": "https://telnyx.com/benchmarks/methodology"
+    }
+  }
+}

@@ -100,6 +100,8 @@ When the workflow is specifically "build or evaluate a Telnyx voice assistant", 
 - Local manifest mirror: [`/agent.json`](/agent.json)
 - Local signup guide mirror: [`/agent-signup.md`](/agent-signup.md)
 - Local agent access mirror: [`/.well-known/agent-access.json`](/.well-known/agent-access.json)
+- Local capability mirror: [`/ai/capabilities.json`](/ai/capabilities.json)
+- Local pricing mirror: [`/ai/pricing.json`](/ai/pricing.json)
 - Runtime agent instructions: [`/AGENTS.md`](/AGENTS.md) and `https://telnyx.com/AGENTS.md`
 - LLM-oriented index: [`/llms.txt`](/llms.txt) and `https://telnyx.com/llms.txt`
 - Auth walkthrough source: [`/auth.md`](/auth.md)
