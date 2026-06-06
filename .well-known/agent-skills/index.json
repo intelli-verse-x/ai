@@ -1,0 +1,1951 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "name": "Telnyx Agent Skills",
+  "description": "Official Agent Skills for building on Telnyx — structured, up-to-date context for AI agents to generate correct, production-ready code using Telnyx APIs and SDKs.",
+  "skills": [
+    {
+      "name": "push-notification-tester",
+      "type": "skill-md",
+      "description": "Test VoIP push notifications for Telnyx WebRTC iOS (APNs) and Android (FCM) apps. Use when debugging push notification delivery, validating certificate/credential setup, or testing that a device receives VoIP pushes correctly.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/push-notification-tester/SKILL.md",
+      "digest": "sha256:5690d1b25c99be91b3edcc64059ab0f307048c176631054834a37da135d152bd",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc/push-notifications"
+    },
+    {
+      "name": "telnyx-10dlc-curl",
+      "type": "skill-md",
+      "description": "10DLC brand and campaign registration for US A2P messaging compliance. Assign phone numbers to campaigns.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-10dlc-curl/SKILL.md",
+      "digest": "sha256:356ea6cb10ba12b84981d18be846aa7551640285b4b708bd0edb0c621743f67f",
+      "documentation": "https://developers.telnyx.com/docs/messaging/10dlc"
+    },
+    {
+      "name": "telnyx-10dlc-go",
+      "type": "skill-md",
+      "description": "10DLC brand and campaign registration for US A2P messaging compliance. Assign phone numbers to campaigns.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-10dlc-go/SKILL.md",
+      "digest": "sha256:1154646d64dcebec1ce7f35202fed4adcf1e15ee3cbe8d741c415ffb27a08234",
+      "documentation": "https://developers.telnyx.com/docs/messaging/10dlc"
+    },
+    {
+      "name": "telnyx-10dlc-java",
+      "type": "skill-md",
+      "description": "10DLC brand and campaign registration for US A2P messaging compliance. Assign phone numbers to campaigns.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-10dlc-java/SKILL.md",
+      "digest": "sha256:4b1668ec0422f308a251ea53a5b760f583f2a3fbd4ccd764bb3d7f37c8464716",
+      "documentation": "https://developers.telnyx.com/docs/messaging/10dlc"
+    },
+    {
+      "name": "telnyx-10dlc-javascript",
+      "type": "skill-md",
+      "description": "10DLC brand and campaign registration for US A2P messaging compliance. Assign phone numbers to campaigns.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-10dlc-javascript/SKILL.md",
+      "digest": "sha256:c7934519d0eb6dce36f783b690ee524875644983790358deaf01711a6b193844",
+      "documentation": "https://developers.telnyx.com/docs/messaging/10dlc"
+    },
+    {
+      "name": "telnyx-10dlc-python",
+      "type": "skill-md",
+      "description": "10DLC brand and campaign registration for US A2P messaging compliance. Assign phone numbers to campaigns.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-10dlc-python/SKILL.md",
+      "digest": "sha256:27b95d1d2ce8702c9e1eb2d827648020ed97cc7abcf41766c753d78cf7108284",
+      "documentation": "https://developers.telnyx.com/docs/messaging/10dlc"
+    },
+    {
+      "name": "telnyx-10dlc-ruby",
+      "type": "skill-md",
+      "description": "10DLC brand and campaign registration for US A2P messaging compliance. Assign phone numbers to campaigns.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-10dlc-ruby/SKILL.md",
+      "digest": "sha256:aac7ce35a9d7938cad2f7b5871c7a25adf894cf0e5f1eb483b663cf4e6af6791",
+      "documentation": "https://developers.telnyx.com/docs/messaging/10dlc"
+    },
+    {
+      "name": "telnyx-account-access-curl",
+      "type": "skill-md",
+      "description": "Configure account addresses, authentication providers, IP access controls, billing groups, and integration secrets. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-access-curl/SKILL.md",
+      "digest": "sha256:25579a5d4643fa011f75f8a6771f83d9c6cb09e4582ff80727a3ad15eeb3f6b5",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/levels-and-capabilities"
+    },
+    {
+      "name": "telnyx-account-access-go",
+      "type": "skill-md",
+      "description": "Configure account addresses, authentication providers, IP access controls, billing groups, and integration secrets. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-access-go/SKILL.md",
+      "digest": "sha256:c4c999ca0da2c63a5c269932a85826eeb5f56894f814e347bb74a60528f7f96c",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/levels-and-capabilities"
+    },
+    {
+      "name": "telnyx-account-access-java",
+      "type": "skill-md",
+      "description": "Configure account addresses, authentication providers, IP access controls, billing groups, and integration secrets. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-access-java/SKILL.md",
+      "digest": "sha256:ef72309867feef1658fd2b894665cc9f44abc21d779a5f17057a7b18f9918716",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/levels-and-capabilities"
+    },
+    {
+      "name": "telnyx-account-access-javascript",
+      "type": "skill-md",
+      "description": "Configure account addresses, authentication providers, IP access controls, billing groups, and integration secrets. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-access-javascript/SKILL.md",
+      "digest": "sha256:49552f4176c39f98b566be87627dc460275ecd8016ad3aa24e6181de9a1bf5ed",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/levels-and-capabilities"
+    },
+    {
+      "name": "telnyx-account-access-python",
+      "type": "skill-md",
+      "description": "Configure account addresses, authentication providers, IP access controls, billing groups, and integration secrets. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-access-python/SKILL.md",
+      "digest": "sha256:b97bfa81ec6784f4a8990a3e0037caf4b06ea1f114226bb2266a993dede9b615",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/levels-and-capabilities"
+    },
+    {
+      "name": "telnyx-account-access-ruby",
+      "type": "skill-md",
+      "description": "Configure account addresses, authentication providers, IP access controls, billing groups, and integration secrets. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-access-ruby/SKILL.md",
+      "digest": "sha256:49f912c4250c3e01e0a85856c6cb79fc26cf6b9f86adf6a2d3e3a0700816fd7c",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/levels-and-capabilities"
+    },
+    {
+      "name": "telnyx-account-curl",
+      "type": "skill-md",
+      "description": "Manage account balance, payments, invoices, webhooks, and view audit logs and detail records. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-curl/SKILL.md",
+      "digest": "sha256:63c6f8c6758ca40dee902cb5a38dbc315013836f93657ca8a9d34f03feb9b572",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/create-account"
+    },
+    {
+      "name": "telnyx-account-go",
+      "type": "skill-md",
+      "description": "Manage account balance, payments, invoices, webhooks, and view audit logs and detail records. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-go/SKILL.md",
+      "digest": "sha256:f09c03b343b9c2f9ff0fcc32119094d4b33d26475992a2fbb25ba0593535d997",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/create-account"
+    },
+    {
+      "name": "telnyx-account-java",
+      "type": "skill-md",
+      "description": "Manage account balance, payments, invoices, webhooks, and view audit logs and detail records. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-java/SKILL.md",
+      "digest": "sha256:d45a478f4d3c37411bf7bf6795bcf08be7879319b4ff37f13512093ceb32d22a",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/create-account"
+    },
+    {
+      "name": "telnyx-account-javascript",
+      "type": "skill-md",
+      "description": "Manage account balance, payments, invoices, webhooks, and view audit logs and detail records. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-javascript/SKILL.md",
+      "digest": "sha256:cafb04e32de5944f3dbe528e53aed79a22f32059e536732709b9e3879c83fd85",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/create-account"
+    },
+    {
+      "name": "telnyx-account-management-curl",
+      "type": "skill-md",
+      "description": "Manage sub-accounts for reseller and enterprise scenarios. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-management-curl/SKILL.md",
+      "digest": "sha256:111fc2de99b5e45a130b1dc61fa9fd55ba7dd52c7200d788f0c0af64873c56ba",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/account-upgrade"
+    },
+    {
+      "name": "telnyx-account-management-go",
+      "type": "skill-md",
+      "description": "Manage sub-accounts for reseller and enterprise scenarios. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-management-go/SKILL.md",
+      "digest": "sha256:1d1a43a23ebf8f24e98d7b4de74e785c0cffc807560c701f97ceba2ccd7461c9",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/account-upgrade"
+    },
+    {
+      "name": "telnyx-account-management-java",
+      "type": "skill-md",
+      "description": "Manage sub-accounts for reseller and enterprise scenarios. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-management-java/SKILL.md",
+      "digest": "sha256:e869cc495804b4e3a5380c7d3bc2cf713ac5b67d7415c62b2eb65f07363b8953",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/account-upgrade"
+    },
+    {
+      "name": "telnyx-account-management-javascript",
+      "type": "skill-md",
+      "description": "Manage sub-accounts for reseller and enterprise scenarios. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-management-javascript/SKILL.md",
+      "digest": "sha256:a017027f260384a7c56d0b6d891b5fc9855dc58fb5d893fbf8270ed6757c6886",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/account-upgrade"
+    },
+    {
+      "name": "telnyx-account-management-python",
+      "type": "skill-md",
+      "description": "Manage sub-accounts for reseller and enterprise scenarios. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-management-python/SKILL.md",
+      "digest": "sha256:2ba1d3165e45b6506fc1c48f8318bae1ec397f7d956bf2bf9959c48c4edf23b0",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/account-upgrade"
+    },
+    {
+      "name": "telnyx-account-management-ruby",
+      "type": "skill-md",
+      "description": "Manage sub-accounts for reseller and enterprise scenarios. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-management-ruby/SKILL.md",
+      "digest": "sha256:eb92583f080fffbda6fccccbc4ff0f95915e3d2deb74e9b420448c44ca18c904",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/account-upgrade"
+    },
+    {
+      "name": "telnyx-account-notifications-curl",
+      "type": "skill-md",
+      "description": "Configure notification channels and settings for account alerts and events. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-notifications-curl/SKILL.md",
+      "digest": "sha256:c1951e5d1afbae0d6bc85a2a819177e0bb3494bd9ff2b6164b6094c3f68a5aba",
+      "documentation": "https://developers.telnyx.com/docs/reporting/usage-reports"
+    },
+    {
+      "name": "telnyx-account-notifications-go",
+      "type": "skill-md",
+      "description": "Configure notification channels and settings for account alerts and events. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-notifications-go/SKILL.md",
+      "digest": "sha256:28a8b9162cde26b7e9227a265afe28572525ee4bcf1d2bf53ddd1bf30a464cad",
+      "documentation": "https://developers.telnyx.com/docs/reporting/usage-reports"
+    },
+    {
+      "name": "telnyx-account-notifications-java",
+      "type": "skill-md",
+      "description": "Configure notification channels and settings for account alerts and events. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-notifications-java/SKILL.md",
+      "digest": "sha256:3287d9909696cae1209d6e25a64d59fb91944a1b6ea4cca3acdae16309c6d5a3",
+      "documentation": "https://developers.telnyx.com/docs/reporting/usage-reports"
+    },
+    {
+      "name": "telnyx-account-notifications-javascript",
+      "type": "skill-md",
+      "description": "Configure notification channels and settings for account alerts and events. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-notifications-javascript/SKILL.md",
+      "digest": "sha256:ea00f7a70632f3989031c88169e2735a561b84d094994d630648381f334d4e2b",
+      "documentation": "https://developers.telnyx.com/docs/reporting/usage-reports"
+    },
+    {
+      "name": "telnyx-account-notifications-python",
+      "type": "skill-md",
+      "description": "Configure notification channels and settings for account alerts and events. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-notifications-python/SKILL.md",
+      "digest": "sha256:2ca129999ff69417f114c60d262999b0bd689e075449b5979b3baefc3788751c",
+      "documentation": "https://developers.telnyx.com/docs/reporting/usage-reports"
+    },
+    {
+      "name": "telnyx-account-notifications-ruby",
+      "type": "skill-md",
+      "description": "Configure notification channels and settings for account alerts and events. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-notifications-ruby/SKILL.md",
+      "digest": "sha256:dba7bbf7767e6b1d0617e08af695cdf55e499bd1471de2193d1bed769ba06b75",
+      "documentation": "https://developers.telnyx.com/docs/reporting/usage-reports"
+    },
+    {
+      "name": "telnyx-account-python",
+      "type": "skill-md",
+      "description": "Manage account balance, payments, invoices, webhooks, and view audit logs and detail records. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-python/SKILL.md",
+      "digest": "sha256:69610f4e421521f510f4342daba2bcb0e68b3ed86f2ee8e3e9f87ce9d7824ec8",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/create-account"
+    },
+    {
+      "name": "telnyx-account-reports-curl",
+      "type": "skill-md",
+      "description": "Generate and retrieve usage reports for billing, analytics, and reconciliation. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-reports-curl/SKILL.md",
+      "digest": "sha256:9dfaee1bd2a380bf1b441326a2adf74102d61da238efb34781a043fdf40b2987",
+      "documentation": "https://developers.telnyx.com/docs/reporting/on-demand-reports"
+    },
+    {
+      "name": "telnyx-account-reports-go",
+      "type": "skill-md",
+      "description": "Generate and retrieve usage reports for billing, analytics, and reconciliation. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-reports-go/SKILL.md",
+      "digest": "sha256:aa5da1ba248a6151f6ce33b342474db47ce463cebe889138d388a70f35375618",
+      "documentation": "https://developers.telnyx.com/docs/reporting/on-demand-reports"
+    },
+    {
+      "name": "telnyx-account-reports-java",
+      "type": "skill-md",
+      "description": "Generate and retrieve usage reports for billing, analytics, and reconciliation. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-reports-java/SKILL.md",
+      "digest": "sha256:b386aeb2876fb75dee140fdb80c46eff89f991904eaf2e3d4a4a15a3d8778935",
+      "documentation": "https://developers.telnyx.com/docs/reporting/on-demand-reports"
+    },
+    {
+      "name": "telnyx-account-reports-javascript",
+      "type": "skill-md",
+      "description": "Generate and retrieve usage reports for billing, analytics, and reconciliation. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-reports-javascript/SKILL.md",
+      "digest": "sha256:884b7a351dc3cf915262bd1fe84e0472d06f9f11fb31368b79ba5b22723f54f5",
+      "documentation": "https://developers.telnyx.com/docs/reporting/on-demand-reports"
+    },
+    {
+      "name": "telnyx-account-reports-python",
+      "type": "skill-md",
+      "description": "Generate and retrieve usage reports for billing, analytics, and reconciliation. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-reports-python/SKILL.md",
+      "digest": "sha256:40b02d5fb0c53a131f2ca0ce921776118c45baefa5d3080214688ff5f06cf96c",
+      "documentation": "https://developers.telnyx.com/docs/reporting/on-demand-reports"
+    },
+    {
+      "name": "telnyx-account-reports-ruby",
+      "type": "skill-md",
+      "description": "Generate and retrieve usage reports for billing, analytics, and reconciliation. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-reports-ruby/SKILL.md",
+      "digest": "sha256:4c82b60c2e824ecaa54f5cdc400c00d245d55a032a7f6d19422a945c79c06289",
+      "documentation": "https://developers.telnyx.com/docs/reporting/on-demand-reports"
+    },
+    {
+      "name": "telnyx-account-ruby",
+      "type": "skill-md",
+      "description": "Manage account balance, payments, invoices, webhooks, and view audit logs and detail records. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-account-ruby/SKILL.md",
+      "digest": "sha256:ab0a4e1029b6a9172f669a276fbce56efceb4a2323630acf0fe9fc5b80b90e54",
+      "documentation": "https://developers.telnyx.com/docs/account-setup/create-account"
+    },
+    {
+      "name": "telnyx-ai-assistants-curl",
+      "type": "skill-md",
+      "description": "AI voice assistants with custom instructions, knowledge bases, and tool integrations.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-assistants-curl/SKILL.md",
+      "digest": "sha256:15d04256149bf0bdc31336d0fd2d9a33cf43a0b2fef78563bfc7b6bc831d6528",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-ai-assistants-go",
+      "type": "skill-md",
+      "description": "AI voice assistants with custom instructions, knowledge bases, and tool integrations.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-assistants-go/SKILL.md",
+      "digest": "sha256:1471d9f1bebbc74f712ebe0e764fba9641d4b14d5107f95bec8b2b556bd767f5",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-ai-assistants-java",
+      "type": "skill-md",
+      "description": "AI voice assistants with custom instructions, knowledge bases, and tool integrations.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-assistants-java/SKILL.md",
+      "digest": "sha256:f67fb5189083db0f03aa08744a105af5a33b728aef635257c18ffa238c5bc2b8",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-ai-assistants-javascript",
+      "type": "skill-md",
+      "description": "AI voice assistants with custom instructions, knowledge bases, and tool integrations.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-assistants-javascript/SKILL.md",
+      "digest": "sha256:31ab1b849a8de358232f853f4941822f0b399999702a0420627cf689c979ac35",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-ai-assistants-python",
+      "type": "skill-md",
+      "description": "AI voice assistants with custom instructions, knowledge bases, and tool integrations.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-assistants-python/SKILL.md",
+      "digest": "sha256:ce0bbbcbfb7bd1f5b007e01f0b8ef9eee4b105284ea46b69b4ab99478774e0e2",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-ai-assistants-ruby",
+      "type": "skill-md",
+      "description": "AI voice assistants with custom instructions, knowledge bases, and tool integrations.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-assistants-ruby/SKILL.md",
+      "digest": "sha256:497343bd66750953d9cf2d865f4749048c3245f76674944cad1c22446bb77991",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-ai-inference-curl",
+      "type": "skill-md",
+      "description": "Access Telnyx LLM inference APIs, embeddings, and AI analytics for call insights and summaries. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-inference-curl/SKILL.md",
+      "digest": "sha256:3187fb2d1b53be54c6e2f3e92d383e9e36f864012b865d7b0b59b9510e0b435f",
+      "documentation": "https://developers.telnyx.com/docs/inference/getting-started"
+    },
+    {
+      "name": "telnyx-ai-inference-go",
+      "type": "skill-md",
+      "description": "Access Telnyx LLM inference APIs, embeddings, and AI analytics for call insights and summaries. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-inference-go/SKILL.md",
+      "digest": "sha256:775323d85ce6d4188d93b67d74b3588f96a7183a0a460295550a349b2d7f4e0f",
+      "documentation": "https://developers.telnyx.com/docs/inference/getting-started"
+    },
+    {
+      "name": "telnyx-ai-inference-java",
+      "type": "skill-md",
+      "description": "Access Telnyx LLM inference APIs, embeddings, and AI analytics for call insights and summaries. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-inference-java/SKILL.md",
+      "digest": "sha256:5d7b592fe6792e697f391f311eabd51a7e3b44d78aedd2fee4e3c8fd599fa669",
+      "documentation": "https://developers.telnyx.com/docs/inference/getting-started"
+    },
+    {
+      "name": "telnyx-ai-inference-javascript",
+      "type": "skill-md",
+      "description": "Access Telnyx LLM inference APIs, embeddings, and AI analytics for call insights and summaries. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-inference-javascript/SKILL.md",
+      "digest": "sha256:543103c1ac88a50158719c21bd221cd75cc0bff88c76e403a89459c76b7b5c7f",
+      "documentation": "https://developers.telnyx.com/docs/inference/getting-started"
+    },
+    {
+      "name": "telnyx-ai-inference-python",
+      "type": "skill-md",
+      "description": "Access Telnyx LLM inference APIs, embeddings, and AI analytics for call insights and summaries. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-inference-python/SKILL.md",
+      "digest": "sha256:b7d85a8b455f302f3def185cfcf86b5d4b254b72de877034eba61053bf469d78",
+      "documentation": "https://developers.telnyx.com/docs/inference/getting-started"
+    },
+    {
+      "name": "telnyx-ai-inference-ruby",
+      "type": "skill-md",
+      "description": "Access Telnyx LLM inference APIs, embeddings, and AI analytics for call insights and summaries. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-inference-ruby/SKILL.md",
+      "digest": "sha256:6a74d462308dec93fac38db7b094518063f9c338c7e6ab9256edd024d231bb6d",
+      "documentation": "https://developers.telnyx.com/docs/inference/getting-started"
+    },
+    {
+      "name": "telnyx-ai-outbound-voice-python",
+      "type": "skill-md",
+      "description": "End-to-end setup for making a Telnyx AI assistant call a phone number. Covers provisioning a phone number, creating a TeXML application, assigning the number, configuring telephony settings, whitelisting destination countries, and triggering outbound calls via scheduled events. Use this skill (not telnyx-ai-assistants-python) when the task involves an AI assistant placing, making, or triggering an outbound phone call to a user.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-ai-outbound-voice-python/SKILL.md",
+      "digest": "sha256:e8fff751ab42677d89315ee163a1e2ecf1f38c5394f44140d497ebaaf694fdb9",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-cli",
+      "type": "skill-md",
+      "description": "Use the Telnyx CLI to manage phone numbers, send messages, make calls, and access all Telnyx APIs from the terminal. 946 commands auto-generated from the OpenAPI spec — every API endpoint is a CLI command.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-cli/SKILL.md",
+      "digest": "sha256:99cf179201730dcaf83b3f23b026a0d06c878dd19c0840858f8b4e0a3262b780",
+      "documentation": "https://developers.telnyx.com/docs"
+    },
+    {
+      "name": "telnyx-fax-curl",
+      "type": "skill-md",
+      "description": "Send and receive faxes programmatically. Manage fax applications and media. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-fax-curl/SKILL.md",
+      "digest": "sha256:ba626edc159e1d1fcc0cb2497debdc150b24145bf2956de6ee8a9b20e3836f55",
+      "documentation": "https://developers.telnyx.com/docs/programmable-fax/get-started"
+    },
+    {
+      "name": "telnyx-fax-go",
+      "type": "skill-md",
+      "description": "Send and receive faxes programmatically. Manage fax applications and media. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-fax-go/SKILL.md",
+      "digest": "sha256:e48e6685476cb5d8ca06062faf2b9883d6e9f1f963f4c8ff45b10c1bfdfa9179",
+      "documentation": "https://developers.telnyx.com/docs/programmable-fax/get-started"
+    },
+    {
+      "name": "telnyx-fax-java",
+      "type": "skill-md",
+      "description": "Send and receive faxes programmatically. Manage fax applications and media. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-fax-java/SKILL.md",
+      "digest": "sha256:8692372a90e9f06c4d1151be41339085e6825d3209c9785a47030934b7cb030d",
+      "documentation": "https://developers.telnyx.com/docs/programmable-fax/get-started"
+    },
+    {
+      "name": "telnyx-fax-javascript",
+      "type": "skill-md",
+      "description": "Send and receive faxes programmatically. Manage fax applications and media. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-fax-javascript/SKILL.md",
+      "digest": "sha256:de25cf58f2a501ecbc229d75019ec91766527ed2e5da1b0aeeebf376c385743c",
+      "documentation": "https://developers.telnyx.com/docs/programmable-fax/get-started"
+    },
+    {
+      "name": "telnyx-fax-python",
+      "type": "skill-md",
+      "description": "Send and receive faxes programmatically. Manage fax applications and media. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-fax-python/SKILL.md",
+      "digest": "sha256:59b8e04c06781086d2df424991a4096fb3abdf86d1f20b3bb56fe3c17606b1c2",
+      "documentation": "https://developers.telnyx.com/docs/programmable-fax/get-started"
+    },
+    {
+      "name": "telnyx-fax-ruby",
+      "type": "skill-md",
+      "description": "Send and receive faxes programmatically. Manage fax applications and media. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-fax-ruby/SKILL.md",
+      "digest": "sha256:54bb8172f329d4b7c660e652347e15dceae684c02e8a5e5c2d7822a0d2c0a0ad",
+      "documentation": "https://developers.telnyx.com/docs/programmable-fax/get-started"
+    },
+    {
+      "name": "telnyx-import-elevenlabs",
+      "type": "skill-md",
+      "description": "Import ElevenLabs conversational AI agents into Telnyx. Preserves instructions, voice settings, tools, and call analysis. Supports all SDK languages.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-import-elevenlabs/SKILL.md",
+      "digest": "sha256:237d0eb679d2be600b776764e31d3f467027c9aa375673575f3ada854fd3a008",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-import-retell",
+      "type": "skill-md",
+      "description": "Import Retell AI agents into Telnyx — both single-prompt and multi-prompt configurations. Preserves instructions, voice settings, tools, and call analysis. Supports all SDK languages.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-import-retell/SKILL.md",
+      "digest": "sha256:2e271c666445abebf48c1e5b24a76ebf11083e3f5d233ab252bf41a94fd08b2f",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-import-vapi",
+      "type": "skill-md",
+      "description": "Import Vapi voice assistants into Telnyx with all configurations — instructions, greeting, voice settings, tools, and call analysis. Supports selective import by assistant ID and covers all SDK languages.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-import-vapi/SKILL.md",
+      "digest": "sha256:40ef2434a0daab45b7f9a7a4cf9c4eaaeab61cd0e7154c0d1217d97dcfe46258",
+      "documentation": "https://developers.telnyx.com/docs/inference/ai-assistants/integrations"
+    },
+    {
+      "name": "telnyx-iot-curl",
+      "type": "skill-md",
+      "description": "Manage IoT SIM cards, eSIMs, data plans, and wireless connectivity. Use when building IoT/M2M solutions. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-iot-curl/SKILL.md",
+      "digest": "sha256:93cc46c08aa88dc1e37a1728b4af18d7afa2b7f3b240d46921e0969dd9ee144f",
+      "documentation": "https://developers.telnyx.com/docs/iot-sim/get-started"
+    },
+    {
+      "name": "telnyx-iot-go",
+      "type": "skill-md",
+      "description": "Manage IoT SIM cards, eSIMs, data plans, and wireless connectivity. Use when building IoT/M2M solutions. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-iot-go/SKILL.md",
+      "digest": "sha256:c130a85a8a6e5c5d4a53f5ebd2ddcfeba3336f922d3635274cb9d57736b6eed0",
+      "documentation": "https://developers.telnyx.com/docs/iot-sim/get-started"
+    },
+    {
+      "name": "telnyx-iot-java",
+      "type": "skill-md",
+      "description": "Manage IoT SIM cards, eSIMs, data plans, and wireless connectivity. Use when building IoT/M2M solutions. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-iot-java/SKILL.md",
+      "digest": "sha256:11248b5795289bf88cbf2f289ec2fe9cc6558163656691e01e725aab52acd82f",
+      "documentation": "https://developers.telnyx.com/docs/iot-sim/get-started"
+    },
+    {
+      "name": "telnyx-iot-javascript",
+      "type": "skill-md",
+      "description": "Manage IoT SIM cards, eSIMs, data plans, and wireless connectivity. Use when building IoT/M2M solutions. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-iot-javascript/SKILL.md",
+      "digest": "sha256:c63fd2e7fde96a8f77d22ef3006d2811eaec64c704e294575904b39325483dca",
+      "documentation": "https://developers.telnyx.com/docs/iot-sim/get-started"
+    },
+    {
+      "name": "telnyx-iot-python",
+      "type": "skill-md",
+      "description": "Manage IoT SIM cards, eSIMs, data plans, and wireless connectivity. Use when building IoT/M2M solutions. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-iot-python/SKILL.md",
+      "digest": "sha256:644b6557e2f89f2870757ec44ea053662570057b176ae464b8ac549684bd87ad",
+      "documentation": "https://developers.telnyx.com/docs/iot-sim/get-started"
+    },
+    {
+      "name": "telnyx-iot-ruby",
+      "type": "skill-md",
+      "description": "Manage IoT SIM cards, eSIMs, data plans, and wireless connectivity. Use when building IoT/M2M solutions. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-iot-ruby/SKILL.md",
+      "digest": "sha256:1fa583d5d34009dbe666657ece34de736c96f4aa3ab0e82910bdf130e225c4c2",
+      "documentation": "https://developers.telnyx.com/docs/iot-sim/get-started"
+    },
+    {
+      "name": "telnyx-messaging-curl",
+      "type": "skill-md",
+      "description": "Send and receive SMS/MMS, handle opt-outs and delivery webhooks. Use for notifications, 2FA, or messaging apps.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-curl/SKILL.md",
+      "digest": "sha256:d03e8132720082d7df415bb185221c6923bce3a743c3079c6641448556f2aa17",
+      "documentation": "https://developers.telnyx.com/docs/messaging"
+    },
+    {
+      "name": "telnyx-messaging-go",
+      "type": "skill-md",
+      "description": "Send and receive SMS/MMS, handle opt-outs and delivery webhooks. Use for notifications, 2FA, or messaging apps.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-go/SKILL.md",
+      "digest": "sha256:37166ab1c3d593c0d5916b20a4726f42a0fafffc445b68d085fe91a9c8d9208b",
+      "documentation": "https://developers.telnyx.com/docs/messaging"
+    },
+    {
+      "name": "telnyx-messaging-hosted-curl",
+      "type": "skill-md",
+      "description": "Set up hosted SMS numbers, toll-free verification, and RCS messaging. Use when migrating numbers or enabling rich messaging features. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-hosted-curl/SKILL.md",
+      "digest": "sha256:5c3dfb65b7c8af52b7cd7a55d96eb757673a94d32a51f2f8bcaa041faf012424",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/hosted-sms"
+    },
+    {
+      "name": "telnyx-messaging-hosted-go",
+      "type": "skill-md",
+      "description": "Set up hosted SMS numbers, toll-free verification, and RCS messaging. Use when migrating numbers or enabling rich messaging features. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-hosted-go/SKILL.md",
+      "digest": "sha256:b8789e839e30b32e83ba30f99c767eb952de0d8ebf64c84940d6cb04ab9a3a5b",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/hosted-sms"
+    },
+    {
+      "name": "telnyx-messaging-hosted-java",
+      "type": "skill-md",
+      "description": "Set up hosted SMS numbers, toll-free verification, and RCS messaging. Use when migrating numbers or enabling rich messaging features. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-hosted-java/SKILL.md",
+      "digest": "sha256:a1588f7a60db6022d257f8276272c75d9b66f6975af06829425974b439499a2d",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/hosted-sms"
+    },
+    {
+      "name": "telnyx-messaging-hosted-javascript",
+      "type": "skill-md",
+      "description": "Set up hosted SMS numbers, toll-free verification, and RCS messaging. Use when migrating numbers or enabling rich messaging features. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-hosted-javascript/SKILL.md",
+      "digest": "sha256:87cb2e1530396f1145d2add5964e8a21ce9d86950273b34ed405bc5ffb59b8ab",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/hosted-sms"
+    },
+    {
+      "name": "telnyx-messaging-hosted-python",
+      "type": "skill-md",
+      "description": "Set up hosted SMS numbers, toll-free verification, and RCS messaging. Use when migrating numbers or enabling rich messaging features. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-hosted-python/SKILL.md",
+      "digest": "sha256:a58881d25905433064282fe7e0d67907ce414fda12a7f1d6a002d9360a72f7cc",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/hosted-sms"
+    },
+    {
+      "name": "telnyx-messaging-hosted-ruby",
+      "type": "skill-md",
+      "description": "Set up hosted SMS numbers, toll-free verification, and RCS messaging. Use when migrating numbers or enabling rich messaging features. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-hosted-ruby/SKILL.md",
+      "digest": "sha256:00a04e75fa5566b68173d35a85ee61c2b2a4614c37efc4b32ba4d961c68eabc3",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/hosted-sms"
+    },
+    {
+      "name": "telnyx-messaging-java",
+      "type": "skill-md",
+      "description": "Send and receive SMS/MMS, handle opt-outs and delivery webhooks. Use for notifications, 2FA, or messaging apps.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-java/SKILL.md",
+      "digest": "sha256:f3795d584c519f7e107d8b52140877ec159f51db328fa53e31adc2b23653af39",
+      "documentation": "https://developers.telnyx.com/docs/messaging"
+    },
+    {
+      "name": "telnyx-messaging-javascript",
+      "type": "skill-md",
+      "description": "Send and receive SMS/MMS, handle opt-outs and delivery webhooks. Use for notifications, 2FA, or messaging apps.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-javascript/SKILL.md",
+      "digest": "sha256:b5d9ea5f3f60d41ec19c4dd5edbf1623e8909246114d9d869895e232d6c553bc",
+      "documentation": "https://developers.telnyx.com/docs/messaging"
+    },
+    {
+      "name": "telnyx-messaging-profiles-curl",
+      "type": "skill-md",
+      "description": "Create and manage messaging profiles with number pools, sticky sender, and geomatch features. Configure short codes for high-volume messaging. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-profiles-curl/SKILL.md",
+      "digest": "sha256:0c4e0a25db9c58dcfd755a2d1cee4b76fbbb18a5f0ee9af291402c0cb60f2e02",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/messaging-profiles-overview"
+    },
+    {
+      "name": "telnyx-messaging-profiles-go",
+      "type": "skill-md",
+      "description": "Create and manage messaging profiles with number pools, sticky sender, and geomatch features. Configure short codes for high-volume messaging. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-profiles-go/SKILL.md",
+      "digest": "sha256:e84db8922fc5d10d2ace2a7a840a29bc5e9f988089fedc5fddf84490eb67f9ee",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/messaging-profiles-overview"
+    },
+    {
+      "name": "telnyx-messaging-profiles-java",
+      "type": "skill-md",
+      "description": "Create and manage messaging profiles with number pools, sticky sender, and geomatch features. Configure short codes for high-volume messaging. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-profiles-java/SKILL.md",
+      "digest": "sha256:2f7c0cc246cdf92eb81958cd125b40cd63f78c26a7924ec7ad08845dd8b03165",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/messaging-profiles-overview"
+    },
+    {
+      "name": "telnyx-messaging-profiles-javascript",
+      "type": "skill-md",
+      "description": "Create and manage messaging profiles with number pools, sticky sender, and geomatch features. Configure short codes for high-volume messaging. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-profiles-javascript/SKILL.md",
+      "digest": "sha256:36b9bddd522d53b373a6db91d0991241ef8e56de72dde9208785091b9d3ba848",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/messaging-profiles-overview"
+    },
+    {
+      "name": "telnyx-messaging-profiles-python",
+      "type": "skill-md",
+      "description": "Create and manage messaging profiles with number pools, sticky sender, and geomatch features. Configure short codes for high-volume messaging. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-profiles-python/SKILL.md",
+      "digest": "sha256:7810eddab9d7abe55ff86e355f78c93e3d1f55009848f7f6539860676e391ad0",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/messaging-profiles-overview"
+    },
+    {
+      "name": "telnyx-messaging-profiles-ruby",
+      "type": "skill-md",
+      "description": "Create and manage messaging profiles with number pools, sticky sender, and geomatch features. Configure short codes for high-volume messaging. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-profiles-ruby/SKILL.md",
+      "digest": "sha256:92ea413f94ef75eb47af4684484f99ab35cb3d80337a5e961c1ff99ed6116c35",
+      "documentation": "https://developers.telnyx.com/docs/messaging/messages/messaging-profiles-overview"
+    },
+    {
+      "name": "telnyx-messaging-python",
+      "type": "skill-md",
+      "description": "Send and receive SMS/MMS, handle opt-outs and delivery webhooks. Use for notifications, 2FA, or messaging apps.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-python/SKILL.md",
+      "digest": "sha256:cdf4457bd83317bf3d99bd0dcc33bc2408ae247b9f2e9390206b62994ddbf33d",
+      "documentation": "https://developers.telnyx.com/docs/messaging"
+    },
+    {
+      "name": "telnyx-messaging-ruby",
+      "type": "skill-md",
+      "description": "Send and receive SMS/MMS, handle opt-outs and delivery webhooks. Use for notifications, 2FA, or messaging apps.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-messaging-ruby/SKILL.md",
+      "digest": "sha256:45cab3526306521b0fe5e7f4556c5014041c1b53115e2c0e64478fa4de27a746",
+      "documentation": "https://developers.telnyx.com/docs/messaging"
+    },
+    {
+      "name": "telnyx-missions-curl",
+      "type": "skill-md",
+      "description": "Create and manage Telnyx Missions — automated workflows, tasks, and sub-resources for AI-driven telecom operations. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-missions-curl/SKILL.md",
+      "digest": "sha256:33fa3f577a760eb2411e97cb123d79549eb13ce89a15a56a7ed3bb3106d4c2eb",
+      "documentation": "https://developers.telnyx.com/docs/inference/missions"
+    },
+    {
+      "name": "telnyx-missions-go",
+      "type": "skill-md",
+      "description": "Create and manage Telnyx Missions — automated workflows, tasks, and sub-resources for AI-driven telecom operations. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-missions-go/SKILL.md",
+      "digest": "sha256:8fc196c66b9aa824ccf2b2dfa8d79daaed83e6a7288b0d5e59df976307b2ffc5",
+      "documentation": "https://developers.telnyx.com/docs/inference/missions"
+    },
+    {
+      "name": "telnyx-missions-java",
+      "type": "skill-md",
+      "description": "Create and manage Telnyx Missions — automated workflows, tasks, and sub-resources for AI-driven telecom operations. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-missions-java/SKILL.md",
+      "digest": "sha256:4e0a597f350dd5c66ecb07c6f3b613f4ea8869c1be8b1e081cb2bb8f060403a5",
+      "documentation": "https://developers.telnyx.com/docs/inference/missions"
+    },
+    {
+      "name": "telnyx-missions-javascript",
+      "type": "skill-md",
+      "description": "Create and manage Telnyx Missions — automated workflows, tasks, and sub-resources for AI-driven telecom operations. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-missions-javascript/SKILL.md",
+      "digest": "sha256:3a325d4b9cb279bd0bc7bb618fe0e3cc43edb4005d8de95c1c8161032943ae38",
+      "documentation": "https://developers.telnyx.com/docs/inference/missions"
+    },
+    {
+      "name": "telnyx-missions-python",
+      "type": "skill-md",
+      "description": "Create and manage Telnyx Missions — automated workflows, tasks, and sub-resources for AI-driven telecom operations. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-missions-python/SKILL.md",
+      "digest": "sha256:db23b8b3aa1cfe07df002c23eb7afcc012e2a7eaf7f767bdc1a1133888fb4150",
+      "documentation": "https://developers.telnyx.com/docs/inference/missions"
+    },
+    {
+      "name": "telnyx-missions-ruby",
+      "type": "skill-md",
+      "description": "Create and manage Telnyx Missions — automated workflows, tasks, and sub-resources for AI-driven telecom operations. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-missions-ruby/SKILL.md",
+      "digest": "sha256:832bf3fa148008ed6743330afc956f03bae5fc21d29df83fb48e28b9f1f0a866",
+      "documentation": "https://developers.telnyx.com/docs/inference/missions"
+    },
+    {
+      "name": "telnyx-networking-curl",
+      "type": "skill-md",
+      "description": "Configure private networks, WireGuard VPN gateways, internet gateways, and virtual cross connects. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-networking-curl/SKILL.md",
+      "digest": "sha256:9590142530ad1b2e3875188d3a130a51cd80077aafa0f8765c031d926339dce9",
+      "documentation": "https://developers.telnyx.com/docs/network/overview"
+    },
+    {
+      "name": "telnyx-networking-go",
+      "type": "skill-md",
+      "description": "Configure private networks, WireGuard VPN gateways, internet gateways, and virtual cross connects. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-networking-go/SKILL.md",
+      "digest": "sha256:b37ecfc1bbf966a0aab3c7adebd745fc5fa945f2f8cf9f016ad1d5612c9fbadc",
+      "documentation": "https://developers.telnyx.com/docs/network/overview"
+    },
+    {
+      "name": "telnyx-networking-java",
+      "type": "skill-md",
+      "description": "Configure private networks, WireGuard VPN gateways, internet gateways, and virtual cross connects. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-networking-java/SKILL.md",
+      "digest": "sha256:4ee94467869848a0bb7863b6d281130586535c3c17c7e2512ce5a7f69c816460",
+      "documentation": "https://developers.telnyx.com/docs/network/overview"
+    },
+    {
+      "name": "telnyx-networking-javascript",
+      "type": "skill-md",
+      "description": "Configure private networks, WireGuard VPN gateways, internet gateways, and virtual cross connects. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-networking-javascript/SKILL.md",
+      "digest": "sha256:c0a97b6df84e3541e700959f33392a1a1b27dfe7575d7e5be5f833c3bbfcf587",
+      "documentation": "https://developers.telnyx.com/docs/network/overview"
+    },
+    {
+      "name": "telnyx-networking-python",
+      "type": "skill-md",
+      "description": "Configure private networks, WireGuard VPN gateways, internet gateways, and virtual cross connects. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-networking-python/SKILL.md",
+      "digest": "sha256:b1ef4d7efad083e13d87f942f97f25002a6669e98c68579e313344759ca7b342",
+      "documentation": "https://developers.telnyx.com/docs/network/overview"
+    },
+    {
+      "name": "telnyx-networking-ruby",
+      "type": "skill-md",
+      "description": "Configure private networks, WireGuard VPN gateways, internet gateways, and virtual cross connects. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-networking-ruby/SKILL.md",
+      "digest": "sha256:e4a60c926a1c426f0e591d6aeaf07a32c3e06fb4a279a5105a44936d84182303",
+      "documentation": "https://developers.telnyx.com/docs/network/overview"
+    },
+    {
+      "name": "telnyx-numbers-compliance-curl",
+      "type": "skill-md",
+      "description": "Manage regulatory requirements, number bundles, supporting documents, and verified numbers for compliance. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-compliance-curl/SKILL.md",
+      "digest": "sha256:c460ece8005a7f72ea4253e2e8890cb274b3a715fc1e41388bc861223b980c32",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/regulatory-requirements"
+    },
+    {
+      "name": "telnyx-numbers-compliance-go",
+      "type": "skill-md",
+      "description": "Manage regulatory requirements, number bundles, supporting documents, and verified numbers for compliance. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-compliance-go/SKILL.md",
+      "digest": "sha256:494b475f0c2ef3ad9f9472378e807e27701232fdca0e620cfb469a4e431f72a9",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/regulatory-requirements"
+    },
+    {
+      "name": "telnyx-numbers-compliance-java",
+      "type": "skill-md",
+      "description": "Manage regulatory requirements, number bundles, supporting documents, and verified numbers for compliance. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-compliance-java/SKILL.md",
+      "digest": "sha256:1195ae3b0667142310a327eb3028815bf187aab37c6984d801be806839223ff4",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/regulatory-requirements"
+    },
+    {
+      "name": "telnyx-numbers-compliance-javascript",
+      "type": "skill-md",
+      "description": "Manage regulatory requirements, number bundles, supporting documents, and verified numbers for compliance. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-compliance-javascript/SKILL.md",
+      "digest": "sha256:220cf5fa124d0a9dbffbf5ab97c84f9043861f24cdb905b9ab16c6e9d7a0ddeb",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/regulatory-requirements"
+    },
+    {
+      "name": "telnyx-numbers-compliance-python",
+      "type": "skill-md",
+      "description": "Manage regulatory requirements, number bundles, supporting documents, and verified numbers for compliance. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-compliance-python/SKILL.md",
+      "digest": "sha256:2264408b3f1108ee0e245680ede994797c9c19c905772f303d8b01feb41fbc23",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/regulatory-requirements"
+    },
+    {
+      "name": "telnyx-numbers-compliance-ruby",
+      "type": "skill-md",
+      "description": "Manage regulatory requirements, number bundles, supporting documents, and verified numbers for compliance. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-compliance-ruby/SKILL.md",
+      "digest": "sha256:b4515849ad82aada21e5fca151c368dffb694ba2eaf7a31e0b29f453cd41982f",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/regulatory-requirements"
+    },
+    {
+      "name": "telnyx-numbers-config-curl",
+      "type": "skill-md",
+      "description": "Configure phone number settings including caller ID, call forwarding, messaging enablement, and connection assignments. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-config-curl/SKILL.md",
+      "digest": "sha256:f1074ddf7f18dec72e1bde0611f18d2b61a9badf9e478494fe002f72b910c876",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/getting-started"
+    },
+    {
+      "name": "telnyx-numbers-config-go",
+      "type": "skill-md",
+      "description": "Configure phone number settings including caller ID, call forwarding, messaging enablement, and connection assignments. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-config-go/SKILL.md",
+      "digest": "sha256:f6100e5fd62575cbe2c687d3c9533cf749f9f1fbaddc33e2ae21e9604f5832a0",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/getting-started"
+    },
+    {
+      "name": "telnyx-numbers-config-java",
+      "type": "skill-md",
+      "description": "Configure phone number settings including caller ID, call forwarding, messaging enablement, and connection assignments. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-config-java/SKILL.md",
+      "digest": "sha256:12d06e05edd48368a76c147b4b9cd673836683a4e9e12e52541277ed2e7413ef",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/getting-started"
+    },
+    {
+      "name": "telnyx-numbers-config-javascript",
+      "type": "skill-md",
+      "description": "Configure phone number settings including caller ID, call forwarding, messaging enablement, and connection assignments. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-config-javascript/SKILL.md",
+      "digest": "sha256:3ad2bce48664cbc409980b49b01a2bb4e725fc9a5a0a763abeb0eaf3a417bd5b",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/getting-started"
+    },
+    {
+      "name": "telnyx-numbers-config-python",
+      "type": "skill-md",
+      "description": "Configure phone number settings including caller ID, call forwarding, messaging enablement, and connection assignments. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-config-python/SKILL.md",
+      "digest": "sha256:bf70287df031b14d251dae7735789591233a07023c573efe8da1ede3ff6aceb0",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/getting-started"
+    },
+    {
+      "name": "telnyx-numbers-config-ruby",
+      "type": "skill-md",
+      "description": "Configure phone number settings including caller ID, call forwarding, messaging enablement, and connection assignments. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-config-ruby/SKILL.md",
+      "digest": "sha256:c1b9304a5b85ff5ae2bff988fbc7326b3158be3be971b0e72d8bf4c867e9ae53",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/getting-started"
+    },
+    {
+      "name": "telnyx-numbers-curl",
+      "type": "skill-md",
+      "description": "Search, order, and manage phone numbers by location, features, and coverage.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-curl/SKILL.md",
+      "digest": "sha256:db4505335a7b896ef5dd4a9a8b34c6b37c283c925dbf434001a032c6ab67ce7b",
+      "documentation": "https://developers.telnyx.com/docs/numbers"
+    },
+    {
+      "name": "telnyx-numbers-go",
+      "type": "skill-md",
+      "description": "Search, order, and manage phone numbers by location, features, and coverage.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-go/SKILL.md",
+      "digest": "sha256:7bf80f04148237eb12ac8b0c751cfc4437c18ebf59ceb08a628292af5112578c",
+      "documentation": "https://developers.telnyx.com/docs/numbers"
+    },
+    {
+      "name": "telnyx-numbers-java",
+      "type": "skill-md",
+      "description": "Search, order, and manage phone numbers by location, features, and coverage.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-java/SKILL.md",
+      "digest": "sha256:723e41ffdedaee4676598b1d95a70f7329d7e04db20f38ad779bd30fc7e6561e",
+      "documentation": "https://developers.telnyx.com/docs/numbers"
+    },
+    {
+      "name": "telnyx-numbers-javascript",
+      "type": "skill-md",
+      "description": "Search, order, and manage phone numbers by location, features, and coverage.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-javascript/SKILL.md",
+      "digest": "sha256:836a7687f67bdab6ff8b827fa5083f2ce7d90760f6764bec55eba9b16b53db6c",
+      "documentation": "https://developers.telnyx.com/docs/numbers"
+    },
+    {
+      "name": "telnyx-numbers-python",
+      "type": "skill-md",
+      "description": "Search, order, and manage phone numbers by location, features, and coverage.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-python/SKILL.md",
+      "digest": "sha256:e76fb384b44c9ed42e6dc0a0cb9e31e400290f3704fb973350f00d9446272cec",
+      "documentation": "https://developers.telnyx.com/docs/numbers"
+    },
+    {
+      "name": "telnyx-numbers-ruby",
+      "type": "skill-md",
+      "description": "Search, order, and manage phone numbers by location, features, and coverage.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-ruby/SKILL.md",
+      "digest": "sha256:41aa49740e1d564f43fed3c7ff850da20b317ac579273d9d48b0a08ce8f5ccf8",
+      "documentation": "https://developers.telnyx.com/docs/numbers"
+    },
+    {
+      "name": "telnyx-numbers-services-curl",
+      "type": "skill-md",
+      "description": "Configure voicemail, voice channels, and emergency (E911) services for your phone numbers. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-services-curl/SKILL.md",
+      "digest": "sha256:0e3ace9f3227dbbcd9327759071c93c742214cda8a01d6b666394719e5000412",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/number-search"
+    },
+    {
+      "name": "telnyx-numbers-services-go",
+      "type": "skill-md",
+      "description": "Configure voicemail, voice channels, and emergency (E911) services for your phone numbers. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-services-go/SKILL.md",
+      "digest": "sha256:62c243fd59cb82d29406549a402735ce009ac11400bc438222823ccf05db7230",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/number-search"
+    },
+    {
+      "name": "telnyx-numbers-services-java",
+      "type": "skill-md",
+      "description": "Configure voicemail, voice channels, and emergency (E911) services for your phone numbers. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-services-java/SKILL.md",
+      "digest": "sha256:1c54df3df247540f98312b269f7833d2133f16f7b3ce41c10d6afb175323b37b",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/number-search"
+    },
+    {
+      "name": "telnyx-numbers-services-javascript",
+      "type": "skill-md",
+      "description": "Configure voicemail, voice channels, and emergency (E911) services for your phone numbers. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-services-javascript/SKILL.md",
+      "digest": "sha256:68d67905d569ad908682c4e51b5912431a7e7dba0c10f4c0a69a60bc6394cd84",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/number-search"
+    },
+    {
+      "name": "telnyx-numbers-services-python",
+      "type": "skill-md",
+      "description": "Configure voicemail, voice channels, and emergency (E911) services for your phone numbers. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-services-python/SKILL.md",
+      "digest": "sha256:1f9e1d57271d15c49aa74738914abd75b6abf269a45b8a2f984ff274cfb529da",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/number-search"
+    },
+    {
+      "name": "telnyx-numbers-services-ruby",
+      "type": "skill-md",
+      "description": "Configure voicemail, voice channels, and emergency (E911) services for your phone numbers. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-numbers-services-ruby/SKILL.md",
+      "digest": "sha256:3134481e39660a32517815a5308051e888254b167bc259206330c93df44c836f",
+      "documentation": "https://developers.telnyx.com/docs/numbers/phone-numbers/number-search"
+    },
+    {
+      "name": "telnyx-oauth-curl",
+      "type": "skill-md",
+      "description": "Implement OAuth 2.0 authentication flows for Telnyx API access. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-oauth-curl/SKILL.md",
+      "digest": "sha256:bb1572800a02be7dbfdff101257a8a5b918d053f0e01d54b21bb4503c847f472",
+      "documentation": "https://developers.telnyx.com/development/api-fundamentals/authentication"
+    },
+    {
+      "name": "telnyx-oauth-go",
+      "type": "skill-md",
+      "description": "Implement OAuth 2.0 authentication flows for Telnyx API access. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-oauth-go/SKILL.md",
+      "digest": "sha256:2e458a3ae2e81deee377762f01e96bf672cf20ef68f805e55181967cecd7f350",
+      "documentation": "https://developers.telnyx.com/development/api-fundamentals/authentication"
+    },
+    {
+      "name": "telnyx-oauth-java",
+      "type": "skill-md",
+      "description": "Implement OAuth 2.0 authentication flows for Telnyx API access. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-oauth-java/SKILL.md",
+      "digest": "sha256:fd9e7b8a0d5b8174c318d84c31e6c01e9d421060aa83d0c8639d7ea51051e01d",
+      "documentation": "https://developers.telnyx.com/development/api-fundamentals/authentication"
+    },
+    {
+      "name": "telnyx-oauth-javascript",
+      "type": "skill-md",
+      "description": "Implement OAuth 2.0 authentication flows for Telnyx API access. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-oauth-javascript/SKILL.md",
+      "digest": "sha256:a18389a02e11cd4fe986059c9b256ee350a1e29997fe5a0cd7b5bdbfdb48cd35",
+      "documentation": "https://developers.telnyx.com/development/api-fundamentals/authentication"
+    },
+    {
+      "name": "telnyx-oauth-python",
+      "type": "skill-md",
+      "description": "Implement OAuth 2.0 authentication flows for Telnyx API access. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-oauth-python/SKILL.md",
+      "digest": "sha256:9e453ec77b4bb59ddc6a0fa5d48285260373d9225b0b01efbfda360729b6cadf",
+      "documentation": "https://developers.telnyx.com/development/api-fundamentals/authentication"
+    },
+    {
+      "name": "telnyx-oauth-ruby",
+      "type": "skill-md",
+      "description": "Implement OAuth 2.0 authentication flows for Telnyx API access. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-oauth-ruby/SKILL.md",
+      "digest": "sha256:26959ea29f3ffe05f39a5a22fb39b54ff9078178f7d2ebd5f819d6ab8497aada",
+      "documentation": "https://developers.telnyx.com/development/api-fundamentals/authentication"
+    },
+    {
+      "name": "telnyx-porting-in-curl",
+      "type": "skill-md",
+      "description": "Port phone numbers into Telnyx. Check portability, create port orders, upload LOA documents, and track porting status. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-in-curl/SKILL.md",
+      "digest": "sha256:ba158e3fb2b0ef4e05e9cd69ef15fed942d8b610913223f46d778b97721135c5",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-in-go",
+      "type": "skill-md",
+      "description": "Port phone numbers into Telnyx. Check portability, create port orders, upload LOA documents, and track porting status. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-in-go/SKILL.md",
+      "digest": "sha256:644d5858e1c26d3dee52cfd65a33f1e08b53adeb671b2418f57acc3d8dcc10c7",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-in-java",
+      "type": "skill-md",
+      "description": "Port phone numbers into Telnyx. Check portability, create port orders, upload LOA documents, and track porting status. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-in-java/SKILL.md",
+      "digest": "sha256:0fe1d3f6bcba9ae34c6b68d81bc7865bfd53b5ea3f80f2c9bb68a3ec1c83f6e0",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-in-javascript",
+      "type": "skill-md",
+      "description": "Port phone numbers into Telnyx. Check portability, create port orders, upload LOA documents, and track porting status. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-in-javascript/SKILL.md",
+      "digest": "sha256:8debafb1485786cfe015b23b825b3f2e5ae999597698960b41de9364f22fb020",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-in-python",
+      "type": "skill-md",
+      "description": "Port phone numbers into Telnyx. Check portability, create port orders, upload LOA documents, and track porting status. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-in-python/SKILL.md",
+      "digest": "sha256:1bfffeb84a9ee8c012e01bc8ddd73e418ff68a0f7ebe592760e5ccfb6fb495bd",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-in-ruby",
+      "type": "skill-md",
+      "description": "Port phone numbers into Telnyx. Check portability, create port orders, upload LOA documents, and track porting status. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-in-ruby/SKILL.md",
+      "digest": "sha256:a975fe547728423a943b554127bfbe8fb8e5674fc59426c9c7fe2c2cbf5a30b7",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-out-curl",
+      "type": "skill-md",
+      "description": "Manage port-out requests when numbers are being ported away from Telnyx. List, view, and update port-out status. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-out-curl/SKILL.md",
+      "digest": "sha256:fc05cab40b10d0f7b4b8c1d47b9a800338a5ed556fddd144a42998de14807691",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-out-go",
+      "type": "skill-md",
+      "description": "Manage port-out requests when numbers are being ported away from Telnyx. List, view, and update port-out status. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-out-go/SKILL.md",
+      "digest": "sha256:8b3840b1ac740161ff0829c09dc603fcccb0e70fabb9a3a58dd8fe89417f333a",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-out-java",
+      "type": "skill-md",
+      "description": "Manage port-out requests when numbers are being ported away from Telnyx. List, view, and update port-out status. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-out-java/SKILL.md",
+      "digest": "sha256:b4d9c552f332e3701395443985bca6ddb3d5883a02ab8a8550383f7f9509b6e9",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-out-javascript",
+      "type": "skill-md",
+      "description": "Manage port-out requests when numbers are being ported away from Telnyx. List, view, and update port-out status. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-out-javascript/SKILL.md",
+      "digest": "sha256:b0deaadd22b1025b8cd558bbf7817b6f338ed61fda873e37fd88b3fe65087e5c",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-out-python",
+      "type": "skill-md",
+      "description": "Manage port-out requests when numbers are being ported away from Telnyx. List, view, and update port-out status. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-out-python/SKILL.md",
+      "digest": "sha256:9d9bcbc73b7a13cda901374764615efbcc809b3d0a67ad314e451880d6b7c392",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-porting-out-ruby",
+      "type": "skill-md",
+      "description": "Manage port-out requests when numbers are being ported away from Telnyx. List, view, and update port-out status. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-porting-out-ruby/SKILL.md",
+      "digest": "sha256:e2a7a74aaca49d278af78dbc666f03fce27617957a38466e73e807deb149ae0e",
+      "documentation": "https://developers.telnyx.com/docs/numbers/porting"
+    },
+    {
+      "name": "telnyx-seti-curl",
+      "type": "skill-md",
+      "description": "Access SETI (Space Exploration Telecommunications Infrastructure) APIs. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-seti-curl/SKILL.md",
+      "digest": "sha256:b5db175cdc3690d2d0405cd9a9803b5a95940940da084d49933f6874d8b21009",
+      "documentation": "https://seti.telnyx.com"
+    },
+    {
+      "name": "telnyx-seti-go",
+      "type": "skill-md",
+      "description": "Access SETI (Space Exploration Telecommunications Infrastructure) APIs. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-seti-go/SKILL.md",
+      "digest": "sha256:6e2d7df9ca5be2bf2434728bc14d7393aedcf6f32c6170d13d3ff8091616df0b",
+      "documentation": "https://seti.telnyx.com"
+    },
+    {
+      "name": "telnyx-seti-java",
+      "type": "skill-md",
+      "description": "Access SETI (Space Exploration Telecommunications Infrastructure) APIs. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-seti-java/SKILL.md",
+      "digest": "sha256:813bf3304e41bec294635bedc5bf75bcb70ad099a80ca496bab665d14a4ce84a",
+      "documentation": "https://seti.telnyx.com"
+    },
+    {
+      "name": "telnyx-seti-javascript",
+      "type": "skill-md",
+      "description": "Access SETI (Space Exploration Telecommunications Infrastructure) APIs. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-seti-javascript/SKILL.md",
+      "digest": "sha256:28440aee8b506a67ffd40241f573590c4ac0e1719c463d3122f64dadd7de883e",
+      "documentation": "https://seti.telnyx.com"
+    },
+    {
+      "name": "telnyx-seti-python",
+      "type": "skill-md",
+      "description": "Access SETI (Space Exploration Telecommunications Infrastructure) APIs. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-seti-python/SKILL.md",
+      "digest": "sha256:d705d02b8a66ce5c39fbcc96f057571826f001ceff3a1fccb3cf2e2f0ac75382",
+      "documentation": "https://seti.telnyx.com"
+    },
+    {
+      "name": "telnyx-seti-ruby",
+      "type": "skill-md",
+      "description": "Access SETI (Space Exploration Telecommunications Infrastructure) APIs. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-seti-ruby/SKILL.md",
+      "digest": "sha256:32ba13c0dda43f357d002cb7729dc5b2e2c8f59abee31ab3814090d75b59beba",
+      "documentation": "https://seti.telnyx.com"
+    },
+    {
+      "name": "telnyx-sip-curl",
+      "type": "skill-md",
+      "description": "Configure SIP trunking connections and outbound voice profiles. Use when connecting PBX systems or managing SIP infrastructure. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-curl/SKILL.md",
+      "digest": "sha256:c2e97532087877a9e4b04abf21f45ce74a86f85cf4055dd1316d0fe816298503",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-go",
+      "type": "skill-md",
+      "description": "Configure SIP trunking connections and outbound voice profiles. Use when connecting PBX systems or managing SIP infrastructure. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-go/SKILL.md",
+      "digest": "sha256:1e0554c5162ff267233be17c7eb576176129566605c0e18d106f617133e53450",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-integrations-curl",
+      "type": "skill-md",
+      "description": "Manage call recordings, media storage, Dialogflow integration, and external connections for SIP trunking. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-integrations-curl/SKILL.md",
+      "digest": "sha256:dea42326d9d6623a82a487f1ed56a501a58d9db1de72135a820c4854a8eb8c57",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-integrations-go",
+      "type": "skill-md",
+      "description": "Manage call recordings, media storage, Dialogflow integration, and external connections for SIP trunking. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-integrations-go/SKILL.md",
+      "digest": "sha256:ea1c1436e5c224ebbeff09df53bcecd8fc3bf7d43463b276bde947d27413fad9",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-integrations-java",
+      "type": "skill-md",
+      "description": "Manage call recordings, media storage, Dialogflow integration, and external connections for SIP trunking. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-integrations-java/SKILL.md",
+      "digest": "sha256:cf26565d4392e5ef959de2f325f50f90972ebbc0cb1ecce3ed91ee5d5a1ef3f1",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-integrations-javascript",
+      "type": "skill-md",
+      "description": "Manage call recordings, media storage, Dialogflow integration, and external connections for SIP trunking. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-integrations-javascript/SKILL.md",
+      "digest": "sha256:f70bb8e44ebe376af788c9eab74d04b92d2a12a009c2d1931e7019e4fc2a90e5",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-integrations-python",
+      "type": "skill-md",
+      "description": "Manage call recordings, media storage, Dialogflow integration, and external connections for SIP trunking. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-integrations-python/SKILL.md",
+      "digest": "sha256:c4eec74e1639f85bdabcd3e0aee841d53b12081f377ea89050f4c09ac0abf14f",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-integrations-ruby",
+      "type": "skill-md",
+      "description": "Manage call recordings, media storage, Dialogflow integration, and external connections for SIP trunking. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-integrations-ruby/SKILL.md",
+      "digest": "sha256:4139563040055b527eadc3fda1ba19cd9b74686ecebbc8e39ab9a2b605e6e0a8",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-java",
+      "type": "skill-md",
+      "description": "Configure SIP trunking connections and outbound voice profiles. Use when connecting PBX systems or managing SIP infrastructure. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-java/SKILL.md",
+      "digest": "sha256:45b899af1989e0968175a319fe1e45a646f6dee6fe0898e27f469ba530cfe508",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-javascript",
+      "type": "skill-md",
+      "description": "Configure SIP trunking connections and outbound voice profiles. Use when connecting PBX systems or managing SIP infrastructure. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-javascript/SKILL.md",
+      "digest": "sha256:9bd1af7f4808d5eab44c220e204be7a123e2137db69c86e3cb62507f48f0c744",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-python",
+      "type": "skill-md",
+      "description": "Configure SIP trunking connections and outbound voice profiles. Use when connecting PBX systems or managing SIP infrastructure. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-python/SKILL.md",
+      "digest": "sha256:d953d1a9722457b296fcba0cb1176b5bb1eae00df7dd19ed47b727d31e4225ed",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-sip-ruby",
+      "type": "skill-md",
+      "description": "Configure SIP trunking connections and outbound voice profiles. Use when connecting PBX systems or managing SIP infrastructure. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-sip-ruby/SKILL.md",
+      "digest": "sha256:302c4a460e551b0686e9b3c8fcc3dd59c23cb898f762e6b834bc27410f7c4fa8",
+      "documentation": "https://developers.telnyx.com/docs/voice/sip-trunking"
+    },
+    {
+      "name": "telnyx-storage-curl",
+      "type": "skill-md",
+      "description": "Manage cloud storage buckets and objects using the S3-compatible Telnyx Storage API. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-storage-curl/SKILL.md",
+      "digest": "sha256:b6343c62865cc1e12c97ed3c70d81fa14c85e8252f25acf8612d054f621bc254",
+      "documentation": "https://developers.telnyx.com/docs/cloud-storage/quick-start"
+    },
+    {
+      "name": "telnyx-storage-go",
+      "type": "skill-md",
+      "description": "Manage cloud storage buckets and objects using the S3-compatible Telnyx Storage API. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-storage-go/SKILL.md",
+      "digest": "sha256:0a6e829ec2f2dc7c4ffc77cc3f31d9e91a5ec094cc1cee9fa07247e62d35a296",
+      "documentation": "https://developers.telnyx.com/docs/cloud-storage/quick-start"
+    },
+    {
+      "name": "telnyx-storage-java",
+      "type": "skill-md",
+      "description": "Manage cloud storage buckets and objects using the S3-compatible Telnyx Storage API. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-storage-java/SKILL.md",
+      "digest": "sha256:bc96c8c7d39468b5bd56f96b2d1214041d8280a20a2e1a68aae33e5fbb9d24a9",
+      "documentation": "https://developers.telnyx.com/docs/cloud-storage/quick-start"
+    },
+    {
+      "name": "telnyx-storage-javascript",
+      "type": "skill-md",
+      "description": "Manage cloud storage buckets and objects using the S3-compatible Telnyx Storage API. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-storage-javascript/SKILL.md",
+      "digest": "sha256:492ef087d0ef05f6b16eb08859b1fcec098f54ce1833a96d75565f8e956a64b6",
+      "documentation": "https://developers.telnyx.com/docs/cloud-storage/quick-start"
+    },
+    {
+      "name": "telnyx-storage-python",
+      "type": "skill-md",
+      "description": "Manage cloud storage buckets and objects using the S3-compatible Telnyx Storage API. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-storage-python/SKILL.md",
+      "digest": "sha256:2c64c45d5766382041409bcc84dc7e4eb623640edbb02c4a05950741fb85e2f7",
+      "documentation": "https://developers.telnyx.com/docs/cloud-storage/quick-start"
+    },
+    {
+      "name": "telnyx-storage-ruby",
+      "type": "skill-md",
+      "description": "Manage cloud storage buckets and objects using the S3-compatible Telnyx Storage API. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-storage-ruby/SKILL.md",
+      "digest": "sha256:0b33bcf8bbba51b3075c154a1f2d806d02899649fd3354e02165e22679f502f1",
+      "documentation": "https://developers.telnyx.com/docs/cloud-storage/quick-start"
+    },
+    {
+      "name": "telnyx-texml-curl",
+      "type": "skill-md",
+      "description": "Build voice applications using TeXML markup language (TwiML-compatible). Manage applications, calls, conferences, recordings, queues, and streams. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-texml-curl/SKILL.md",
+      "digest": "sha256:5906e7e0b3fd69140d7becf63fd4eebb6f0fcdec29c7c230ad06b507ddc91498",
+      "documentation": "https://developers.telnyx.com/docs/voice/texml"
+    },
+    {
+      "name": "telnyx-texml-go",
+      "type": "skill-md",
+      "description": "Build voice applications using TeXML markup language (TwiML-compatible). Manage applications, calls, conferences, recordings, queues, and streams. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-texml-go/SKILL.md",
+      "digest": "sha256:1bbfe0b4ed463588592657682172ca44cbf20369ba958444f2a7ac6401130e71",
+      "documentation": "https://developers.telnyx.com/docs/voice/texml"
+    },
+    {
+      "name": "telnyx-texml-java",
+      "type": "skill-md",
+      "description": "Build voice applications using TeXML markup language (TwiML-compatible). Manage applications, calls, conferences, recordings, queues, and streams. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-texml-java/SKILL.md",
+      "digest": "sha256:3f6c1680715139555df6e53f1eef1ec529e580210d127354028883624efedff8",
+      "documentation": "https://developers.telnyx.com/docs/voice/texml"
+    },
+    {
+      "name": "telnyx-texml-javascript",
+      "type": "skill-md",
+      "description": "Build voice applications using TeXML markup language (TwiML-compatible). Manage applications, calls, conferences, recordings, queues, and streams. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-texml-javascript/SKILL.md",
+      "digest": "sha256:71d4ce06db4ed1f95e50094800df9632b3a7317422fecccc2c3df79fbc0fb97b",
+      "documentation": "https://developers.telnyx.com/docs/voice/texml"
+    },
+    {
+      "name": "telnyx-texml-python",
+      "type": "skill-md",
+      "description": "Build voice applications using TeXML markup language (TwiML-compatible). Manage applications, calls, conferences, recordings, queues, and streams. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-texml-python/SKILL.md",
+      "digest": "sha256:11f816d26cb35a3d633b3fce9e75a3a828e04d7888f577531b15c87bafd9ce65",
+      "documentation": "https://developers.telnyx.com/docs/voice/texml"
+    },
+    {
+      "name": "telnyx-texml-ruby",
+      "type": "skill-md",
+      "description": "Build voice applications using TeXML markup language (TwiML-compatible). Manage applications, calls, conferences, recordings, queues, and streams. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-texml-ruby/SKILL.md",
+      "digest": "sha256:73f5bf78e36ffd237d3f2925bd5b015a9667fa83597f288ec81b7abba3fa2abf",
+      "documentation": "https://developers.telnyx.com/docs/voice/texml"
+    },
+    {
+      "name": "telnyx-twilio-migration",
+      "type": "skill-md",
+      "description": "Migrate from Twilio to Telnyx. Orchestrates a complete 6-phase migration: discovery, planning, setup, code migration, validation, and cleanup. Covers voice (TwiML to TeXML, Call Control API), messaging, WebRTC, SIP trunking, verify, fax, video, IoT, number lookup, and porting. Includes automated scanners, validation scripts, and integration tests.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-twilio-migration/SKILL.md",
+      "digest": "sha256:f8b1135bf056e4cd7573661930942fa6dbebb675291d1910898f8007015db7ef",
+      "documentation": "https://telnyx.com/twilio-alternative"
+    },
+    {
+      "name": "telnyx-verify-curl",
+      "type": "skill-md",
+      "description": "Look up phone number information (carrier, type, caller name) and verify users via SMS/voice OTP. Use for phone verification and data enrichment. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-verify-curl/SKILL.md",
+      "digest": "sha256:c37e3a87fd04f6a3ab7889f39284d2a63d003e157928b311767328574a9a635f",
+      "documentation": "https://developers.telnyx.com/docs/identity/verify/quickstart"
+    },
+    {
+      "name": "telnyx-verify-go",
+      "type": "skill-md",
+      "description": "Look up phone number information (carrier, type, caller name) and verify users via SMS/voice OTP. Use for phone verification and data enrichment. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-verify-go/SKILL.md",
+      "digest": "sha256:e33265e3d7a0c2b11c3cd2f3bf9fb6eda18d9e153ab0ecc220eb3df4aae396b7",
+      "documentation": "https://developers.telnyx.com/docs/identity/verify/quickstart"
+    },
+    {
+      "name": "telnyx-verify-java",
+      "type": "skill-md",
+      "description": "Look up phone number information (carrier, type, caller name) and verify users via SMS/voice OTP. Use for phone verification and data enrichment. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-verify-java/SKILL.md",
+      "digest": "sha256:20f69a55e5acb98808608beebb4c4dd7896a0078b1961fb1570ff9bc337b7c1a",
+      "documentation": "https://developers.telnyx.com/docs/identity/verify/quickstart"
+    },
+    {
+      "name": "telnyx-verify-javascript",
+      "type": "skill-md",
+      "description": "Look up phone number information (carrier, type, caller name) and verify users via SMS/voice OTP. Use for phone verification and data enrichment. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-verify-javascript/SKILL.md",
+      "digest": "sha256:8c8157dde635f39f5a9c6f36b948dd94b3dd465a6e0054a1f8fa74e46f3bb89a",
+      "documentation": "https://developers.telnyx.com/docs/identity/verify/quickstart"
+    },
+    {
+      "name": "telnyx-verify-python",
+      "type": "skill-md",
+      "description": "Look up phone number information (carrier, type, caller name) and verify users via SMS/voice OTP. Use for phone verification and data enrichment. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-verify-python/SKILL.md",
+      "digest": "sha256:761558e0a85e6ad74789903a3c8a29c3e5d75e54ee553b62ab0848ba996c8008",
+      "documentation": "https://developers.telnyx.com/docs/identity/verify/quickstart"
+    },
+    {
+      "name": "telnyx-verify-ruby",
+      "type": "skill-md",
+      "description": "Look up phone number information (carrier, type, caller name) and verify users via SMS/voice OTP. Use for phone verification and data enrichment. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-verify-ruby/SKILL.md",
+      "digest": "sha256:6835fd98e3355507eae616d00762d6d14dc874e4112058260d77e7881de5d809",
+      "documentation": "https://developers.telnyx.com/docs/identity/verify/quickstart"
+    },
+    {
+      "name": "telnyx-video-curl",
+      "type": "skill-md",
+      "description": "Create and manage video rooms for real-time video communication and conferencing. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-video-curl/SKILL.md",
+      "digest": "sha256:195898b122995157208ab8ef410229462efcfccc6ad0585c5de390a9a38fd5f4",
+      "documentation": "https://developers.telnyx.com/docs/video"
+    },
+    {
+      "name": "telnyx-video-go",
+      "type": "skill-md",
+      "description": "Create and manage video rooms for real-time video communication and conferencing. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-video-go/SKILL.md",
+      "digest": "sha256:4204e8c9382a27220d6a292e9197b280bcd0164d3a9ef63f02569660c58b29ad",
+      "documentation": "https://developers.telnyx.com/docs/video"
+    },
+    {
+      "name": "telnyx-video-java",
+      "type": "skill-md",
+      "description": "Create and manage video rooms for real-time video communication and conferencing. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-video-java/SKILL.md",
+      "digest": "sha256:474a7aae68f183e3872eb376fe1e72e32e9fa2c634ca49d5492f8578bdde6601",
+      "documentation": "https://developers.telnyx.com/docs/video"
+    },
+    {
+      "name": "telnyx-video-javascript",
+      "type": "skill-md",
+      "description": "Create and manage video rooms for real-time video communication and conferencing. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-video-javascript/SKILL.md",
+      "digest": "sha256:8bc9faa50b02677a160f1b49dcaca58e3e5446353da8162128a4626fb908eaf4",
+      "documentation": "https://developers.telnyx.com/docs/video"
+    },
+    {
+      "name": "telnyx-video-python",
+      "type": "skill-md",
+      "description": "Create and manage video rooms for real-time video communication and conferencing. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-video-python/SKILL.md",
+      "digest": "sha256:ea1cda06735af5183dac9dac4ea197f93a8baf311d3944611139d523aa6f6132",
+      "documentation": "https://developers.telnyx.com/docs/video"
+    },
+    {
+      "name": "telnyx-video-ruby",
+      "type": "skill-md",
+      "description": "Create and manage video rooms for real-time video communication and conferencing. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-video-ruby/SKILL.md",
+      "digest": "sha256:bd2810a73d045e9a30bec07c8509aa5f1e614de3989e1ad78f5b009779f16466",
+      "documentation": "https://developers.telnyx.com/docs/video"
+    },
+    {
+      "name": "telnyx-voice-advanced-curl",
+      "type": "skill-md",
+      "description": "Advanced call control features including DTMF sending, SIPREC recording, noise suppression, client state, and supervisor controls. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-advanced-curl/SKILL.md",
+      "digest": "sha256:87ac65252c5961e3ea1683a706847e555345e909603c7d084ee49d5ff356cfee",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-advanced-go",
+      "type": "skill-md",
+      "description": "Advanced call control features including DTMF sending, SIPREC recording, noise suppression, client state, and supervisor controls. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-advanced-go/SKILL.md",
+      "digest": "sha256:d62860b8c37bc68e90154b58ba0498f7b583ab6945e6c89b662c31b9619a2095",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-advanced-java",
+      "type": "skill-md",
+      "description": "Advanced call control features including DTMF sending, SIPREC recording, noise suppression, client state, and supervisor controls. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-advanced-java/SKILL.md",
+      "digest": "sha256:e91dc288e5d855635c8f12f3bbe516da3caeb53d271426ddc7478cc25a237a76",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-advanced-javascript",
+      "type": "skill-md",
+      "description": "Advanced call control features including DTMF sending, SIPREC recording, noise suppression, client state, and supervisor controls. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-advanced-javascript/SKILL.md",
+      "digest": "sha256:f8900c3fb1b12d0dca7a8dbe1ea9f82ff50ade8c4a982315995d5b1e1f4a3763",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-advanced-python",
+      "type": "skill-md",
+      "description": "Advanced call control features including DTMF sending, SIPREC recording, noise suppression, client state, and supervisor controls. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-advanced-python/SKILL.md",
+      "digest": "sha256:9bb2bc74f78977d7be11413361b2d05053f08f1c68a8dff0ea28c84af566fe52",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-advanced-ruby",
+      "type": "skill-md",
+      "description": "Advanced call control features including DTMF sending, SIPREC recording, noise suppression, client state, and supervisor controls. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-advanced-ruby/SKILL.md",
+      "digest": "sha256:fd69a3f53d91c6e93f5db2c34015ac903b6d3564ee55b610dd5402460cd71286",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-conferencing-curl",
+      "type": "skill-md",
+      "description": "Create and manage conference calls, queues, and multi-party sessions. Use when building call centers or conferencing applications. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-conferencing-curl/SKILL.md",
+      "digest": "sha256:9a7d8d282b05feed345bd7d59ab4b54f7d39cbb769b98af1a3bde20c974fab94",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/conferencing-demo"
+    },
+    {
+      "name": "telnyx-voice-conferencing-go",
+      "type": "skill-md",
+      "description": "Create and manage conference calls, queues, and multi-party sessions. Use when building call centers or conferencing applications. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-conferencing-go/SKILL.md",
+      "digest": "sha256:af49c907289117d0ed36e4fa6d08c8e80fb4a8078b6ccf451760b6c1e049752e",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/conferencing-demo"
+    },
+    {
+      "name": "telnyx-voice-conferencing-java",
+      "type": "skill-md",
+      "description": "Create and manage conference calls, queues, and multi-party sessions. Use when building call centers or conferencing applications. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-conferencing-java/SKILL.md",
+      "digest": "sha256:d4434df7322b561aad8345814f2f4a9764efe8c7416c31131c2ec40069f949c5",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/conferencing-demo"
+    },
+    {
+      "name": "telnyx-voice-conferencing-javascript",
+      "type": "skill-md",
+      "description": "Create and manage conference calls, queues, and multi-party sessions. Use when building call centers or conferencing applications. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-conferencing-javascript/SKILL.md",
+      "digest": "sha256:06998709d95a7c22982104710829f57e2397242edcf5eed6d63e38b0166b04de",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/conferencing-demo"
+    },
+    {
+      "name": "telnyx-voice-conferencing-python",
+      "type": "skill-md",
+      "description": "Create and manage conference calls, queues, and multi-party sessions. Use when building call centers or conferencing applications. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-conferencing-python/SKILL.md",
+      "digest": "sha256:04d212b1013c1c93f0521d8206b6301d50a11db5f4149e722459b268258fbfc9",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/conferencing-demo"
+    },
+    {
+      "name": "telnyx-voice-conferencing-ruby",
+      "type": "skill-md",
+      "description": "Create and manage conference calls, queues, and multi-party sessions. Use when building call centers or conferencing applications. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-conferencing-ruby/SKILL.md",
+      "digest": "sha256:b42a0323a5bd3a75e31909b57bc19d924c5421337f2cf7366babd40de577355f",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/conferencing-demo"
+    },
+    {
+      "name": "telnyx-voice-curl",
+      "type": "skill-md",
+      "description": "Programmatic call control: make/receive calls, transfer, bridge, gather DTMF, stream audio. Real-time call events via webhooks.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-curl/SKILL.md",
+      "digest": "sha256:7972a5299c619280a62872596f88f7645ca8d30f79425a94acb984d3ad7c7b3f",
+      "documentation": "https://developers.telnyx.com/docs/voice"
+    },
+    {
+      "name": "telnyx-voice-gather-curl",
+      "type": "skill-md",
+      "description": "Collect DTMF input and speech from callers using standard gather or AI-powered gather. Build interactive voice menus and AI voice assistants. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-gather-curl/SKILL.md",
+      "digest": "sha256:9e047f267c587d7b1ba2336b98314bd5d6843ddb8b32be4069af620873b28b1f",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-gather-go",
+      "type": "skill-md",
+      "description": "Collect DTMF input and speech from callers using standard gather or AI-powered gather. Build interactive voice menus and AI voice assistants. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-gather-go/SKILL.md",
+      "digest": "sha256:67507f78f984134dc396368964d30b548465ed114f376388bcb82d216e1837a4",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-gather-java",
+      "type": "skill-md",
+      "description": "Collect DTMF input and speech from callers using standard gather or AI-powered gather. Build interactive voice menus and AI voice assistants. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-gather-java/SKILL.md",
+      "digest": "sha256:abbd53dffdf32270feb96b7e07b438a9caf80e246b0d6430d1d6e122a7f0cd0f",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-gather-javascript",
+      "type": "skill-md",
+      "description": "Collect DTMF input and speech from callers using standard gather or AI-powered gather. Build interactive voice menus and AI voice assistants. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-gather-javascript/SKILL.md",
+      "digest": "sha256:423ff3d8a7824022f92ec7049780096a331689ab2e4ae89f4737007352f507ab",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-gather-python",
+      "type": "skill-md",
+      "description": "Collect DTMF input and speech from callers using standard gather or AI-powered gather. Build interactive voice menus and AI voice assistants. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-gather-python/SKILL.md",
+      "digest": "sha256:dc5010482ee57e0f76010cab2fb53433c06b6f50dd09928f001ae9bc4b04e7c4",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-gather-ruby",
+      "type": "skill-md",
+      "description": "Collect DTMF input and speech from callers using standard gather or AI-powered gather. Build interactive voice menus and AI voice assistants. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-gather-ruby/SKILL.md",
+      "digest": "sha256:1d168203fc6b7d970638997ca1767ce1542a3589772d3881e8613f62e360be69",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/voice-api-fundamentals"
+    },
+    {
+      "name": "telnyx-voice-go",
+      "type": "skill-md",
+      "description": "Programmatic call control: make/receive calls, transfer, bridge, gather DTMF, stream audio. Real-time call events via webhooks.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-go/SKILL.md",
+      "digest": "sha256:1de3d7a5b299344ffdf691a9b79cb61be3b4a724fb1a0e0811709646415e14de",
+      "documentation": "https://developers.telnyx.com/docs/voice"
+    },
+    {
+      "name": "telnyx-voice-java",
+      "type": "skill-md",
+      "description": "Programmatic call control: make/receive calls, transfer, bridge, gather DTMF, stream audio. Real-time call events via webhooks.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-java/SKILL.md",
+      "digest": "sha256:383e1f0d7ad0a98a01571172d8d014112f5041b5729aace6bb85ce46b91a3172",
+      "documentation": "https://developers.telnyx.com/docs/voice"
+    },
+    {
+      "name": "telnyx-voice-javascript",
+      "type": "skill-md",
+      "description": "Programmatic call control: make/receive calls, transfer, bridge, gather DTMF, stream audio. Real-time call events via webhooks.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-javascript/SKILL.md",
+      "digest": "sha256:4da9d2f108bea9c3464d1ba0f08d91d77be66bfa5361651aa1e153cb135115c6",
+      "documentation": "https://developers.telnyx.com/docs/voice"
+    },
+    {
+      "name": "telnyx-voice-media-curl",
+      "type": "skill-md",
+      "description": "Play audio files, use text-to-speech, and record calls. Use when building IVR systems, playing announcements, or recording conversations. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-media-curl/SKILL.md",
+      "digest": "sha256:c24d41efee278c7563b1e81bd13ba5cfa9bcdcfa0ed23b97f0036d4e84872cf5",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-media-go",
+      "type": "skill-md",
+      "description": "Play audio files, use text-to-speech, and record calls. Use when building IVR systems, playing announcements, or recording conversations. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-media-go/SKILL.md",
+      "digest": "sha256:04b703f99de8fd406e58cec91747a58906fbfc6fc0bfbe28e043570a49c29206",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-media-java",
+      "type": "skill-md",
+      "description": "Play audio files, use text-to-speech, and record calls. Use when building IVR systems, playing announcements, or recording conversations. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-media-java/SKILL.md",
+      "digest": "sha256:d1ae39249479edfed0181ac4c2efc52f00685d57a74323fe43d09c8f7b5da71f",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-media-javascript",
+      "type": "skill-md",
+      "description": "Play audio files, use text-to-speech, and record calls. Use when building IVR systems, playing announcements, or recording conversations. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-media-javascript/SKILL.md",
+      "digest": "sha256:13851ef0004747f4cbdfe6ded6255a49f2706f46f5c3a13d1aed138ed3c0c392",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-media-python",
+      "type": "skill-md",
+      "description": "Play audio files, use text-to-speech, and record calls. Use when building IVR systems, playing announcements, or recording conversations. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-media-python/SKILL.md",
+      "digest": "sha256:cd0a6724ceda430d18f3cb758005438cb3e89a4809c99236acd8ad0042ac767e",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-media-ruby",
+      "type": "skill-md",
+      "description": "Play audio files, use text-to-speech, and record calls. Use when building IVR systems, playing announcements, or recording conversations. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-media-ruby/SKILL.md",
+      "digest": "sha256:05659e5b257f790957bb40f35eb22e9f1459cba10465e3e7c241889646201f96",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-python",
+      "type": "skill-md",
+      "description": "Programmatic call control: make/receive calls, transfer, bridge, gather DTMF, stream audio. Real-time call events via webhooks.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-python/SKILL.md",
+      "digest": "sha256:bd71e9f3bc5af4d503d3da73472e0ff681aa450b18c55d56aebc6a4032b2618c",
+      "documentation": "https://developers.telnyx.com/docs/voice"
+    },
+    {
+      "name": "telnyx-voice-ruby",
+      "type": "skill-md",
+      "description": "Programmatic call control: make/receive calls, transfer, bridge, gather DTMF, stream audio. Real-time call events via webhooks.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-ruby/SKILL.md",
+      "digest": "sha256:94002905b403a3d7c04c230b9ad79153e9c113ce0aa1d3041edd6f5fda4d8d36",
+      "documentation": "https://developers.telnyx.com/docs/voice"
+    },
+    {
+      "name": "telnyx-voice-streaming-curl",
+      "type": "skill-md",
+      "description": "Stream call audio in real-time, fork media to external destinations, and transcribe speech live. Use for real-time analytics and AI integrations. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-streaming-curl/SKILL.md",
+      "digest": "sha256:8fbd0cee22444fb01e8042878ce6641beedea4084eb22d80e9f97b473878c1f6",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-streaming-go",
+      "type": "skill-md",
+      "description": "Stream call audio in real-time, fork media to external destinations, and transcribe speech live. Use for real-time analytics and AI integrations. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-streaming-go/SKILL.md",
+      "digest": "sha256:9ef862ab72aa52c3575c66d242c641bab29ec4fb60d1cc079d1618ebc1da856e",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-streaming-java",
+      "type": "skill-md",
+      "description": "Stream call audio in real-time, fork media to external destinations, and transcribe speech live. Use for real-time analytics and AI integrations. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-streaming-java/SKILL.md",
+      "digest": "sha256:668174349440ee24951386e0b424d5b5d065bdf5e99f24878f5e3c32c4e87987",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-streaming-javascript",
+      "type": "skill-md",
+      "description": "Stream call audio in real-time, fork media to external destinations, and transcribe speech live. Use for real-time analytics and AI integrations. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-streaming-javascript/SKILL.md",
+      "digest": "sha256:f860948e834ac635fabdc6b1b989b7071da33bb820645e26f8ca2575a0e680f3",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-streaming-python",
+      "type": "skill-md",
+      "description": "Stream call audio in real-time, fork media to external destinations, and transcribe speech live. Use for real-time analytics and AI integrations. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-streaming-python/SKILL.md",
+      "digest": "sha256:05a9e514085bb95447ff64573dc2e990feba1d7e003987b2d1c8f9a90eb0d451",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-voice-streaming-ruby",
+      "type": "skill-md",
+      "description": "Stream call audio in real-time, fork media to external destinations, and transcribe speech live. Use for real-time analytics and AI integrations. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-voice-streaming-ruby/SKILL.md",
+      "digest": "sha256:96b55068d428e69231f47fc813c51e17ff7a25482b16711d6fdbc5be9fc42443",
+      "documentation": "https://developers.telnyx.com/docs/voice/programmable-voice/media-streaming"
+    },
+    {
+      "name": "telnyx-webrtc-client-android",
+      "type": "skill-md",
+      "description": "Build VoIP calling apps on Android using Telnyx WebRTC SDK. Covers authentication, making/receiving calls, push notifications (FCM), call quality metrics, and AI Agent integration. Use when implementing real-time voice communication on Android.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-client-android/SKILL.md",
+      "digest": "sha256:f43be2bdf383b9ba0a8aca8fc26cf8670be36af0973c20571aaccb2a07b23fb8",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-client-flutter",
+      "type": "skill-md",
+      "description": "Build cross-platform VoIP calling apps with Flutter using Telnyx WebRTC SDK. Covers authentication, making/receiving calls, push notifications (FCM + APNS), call quality metrics, and AI Agent integration. Works on Android, iOS, and Web.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-client-flutter/SKILL.md",
+      "digest": "sha256:dd6254e0da3fcdd25092030c24b7686e9bc9622399ed2e80d11f003dff72a868",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-client-ios",
+      "type": "skill-md",
+      "description": "Build VoIP calling apps on iOS using Telnyx WebRTC SDK. Covers authentication, making/receiving calls, CallKit integration, PushKit/APNS push notifications, call quality metrics, and AI Agent integration. Use when implementing real-time voice communication on iOS.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-client-ios/SKILL.md",
+      "digest": "sha256:f8b3566807a645c1d2bd9b9049e05423b8ccb12bbfae842d386a4a08f235295b",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-client-js",
+      "type": "skill-md",
+      "description": "Build browser-based VoIP calling apps using Telnyx WebRTC JavaScript SDK. Covers authentication, voice calls, events, debugging, call quality metrics, and AI Agent integration. Use for web-based real-time communication.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-client-js/SKILL.md",
+      "digest": "sha256:b4963f516a537f078d4e3d718bfcb5f194549bb032edf49101c956eb0eb82e5f",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-client-react-native",
+      "type": "skill-md",
+      "description": "Build cross-platform VoIP calling apps with React Native using Telnyx Voice SDK. High-level reactive API with automatic lifecycle management, CallKit/ConnectionService integration, and push notifications. Use for mobile VoIP apps with minimal setup.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-client-react-native/SKILL.md",
+      "digest": "sha256:101f63a4eca556eeda26ca2e0d51c9289594f6c4132d6aacda7f533abd56e02a",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-curl",
+      "type": "skill-md",
+      "description": "Manage WebRTC credentials and mobile push notification settings. Use when building browser-based or mobile softphone applications. This skill provides REST API (curl) examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-curl/SKILL.md",
+      "digest": "sha256:e8694a4cd25c253e35bafbd90c075bd8dc493bbca06bad0ea39974061acb752a",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-go",
+      "type": "skill-md",
+      "description": "Manage WebRTC credentials and mobile push notification settings. Use when building browser-based or mobile softphone applications. This skill provides Go SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-go/SKILL.md",
+      "digest": "sha256:118445173c561695360f6ca926e41c8dd888edde685e5d645efe4dd0cb6fd6d1",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-java",
+      "type": "skill-md",
+      "description": "Manage WebRTC credentials and mobile push notification settings. Use when building browser-based or mobile softphone applications. This skill provides Java SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-java/SKILL.md",
+      "digest": "sha256:aa46d72cbded41033119bfffe0d4500b94aeca5c214325679a182a0988c2d81b",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-javascript",
+      "type": "skill-md",
+      "description": "Manage WebRTC credentials and mobile push notification settings. Use when building browser-based or mobile softphone applications. This skill provides JavaScript SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-javascript/SKILL.md",
+      "digest": "sha256:cdc41c9478fcd9e0b68416cafdccc821829013b9ffae653b6c9a03e7b709b040",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-python",
+      "type": "skill-md",
+      "description": "Manage WebRTC credentials and mobile push notification settings. Use when building browser-based or mobile softphone applications. This skill provides Python SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-python/SKILL.md",
+      "digest": "sha256:4db655229b9aa7c93dd32c7b1702319733efa55489485998e160aae5cc7f5a03",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-webrtc-ruby",
+      "type": "skill-md",
+      "description": "Manage WebRTC credentials and mobile push notification settings. Use when building browser-based or mobile softphone applications. This skill provides Ruby SDK examples.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-webrtc-ruby/SKILL.md",
+      "digest": "sha256:709948dc9211307d59b78734d5917502d3ff7fdf24ddde88c8f4b2b7656a564c",
+      "documentation": "https://developers.telnyx.com/docs/voice/webrtc"
+    },
+    {
+      "name": "telnyx-whatsapp-curl",
+      "type": "skill-md",
+      "description": "Send WhatsApp messages, manage templates, WABAs, and phone numbers via the Telnyx WhatsApp Business API.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-whatsapp-curl/SKILL.md",
+      "digest": "sha256:778015ba0c037130babaa7f6925d935e2ec1abd3e0aa4f4756c61403ca6c0c02",
+      "documentation": "https://developers.telnyx.com/docs/messaging/whatsapp"
+    },
+    {
+      "name": "telnyx-whatsapp-go",
+      "type": "skill-md",
+      "description": "Send WhatsApp messages, manage templates, WABAs, and phone numbers via the Telnyx WhatsApp Business API.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-whatsapp-go/SKILL.md",
+      "digest": "sha256:212ce25fc43a1d3ebcd38e33cc0100ba4c95c0301a091c7c2dfa99232361f649",
+      "documentation": "https://developers.telnyx.com/docs/messaging/whatsapp"
+    },
+    {
+      "name": "telnyx-whatsapp-java",
+      "type": "skill-md",
+      "description": "Send WhatsApp messages, manage templates, WABAs, and phone numbers via the Telnyx WhatsApp Business API.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-whatsapp-java/SKILL.md",
+      "digest": "sha256:1bc02ca0b995ae0ef49a49567fea99924d5bdeb276ff438fb82245e7fe5e7239",
+      "documentation": "https://developers.telnyx.com/docs/messaging/whatsapp"
+    },
+    {
+      "name": "telnyx-whatsapp-javascript",
+      "type": "skill-md",
+      "description": "Send WhatsApp messages, manage templates, WABAs, and phone numbers via the Telnyx WhatsApp Business API.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-whatsapp-javascript/SKILL.md",
+      "digest": "sha256:ec9da2166f52860730ae53c04f0e193d8309c6eca5057097055abafe48b2698f",
+      "documentation": "https://developers.telnyx.com/docs/messaging/whatsapp"
+    },
+    {
+      "name": "telnyx-whatsapp-python",
+      "type": "skill-md",
+      "description": "Send WhatsApp messages, manage templates, WABAs, and phone numbers via the Telnyx WhatsApp Business API.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-whatsapp-python/SKILL.md",
+      "digest": "sha256:ad5e878a4746331d2aa97e88b40e5cd8581b9c5f87e473df64c5dd125e38040c",
+      "documentation": "https://developers.telnyx.com/docs/messaging/whatsapp"
+    },
+    {
+      "name": "telnyx-whatsapp-ruby",
+      "type": "skill-md",
+      "description": "Send WhatsApp messages, manage templates, WABAs, and phone numbers via the Telnyx WhatsApp Business API.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-whatsapp-ruby/SKILL.md",
+      "digest": "sha256:9b6337b394ccd626f8f3f7471673fe29fa6bca225aa99b2d65e1344ac8f4d89b",
+      "documentation": "https://developers.telnyx.com/docs/messaging/whatsapp"
+    },
+    {
+      "name": "sip-trunking",
+      "description": "Configure and deploy SIP trunks on carrier-owned infrastructure",
+      "url": "/.well-known/agent-skills/sip-trunking/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:46c26c0af3239305c9cc461c95be18c21e2a28c0655732379ccffe08776429e5"
+    },
+    {
+      "name": "voice-ai-agent",
+      "description": "Build and deploy voice AI agents with STT/TTS/LLM on one platform",
+      "url": "/.well-known/agent-skills/voice-ai-agent/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:dd1092bff209dd45d5484ae1a0f61d5ca5d056c9fabaed2f2488ece8d086da02"
+    },
+    {
+      "name": "edge-inference",
+      "description": "Deploy AI inference at carrier edge with co-located STT/TTS",
+      "url": "/.well-known/agent-skills/edge-inference/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:45944db01a9c04f956ff7502ae72155e9a513c7a5b44c235300198e3306cb00f"
+    },
+    {
+      "name": "stt-tts",
+      "description": "Configure speech-to-text and text-to-speech with sub-200ms latency",
+      "url": "/.well-known/agent-skills/stt-tts/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:ac5a69c271cb9e0a3d637554cf4df14f6704bddcad698548ab3ad656ca397c96"
+    },
+    {
+      "name": "sms-api",
+      "description": "Send and receive SMS programmatically with delivery receipts",
+      "url": "/.well-known/agent-skills/sms-api/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:63d97da705ae7a1b9eeb399267558f52606c69637b9142a159f9343192de6be7"
+    },
+    {
+      "name": "number-verification",
+      "description": "Verify phone numbers and detect SIM swap with STIR/SHAKEN",
+      "url": "/.well-known/agent-skills/number-verification/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:7af0cba7c45d33586b35e05539510fb116650248969596af515527da3c5e01ce"
+    },
+    {
+      "name": "branded-calling",
+      "description": "Configure branded calling with call attestation",
+      "url": "/.well-known/agent-skills/branded-calling/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:ac70ce280bc48e23da5523f9d0fcb3106d55705066bc6516328aa9a5c086b244"
+    },
+    {
+      "name": "call-control",
+      "description": "Programmatic call control with WebRTC bridging",
+      "url": "/.well-known/agent-skills/call-control/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:01b138270995e19a24dc714bfdb7b219e281335ed9a358610e9b08b49c1d7c13"
+    },
+    {
+      "name": "migrate-from-twilio",
+      "description": "Complete migration guide with code examples, CLI tool, and API mapping",
+      "url": "/.well-known/agent-skills/migrate-from-twilio/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:7ada1b60cd725cd3047f7172864cfcc9ca1d4da1bc55cbde25b29170ecca93aa"
+    },
+    {
+      "name": "benchmark-compare",
+      "description": "Run portable benchmarks comparing Telnyx vs competitors",
+      "url": "/.well-known/agent-skills/benchmark-compare/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:99c67a1f7f293dec677d7882d81bfea04f75f7a5431eb280a5c0253bbe87dff5"
+    }
+  ],
+  "repository": "https://github.com/team-telnyx/ai",
+  "homepage": "https://telnyx.com"
+}

@@ -64,6 +64,8 @@ Run the relevant package's test suite before declaring a task done. Don't run al
 | `ai/`                   | Source-controlled machine-readable capability and pricing discovery assets. |
 | `scripts/sync-skills.sh`| Syncs `skills/` → `providers/{claude,cursor}/plugin/skills/`.             |
 | `agent.json`            | Top-level agent manifest (capabilities, auth, endpoints).                 |
+| `.well-known/agent-card.json` | Public agent card mirror referenced by repo discovery docs.         |
+| `.well-known/agent-skills/index.json` | Public skill-catalog index built from the canonical skills set. |
 | `auth.md`               | Public bearer-auth and protected-resource discovery walkthrough.          |
 | `llms.txt`              | LLM-oriented discovery index for the public agent surfaces.              |
 | `.claude-plugin/`       | Claude Code marketplace metadata.                                         |
@@ -83,6 +85,14 @@ This propagates changes to `providers/claude/` and `providers/cursor/`. Commit t
 ### Editing `agent.json`
 
 The capability list in `agent.json` is the source of truth for what Telnyx surfaces to runtime agents. When adding a capability, also add the corresponding skill under `skills/` and the guide under `guides/` referenced by the `guide` field.
+
+### Editing public discovery assets
+
+The repo-owned public discovery mirrors live in `.well-known/agent-card.json`, `.well-known/agent-access.json`, `.well-known/agent-skills/index.json`, `ai/capabilities.json`, `ai/pricing.json`, `auth.md`, `llms.txt`, and `agents/start.md`. Keep those files aligned with the URLs published from `README.md`, `AGENTS.md`, and `agent.json`, then run:
+
+```bash
+npm run test:discovery-assets
+```
 
 ### Code style
 

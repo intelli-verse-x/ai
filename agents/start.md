@@ -98,8 +98,10 @@ When the workflow is specifically "build or evaluate a Telnyx voice assistant", 
 ## Repo-owned mirrors and operating files
 
 - Local manifest mirror: [`/agent.json`](/agent.json)
+- Local public agent card mirror: [`/.well-known/agent-card.json`](/.well-known/agent-card.json)
 - Local signup guide mirror: [`/agent-signup.md`](/agent-signup.md)
 - Local agent access mirror: [`/.well-known/agent-access.json`](/.well-known/agent-access.json)
+- Local agent skills index mirror: [`/.well-known/agent-skills/index.json`](/.well-known/agent-skills/index.json)
 - Local capability mirror: [`/ai/capabilities.json`](/ai/capabilities.json)
 - Local pricing mirror: [`/ai/pricing.json`](/ai/pricing.json)
 - Runtime agent instructions: [`/AGENTS.md`](/AGENTS.md) and `https://telnyx.com/AGENTS.md`

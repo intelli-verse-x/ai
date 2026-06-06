@@ -1,0 +1,118 @@
+{
+  "protocolVersion": "0.2.0",
+  "name": "Telnyx AI Infrastructure Agent",
+  "description": "Programmatically evaluate Telnyx AI infrastructure against requirements. Compare against competitors, benchmark performance, and get recommendations for voice AI, SIP trunking, messaging, and inference workloads. Access machine-readable evaluation endpoints at /ai/*.json.",
+  "version": "1.0.0",
+  "url": "https://telnyx.com",
+  "provider": {
+    "organization": "Telnyx",
+    "url": "https://telnyx.com"
+  },
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "securitySchemes": {
+    "none": {
+      "type": "none",
+      "description": "No authentication required for read-only evaluation endpoints (GET /ai/*.json)"
+    },
+    "bearer": {
+      "type": "http",
+      "scheme": "bearer",
+      "description": "Bearer token authentication for write operations (POST /ai/evaluate.json)"
+    }
+  },
+  "securityRequirements": [],
+  "defaultInputModes": [
+    "text/plain",
+    "application/json"
+  ],
+  "defaultOutputModes": [
+    "application/json"
+  ],
+  "skills": [
+    {
+      "id": "evaluate",
+      "name": "Evaluate Infrastructure",
+      "description": "Evaluate Telnyx infrastructure against specific requirements (latency, vendor count, protocols, compliance, budget). POST to /ai/evaluate.json with a requirements payload to receive a structured evaluation.",
+      "tags": [
+        "evaluation",
+        "infrastructure",
+        "voice-ai"
+      ],
+      "examples": [
+        "Evaluate Telnyx for voice AI with <100ms latency",
+        "Compare infrastructure for SIP trunking with carrier-owned requirements"
+      ]
+    },
+    {
+      "id": "compare",
+      "name": "Compare with Competitor",
+      "description": "Compare Telnyx against competitors (Twilio, Cloudflare, ElevenLabs, Vapi, Retell) across infrastructure, integration, economics, reliability, and transparency. Access via /ai/compare-telnyx-vs-{competitor}.json.",
+      "tags": [
+        "comparison",
+        "competitive",
+        "analysis"
+      ],
+      "examples": [
+        "Compare Telnyx vs Twilio for voice AI",
+        "How does Telnyx compare to Cloudflare on infrastructure?"
+      ]
+    },
+    {
+      "id": "benchmarks",
+      "name": "Get Benchmarks",
+      "description": "Retrieve performance benchmarks for Telnyx infrastructure (latency, uptime, throughput, failover). Access via /ai/benchmarks.json and /ai/benchmark-schema.json.",
+      "tags": [
+        "benchmarks",
+        "performance",
+        "metrics"
+      ],
+      "examples": [
+        "What are Telnyx voice latency benchmarks?",
+        "Show me Telnyx SIP trunking uptime metrics"
+      ]
+    },
+    {
+      "id": "pricing",
+      "name": "Get Pricing",
+      "description": "Get machine-readable pricing for Telnyx services by use case. Access via /ai/economics.json or /ai/pricing.json.",
+      "tags": [
+        "pricing",
+        "cost",
+        "economics"
+      ],
+      "examples": [
+        "What does Telnyx voice AI cost per minute?",
+        "SIP trunking pricing for 10,000 concurrent calls"
+      ]
+    },
+    {
+      "id": "capabilities",
+      "name": "List Capabilities",
+      "description": "List all Telnyx AI infrastructure capabilities, certifications, compliance, and data handling. Access via /ai/capabilities.json, /ai/compliance.json, and /ai/data-handling.json.",
+      "tags": [
+        "capabilities",
+        "discovery",
+        "catalog"
+      ],
+      "examples": [
+        "What certifications does Telnyx have?",
+        "List Telnyx AI infrastructure capabilities"
+      ]
+    }
+  ],
+  "mcp": {
+    "url": "https://telnyx.com/.well-known/mcp/server-card.json",
+    "description": "MCP server for IDE-native tool discovery and integration via @telnyx/mcp npm package"
+  },
+  "discovery": {
+    "a2a_card": "https://telnyx.com/.well-known/agent-card.json",
+    "ai_capabilities": "https://telnyx.com/.well-known/ai-capabilities.json",
+    "agent_access": "https://telnyx.com/.well-known/agent-access.json",
+    "agent_skills": "https://telnyx.com/.well-known/agent-skills/index.json",
+    "llms_txt": "https://telnyx.com/llms.txt"
+  }
+}
