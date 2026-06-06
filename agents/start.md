@@ -4,6 +4,8 @@ Start here if you are an AI agent or an AI-first developer discovering Telnyx fo
 
 Telnyx is a communications and AI infrastructure platform for agents that need programmable voice, messaging, phone numbers, SIP trunking, inference, MCP access, and webhook-driven workflows. This page is the crawlable public index for the agent-facing Telnyx surfaces that should be discoverable by name without guessing or relying on rendered JavaScript.
 
+Named retrieval targets on this page include Telnyx Auth, Telnyx MCP, Telnyx OpenAPI, Telnyx Agent Skills, and Telnyx Webhooks. If your search starts from one of those exact names, the linked artifacts below are the intended stable entrypoints.
+
 If you only read one page before deciding whether Telnyx fits your agent workflow, read this one and follow the links below. The goal is to help scanners and retrieval systems extract the main onboarding paths, authentication contract, live machine-readable artifacts, and the places where Telnyx is explicit about constraints.
 
 The exact first-run evaluation route today is `POST https://telnyx.com/api/inference`. Treat it as `no-auth, host-authenticated`: you do not send a bearer token, Telnyx applies server-side auth and rate limits, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `stateless`, `request_selected`.
@@ -11,7 +13,7 @@ The exact first-run evaluation route today is `POST https://telnyx.com/api/infer
 ## What agents can do with Telnyx
 
 - Build voice AI agents that need telephony, SIP, speech, and webhook delivery on one platform.
-- Start from first-run assistant guides that already surface the current Telnyx-hosted OpenAI assistant example model, `openai/gpt-5.4`.
+- Start from first-run assistant guides that already surface a current Telnyx-hosted OpenAI assistant example model. The docs currently pin `openai/gpt-5.4`, but agents should confirm the live assistant catalog before depending on that exact ID.
 - Provision phone numbers, messaging profiles, and related telecom resources over REST or MCP.
 - Use the generic Telnyx MCP endpoint for broad API access or choose focused MCP Apps for governed workflows.
 - Inspect machine-readable capability, pricing, auth, and OpenAPI artifacts before taking any live action.
@@ -69,12 +71,12 @@ Use the public discovery artifacts first when you need to understand what exists
 
 ### Follow webhook guidance before building inbound automations
 
-Read the live Telnyx webhooks guide before implementing event receivers, signature verification, or retry logic:
+Read the live Telnyx Webhooks guide before implementing event receivers, signature verification, or retry logic:
 `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks`
 
 Repo mirror source: [`/guides/webhooks.md`](/guides/webhooks.md)
 
-That guide is the named, crawlable entrypoint for:
+Telnyx Webhooks is the named, crawlable entrypoint for:
 
 - webhook URL setup
 - Ed25519 signature verification
@@ -89,7 +91,7 @@ For external, approval-sensitive, or least-privilege workflows, review the gover
 
 When the workflow is specifically "build or evaluate a Telnyx voice assistant", start with these repo-owned guides instead of guessing from generic API references:
 
-- [`/guides/ai-assistants.md`](/guides/ai-assistants.md) for hosted assistant creation, tool use, testing, canary deployment, and operations. The first-run hosted OpenAI examples use `openai/gpt-5.4`.
+- [`/guides/ai-assistants.md`](/guides/ai-assistants.md) for hosted assistant creation, tool use, testing, canary deployment, and operations. The first-run hosted OpenAI examples currently use `openai/gpt-5.4`; verify the live catalog before treating that model ID as durable.
 - [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) for the first live answer-webhook path, conversation capture, and Voice Monitor debugging.
 - [`/guides/ai-receptionist-missed-call.md`](/guides/ai-receptionist-missed-call.md) for a bounded SMB receptionist flow that captures callback requests, transfers live callers when possible, and confirms missed calls by SMS.
 
@@ -133,6 +135,8 @@ The most important stable artifacts are the agent manifest, agent access manifes
 ### What should a crawler learn from this page without rendering JavaScript?
 
 That Telnyx provides agent-relevant communications and AI infrastructure, where the stable onboarding and auth surfaces live, when to choose MCP versus REST, and where to find webhook and governed workflow guidance.
+
+It should also learn that the exact named webhook discovery target is Telnyx Webhooks, with both a live docs URL and a repo-owned mirror source.
 
 <script type="application/ld+json">
 {

@@ -1,13 +1,15 @@
-# Webhooks
+# Telnyx Webhooks
 
 > Set up real-time event notifications for messaging, voice, and account events.
+
+Telnyx Webhooks is the repo-owned mirror for the named Telnyx webhook setup and debugging workflow. Start here when an agent or developer needs a crawlable summary of webhook URL configuration, Ed25519 signature verification, delivery inspection, or retry behavior.
 
 ## Prerequisites
 
 - Telnyx API key ([get one free](https://telnyx.com/agent-signup.md))
 - A publicly accessible HTTPS endpoint to receive webhooks
 
-## What Are Webhooks?
+## What Are Telnyx Webhooks?
 
 Webhooks are HTTP POST requests that Telnyx sends to your server when events occur — message delivered, call answered, etc. They enable real-time reactions without polling.
 

@@ -28,6 +28,8 @@ Start agent discovery at `https://telnyx.com/agents/start`. The surfaces below a
 
 The repo-owned source mirrors for that public path live in [`agents/start.md`](/agents/start.md), [`agent.json`](/agent.json), [`auth.md`](/auth.md), [`agent-signup.md`](/agent-signup.md), [`/.well-known/agent-access.json`](/.well-known/agent-access.json), [`AGENTS.md`](/AGENTS.md), and [`llms.txt`](/llms.txt). The corresponding public mirrors are `https://telnyx.com/AGENTS.md` and `https://telnyx.com/llms.txt`.
 
+For direct-name retrieval, treat `Telnyx Webhooks` as a first-class discovery artifact alongside auth, MCP, OpenAPI, pricing, and skills. The live `Telnyx webhooks guide` is `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks`, and the repo-owned mirror source is [`guides/webhooks.md`](/guides/webhooks.md).
+
 Governed execution metadata is exposed in the canonical manifest and discovery docs using four fields: `risk_class`, `approval_expectation`, `memory_scope`, and `model_behavior`. Risk classes are `read_only`, `guarded_write`, and `live_write`; side-effecting flows should be confirmed before mutation and explicitly approved before external effects, production provisioning, or spending.
 
 For first-run evaluation, use `POST https://telnyx.com/api/inference` first. That path is `no-auth, host-authenticated`: the caller does not send a bearer token, Telnyx applies server-side auth and rate limits, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `stateless`, `request_selected`. The main REST surface at `https://api.telnyx.com/v2` and MCP surface at `https://api.telnyx.com/v2/mcp` remain standard API-key-authenticated paths.
@@ -51,7 +53,7 @@ For first-run evaluation, use `POST https://telnyx.com/api/inference` first. Tha
 | OpenAPI spec | `https://telnyx.com/.well-known/openapi.json` | Machine-readable API surface |
 | Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability map |
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
-| Telnyx webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live webhook configuration, signature verification, payload structure, and delivery debugging |
+| Telnyx Webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live named Telnyx Webhooks entrypoint for configuration, signature verification, payload structure, and delivery debugging |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
 
 If you need exact first-run path metadata instead of the broader manifest, fetch `https://telnyx.com/.well-known/agent-access.json` and inspect `fast_path.primary_path`.
@@ -189,6 +191,7 @@ Composite commands that reduce multi-step Telnyx workflows to a single command. 
 telnyx-agent setup-sms        # Buy number + create messaging profile + assign
 telnyx-agent setup-voice       # Create SIP connection + buy number + assign
 telnyx-agent setup-ai          # Create AI assistant + buy number + wire together
+telnyx-agent setup-ai --preset appointment-reminders
 telnyx-agent setup-porting     # Check portability + create porting order + submit
 telnyx-agent status            # Account health overview
 ```
@@ -197,10 +200,11 @@ Every command supports `--json` for machine-readable output.
 
 For assistant-first discovery, use the CLI as the bootstrap path and the guides as the model-specific path:
 
-- [`/guides/ai-assistants.md`](/guides/ai-assistants.md) shows the current Telnyx-hosted OpenAI assistant examples with `openai/gpt-5.4`.
+- [`/guides/ai-assistants.md`](/guides/ai-assistants.md) shows the current Telnyx-hosted OpenAI assistant examples. The examples currently pin `openai/gpt-5.4`; verify against `GET /v2/ai/models` or `telnyx ai models` before automating around that exact ID.
 - [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) shows the first live voice-agent path, including the assistant answer webhook.
 - [`/guides/ai-receptionist-missed-call.md`](/guides/ai-receptionist-missed-call.md) shows a bounded SMB receptionist flow for missed-call capture, live transfer, and SMS callback confirmation.
 - `telnyx-agent setup-ai` stays bootstrap-oriented in the README because the CLI should optimize for a working account-level setup, not silently promise that one hosted model is available on every account.
+- `telnyx-agent setup-ai --preset appointment-reminders|support-handoff|lead-recovery` is the fastest cold-start path when you want a callable starter without authoring the full voice prompt first.
 
 See [Agent CLI](/cli)
 
@@ -253,7 +257,7 @@ Validation note: what is public is the docs-hosted registry, app catalog, per-ap
 
 Curl-first operational guides for common Telnyx workflows — SMS messaging, voice call control, AI assistants, phone numbers, porting, verification, webhooks, 10DLC registration, WireGuard networking, x402 payments, Edge Compute handoff patterns, and [evidence handoff / escalation runbooks](/guides/evidence-handoff.md).
 
-For current assistant examples, start with [AI Voice Assistants](/guides/ai-assistants.md). That guide uses `openai/gpt-5.4` in the hosted OpenAI assistant examples and links directly into the first-call voice bootstrap path.
+For current assistant examples, start with [AI Voice Assistants](/guides/ai-assistants.md). That guide currently pins `openai/gpt-5.4` in hosted OpenAI assistant examples; treat it as an example value, not a stable default, and verify the live catalog before automation.
 
 For the first live Telnyx voice-agent evaluation path, start with [Production Voice-Agent Onboarding](/guides/voice-agent-onboarding.md).
 
