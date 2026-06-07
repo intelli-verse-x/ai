@@ -28,6 +28,8 @@ Start agent discovery at `https://telnyx.com/agents/start`. The surfaces below a
 
 The repo-owned source mirrors for that public path live in [`agents/start.md`](/agents/start.md), [`agent.json`](/agent.json), [`auth.md`](/auth.md), [`agent-signup.md`](/agent-signup.md), [`/.well-known/agent-access.json`](/.well-known/agent-access.json), [`/.well-known/agent-card.json`](/.well-known/agent-card.json), [`/.well-known/agent-skills/index.json`](/.well-known/agent-skills/index.json), [`/ai/capabilities.json`](/ai/capabilities.json), [`/ai/pricing.json`](/ai/pricing.json), [`AGENTS.md`](/AGENTS.md), and [`llms.txt`](/llms.txt). The corresponding public mirrors are `https://telnyx.com/AGENTS.md`, `https://telnyx.com/llms.txt`, `https://telnyx.com/ai/capabilities.json`, and `https://telnyx.com/ai/pricing.json`.
 
+For Hermes Agent and OpenClaw users, the Telnyx-owned SMS platform adapter lives in [`/telnyx-hermes-sms`](/telnyx-hermes-sms). Start with [`telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md) for the installer CLI, Hermes plugin enablement steps, and the current canonical install path. Today the canonical install path is the GitHub repo install command; once GitHub Releases are published, the tagged release path should become the stable default.
+
 For direct-name retrieval, treat `Telnyx Webhooks` as a first-class discovery artifact alongside auth, MCP, OpenAPI, pricing, and skills. The live `Telnyx webhooks guide` is `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks`, and the repo-owned mirror source is [`guides/webhooks.md`](/guides/webhooks.md).
 
 Governed execution metadata is exposed in the canonical manifest and discovery docs using four fields: `risk_class`, `approval_expectation`, `memory_scope`, and `model_behavior`. Risk classes are `read_only`, `guarded_write`, and `live_write`; side-effecting flows should be confirmed before mutation and explicitly approved before external effects, production provisioning, or spending.
@@ -55,6 +57,7 @@ For first-run evaluation, use `POST https://telnyx.com/api/inference` first. Tha
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
 | Telnyx Webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live named Telnyx Webhooks entrypoint for configuration, signature verification, payload structure, and delivery debugging |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
+| Hermes/OpenClaw SMS adapter | [`/telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md) | Telnyx-owned Hermes SMS plugin install path and integration quickstart |
 
 If you need exact first-run path metadata instead of the broader manifest, fetch `https://telnyx.com/.well-known/agent-access.json` and inspect `fast_path.primary_path`.
 
@@ -266,6 +269,8 @@ For a production-shaped but still bounded inbound workflow, use [AI Receptionist
 For Edge Compute specifically, the goal is to make the handoff testable fast: start from a real `telnyx-edge` example, deploy it, and let `team-telnyx/ai` orchestrate against that live endpoint.
 
 For the managed-agent packaging pattern that ties discovery, skills, MCP apps, and least-privilege operations together, see [Managed Telecom Agents](/managed-telecom-agents.md).
+
+For Hermes Agent or OpenClaw SMS integrations, use [`telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md). That repo-owned subdirectory is the fastest path when the goal is "wire Telnyx SMS into Hermes" rather than "call Telnyx APIs directly from a generic agent framework."
 
 See [Guides](/guides) for the full list.
 

@@ -8,6 +8,11 @@ It is a **plugin-first platform adapter**. Hermes already has a built-in
 keeps Twilio untouched and adds Telnyx as `telnyx_sms` so the integration is
 safe, reversible, and consistent with Hermes' platform-plugin architecture.
 
+Canonical install path:
+
+- Today: install from the GitHub repository with `uv tool install --python 3.12 "git+https://github.com/team-telnyx/telnyx-hermes-sms.git"`.
+- Stable target: once GitHub Releases are published for `team-telnyx/telnyx-hermes-sms`, prefer the tagged release install command as the default copy-paste path.
+
 ## What's inside
 
 | File | Purpose |
