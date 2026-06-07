@@ -1,0 +1,39 @@
+{
+  "name": "@telnyx/link",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Telnyx Link MVP skeleton: internal employee AI companion with mocked tools, skills, approvals, and shared-channel safety.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "telnyx-link": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "link:dev": "tsx src/cli.ts chat",
+    "link:skill": "tsx src/cli.ts skill",
+    "link:shared-channel": "tsx src/cli.ts shared-channel"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.11.4",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

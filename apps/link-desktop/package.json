@@ -1,0 +1,37 @@
+{
+  "name": "@telnyx/link-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron desktop MVP for Telnyx Link.",
+  "type": "module",
+  "main": "src/main/main.js",
+  "scripts": {
+    "predev": "npm --prefix ../../tools/link run build",
+    "dev": "node scripts/dev.mjs",
+    "prestart": "npm --prefix ../../tools/link run build && npm run build",
+    "start": "LINK_DESKTOP_RENDERER=dist/renderer/index.html electron src/main/main.js",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "preview": "vite --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@telnyx/webrtc": "^2.27.1",
+    "@vitejs/plugin-react": "^5.1.1",
+    "electron": "^39.2.7",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "vite": "^7.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
