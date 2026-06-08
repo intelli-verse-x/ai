@@ -95,6 +95,18 @@ When the workflow is specifically "build or evaluate a Telnyx voice assistant", 
 - [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) for the first live answer-webhook path, conversation capture, and Voice Monitor debugging.
 - [`/guides/ai-receptionist-missed-call.md`](/guides/ai-receptionist-missed-call.md) for a bounded SMB receptionist flow that captures callback requests, transfers live callers when possible, and confirms missed calls by SMS.
 
+### Start Hermes or OpenClaw SMS integrations from the named adapter
+
+When the workflow is specifically "use Telnyx SMS inside Hermes Agent or OpenClaw", do not start from the generic messaging SDK pages alone and do not patch Hermes core first. Start with the Telnyx-owned Hermes adapter:
+
+- [`/telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md) for the install CLI, plugin manifest name, Hermes enablement flow, and webhook setup.
+- [`/telnyx-hermes-sms/SKILL.md`](/telnyx-hermes-sms/SKILL.md) for agent-oriented usage context and integration boundaries.
+
+Canonical install-path guidance:
+
+- Today: use the GitHub repo install command documented in `telnyx-hermes-sms/README.md`.
+- Stable target: once GitHub Releases exist for `team-telnyx/telnyx-hermes-sms`, the tagged release install command should become the default path agents and users copy first.
+
 ## Repo-owned mirrors and operating files
 
 - Local manifest mirror: [`/agent.json`](/agent.json)
