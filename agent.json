@@ -138,7 +138,7 @@
     {
       "id": "ai_assistants",
       "name": "AI Voice Assistants",
-      "description": "Deploy AI-powered voice assistants that answer calls with custom personalities and tools.",
+      "description": "Deploy AI-powered voice assistants that answer calls with custom personalities, tools, webhook-driven call control, and Telnyx-hosted speech and inference.",
       "guide": "/guides/ai-assistants.md",
       "cli": "telnyx assistant create --name 'Support Bot'",
       "api": "POST /v2/ai/assistants",
@@ -320,7 +320,7 @@
     {
       "id": "webhooks",
       "name": "Webhooks",
-      "description": "Real-time event notifications for messaging, voice, and account events.",
+      "description": "Real-time event notifications for messaging, voice, AI assistant, and account events, including delivery inspection and retry debugging.",
       "guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
       "api": "GET /v2/webhook_deliveries",
       "docs": "https://developers.telnyx.com/docs/webhooks",
@@ -351,7 +351,7 @@
     {
       "id": "payments",
       "name": "x402 Crypto Payments",
-      "description": "Fund account with USDC on Base blockchain via x402 protocol.",
+      "description": "Fund a Telnyx account with USDC on Base blockchain via x402 protocol using quote, signature, and submit steps.",
       "guide": "/guides/x402-payments.md",
       "api": "POST /v2/x402/credit_account/quote",
       "docs": "https://developers.telnyx.com/docs/account/billing",
@@ -518,6 +518,11 @@
     "status": "https://status.telnyx.com",
     "pricing": "https://telnyx.com/ai/pricing.json",
     "webhooks_guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
+    "webhooks_repo_mirror": "https://telnyx.com/guides/webhooks.md",
+    "voice_ai_agents_guide": "https://telnyx.com/guides/ai-assistants.md",
+    "voice_agent_onboarding_guide": "https://telnyx.com/guides/voice-agent-onboarding.md",
+    "x402_payments_guide": "https://telnyx.com/guides/x402-payments.md",
+    "zero_signup_first_run": "https://telnyx.com/api/inference",
     "support": "https://support.telnyx.com",
     "github": "https://github.com/team-telnyx"
   }

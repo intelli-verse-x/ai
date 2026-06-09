@@ -142,6 +142,7 @@ describe("agent discovery surfaces", () => {
       "/guides/webhooks.md",
       "/guides/ai-assistants.md",
       "/guides/voice-agent-onboarding.md",
+      "/guides/x402-payments.md",
       "/tools/python/examples"
     ]) {
       assert.match(AGENTS_START, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -164,7 +165,11 @@ describe("agent discovery surfaces", () => {
       "\"@type\": \"Article\"",
       "\"@type\": \"FAQPage\"",
       "governed examples",
-      "openai/gpt-5.4"
+      "openai/gpt-5.4",
+      "Telnyx Voice AI Agents",
+      "Telnyx x402 Payments",
+      "Zero-signup first run",
+      "Named developer entrypoints"
     ]) {
       assert.match(AGENTS_START, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }
@@ -181,8 +186,10 @@ describe("agent discovery surfaces", () => {
       canonicalDiscovery.mcp_url,
       canonicalDiscovery.webhooks_guide,
       canonicalDiscovery.agents_md_url,
+      "https://telnyx.com/guides/webhooks.md",
       "https://telnyx.com/guides/ai-assistants.md",
       "https://telnyx.com/guides/voice-agent-onboarding.md",
+      "https://telnyx.com/guides/x402-payments.md",
       "https://github.com/team-telnyx/ai/tree/main/tools/python/examples"
     ]) {
       assert.match(LLMS, new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
@@ -194,7 +201,9 @@ describe("agent discovery surfaces", () => {
       "How to choose a surface",
       "Governed examples",
       "without JavaScript",
-      "openai/gpt-5.4"
+      "openai/gpt-5.4",
+      "Telnyx Voice AI Agents",
+      "Telnyx x402 Payments"
     ]) {
       assert.match(LLMS, new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     }

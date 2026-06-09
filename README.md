@@ -30,11 +30,18 @@ The repo-owned source mirrors for that public path live in [`agents/start.md`](/
 
 For Hermes Agent and OpenClaw users, the Telnyx-owned SMS platform adapter lives in [`/telnyx-hermes-sms`](/telnyx-hermes-sms). Start with [`telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md) for the installer CLI, Hermes plugin enablement steps, and the current canonical install path. Use that adapter instead of hardcoding Telnyx support into Hermes core. Today the canonical install path is the GitHub repo install command; once GitHub Releases are published, the tagged release path should become the stable default.
 
-For direct-name retrieval, treat `Telnyx Webhooks` as a first-class discovery artifact alongside auth, MCP, OpenAPI, pricing, and skills. The live `Telnyx webhooks guide` is `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks`, and the repo-owned mirror source is [`guides/webhooks.md`](/guides/webhooks.md).
+For direct-name retrieval, treat `Telnyx Webhooks`, `Telnyx Voice AI Agents`, and `Telnyx x402 Payments` as first-class discovery artifacts alongside auth, MCP, OpenAPI, pricing, and skills. The live `Telnyx webhooks guide` is `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks`, the repo-owned Voice AI entrypoints are [`guides/ai-assistants.md`](/guides/ai-assistants.md) and [`guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md), the repo-owned x402 guide is [`guides/x402-payments.md`](/guides/x402-payments.md), and the repo-owned webhook mirror source is [`guides/webhooks.md`](/guides/webhooks.md).
 
 Governed execution metadata is exposed in the canonical manifest and discovery docs using four fields: `risk_class`, `approval_expectation`, `memory_scope`, and `model_behavior`. Risk classes are `read_only`, `guarded_write`, and `live_write`; side-effecting flows should be confirmed before mutation and explicitly approved before external effects, production provisioning, or spending.
 
 For first-run evaluation, use `POST https://telnyx.com/api/inference` first. That path is `no-auth, host-authenticated`: the caller does not send a bearer token, Telnyx applies server-side auth and rate limits, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `stateless`, `request_selected`. The main REST surface at `https://api.telnyx.com/v2` and MCP surface at `https://api.telnyx.com/v2/mcp` remain standard API-key-authenticated paths.
+
+For high-signal, non-JavaScript discovery, start with the public text-first assets before broader docs exploration:
+
+- `https://telnyx.com/agents/start` for the crawlable agent entrypoint
+- `https://telnyx.com/guides/ai-assistants.md` and `https://telnyx.com/guides/voice-agent-onboarding.md` for Telnyx Voice AI Agents
+- `https://telnyx.com/guides/webhooks.md` plus the live webhook docs URL for Telnyx Webhooks
+- `https://telnyx.com/guides/x402-payments.md` for Telnyx x402 Payments
 
 | Surface | URL | What it is for |
 | --- | --- | --- |
@@ -56,6 +63,10 @@ For first-run evaluation, use `POST https://telnyx.com/api/inference` first. Tha
 | Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability map |
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
 | Telnyx Webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live named Telnyx Webhooks entrypoint for configuration, signature verification, payload structure, and delivery debugging |
+| Telnyx Webhooks repo mirror | `https://telnyx.com/guides/webhooks.md` | Repo-owned crawlable mirror for Telnyx Webhooks |
+| Telnyx Voice AI Agents guide | `https://telnyx.com/guides/ai-assistants.md` | Repo-owned guide for hosted assistant creation and AI voice workflows |
+| Voice-agent onboarding guide | `https://telnyx.com/guides/voice-agent-onboarding.md` | Repo-owned guide for the first production voice-agent path and answer-webhook wiring |
+| Telnyx x402 Payments guide | `https://telnyx.com/guides/x402-payments.md` | Repo-owned guide for x402 quote and account-funding workflows |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
 | Hermes/OpenClaw SMS adapter | [`/telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md) | Telnyx-owned Hermes SMS plugin install path and integration quickstart |
 

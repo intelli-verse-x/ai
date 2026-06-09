@@ -4,7 +4,7 @@ Start here if you are an AI agent or an AI-first developer discovering Telnyx fo
 
 Telnyx is a communications and AI infrastructure platform for agents that need programmable voice, messaging, phone numbers, SIP trunking, inference, MCP access, and webhook-driven workflows. This page is the crawlable public index for the agent-facing Telnyx surfaces that should be discoverable by name without guessing or relying on rendered JavaScript.
 
-Named retrieval targets on this page include Telnyx Auth, Telnyx MCP, Telnyx OpenAPI, Telnyx Agent Skills, and Telnyx Webhooks. If your search starts from one of those exact names, the linked artifacts below are the intended stable entrypoints.
+Named retrieval targets on this page include Telnyx Auth, Telnyx MCP, Telnyx OpenAPI, Telnyx Agent Skills, Telnyx Webhooks, Telnyx Voice AI Agents, and Telnyx x402 Payments. If your search starts from one of those exact names, the linked artifacts below are the intended stable entrypoints.
 
 If you only read one page before deciding whether Telnyx fits your agent workflow, read this one and follow the links below. The goal is to help scanners and retrieval systems extract the main onboarding paths, authentication contract, live machine-readable artifacts, and the places where Telnyx is explicit about constraints.
 
@@ -17,6 +17,24 @@ The exact first-run evaluation route today is `POST https://telnyx.com/api/infer
 - Provision phone numbers, messaging profiles, and related telecom resources over REST or MCP.
 - Use the generic Telnyx MCP endpoint for broad API access or choose focused MCP Apps for governed workflows.
 - Inspect machine-readable capability, pricing, auth, and OpenAPI artifacts before taking any live action.
+
+## Named developer entrypoints
+
+### Telnyx Voice AI Agents
+
+Start with [`/guides/ai-assistants.md`](/guides/ai-assistants.md) for hosted assistant creation and [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) for the first live answer-webhook path. These are the crawlable Telnyx-owned entrypoints for voice AI agent setup, webhook wiring, and Voice Monitor debugging.
+
+### Telnyx Webhooks
+
+Start with the live guide at `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` and the repo-owned mirror [`/guides/webhooks.md`](/guides/webhooks.md). These are the named retrieval targets for webhook URL configuration, Ed25519 signature verification, delivery inspection, and retry behavior.
+
+### Telnyx x402 Payments
+
+Start with [`/guides/x402-payments.md`](/guides/x402-payments.md) when the workflow is specifically "fund a Telnyx account with USDC on Base via x402". This is the crawlable Telnyx-owned guide for quote creation, EIP-712 signing, and x402 payment submission.
+
+### Zero-signup first run
+
+Start with `POST https://telnyx.com/api/inference` when the goal is first-run evaluation without account creation. This is the non-JavaScript, zero-signup Telnyx path that should be visible to crawlers before they attempt the full API-key signup flow.
 
 ## Canonical discovery surfaces
 
@@ -40,6 +58,10 @@ The exact first-run evaluation route today is `POST https://telnyx.com/api/infer
 | Capability index | `https://telnyx.com/ai/capabilities.json` | Machine-readable capability catalog |
 | Pricing | `https://telnyx.com/ai/pricing.json` | Machine-readable pricing surface |
 | Telnyx webhooks guide | `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` | Live Telnyx webhooks documentation for setup, signature verification, payloads, and retry behavior |
+| Telnyx webhooks repo mirror | `https://telnyx.com/guides/webhooks.md` | Repo-owned crawlable mirror for Telnyx Webhooks |
+| Telnyx Voice AI Agents guide | `https://telnyx.com/guides/ai-assistants.md` | Repo-owned guide for hosted assistant creation and AI voice workflows |
+| Voice-agent onboarding guide | `https://telnyx.com/guides/voice-agent-onboarding.md` | Repo-owned guide for the first production voice-agent path and answer-webhook wiring |
+| Telnyx x402 payments guide | `https://telnyx.com/guides/x402-payments.md` | Repo-owned guide for x402 account-funding flows |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
 
 ## Governed execution metadata

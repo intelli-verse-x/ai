@@ -45,13 +45,20 @@
     },
     "discovery": {
       "docs_url": "https://developers.telnyx.com",
+      "agents_start": "https://telnyx.com/agents/start",
       "quickstart_url": "https://developers.telnyx.com/docs/quickstart",
       "openapi_url": "https://developers.telnyx.com/openapi.json",
       "pricing_json": "https://telnyx.com/ai/pricing.json",
       "agent_skills": "https://telnyx.com/.well-known/agent-skills/index.json",
       "mcp_server": "https://api.telnyx.com/v2/mcp",
       "agent_card": "https://telnyx.com/.well-known/agent-card.json",
-      "agent_signup_url": "https://telnyx.com/agent-signup.md"
+      "agent_signup_url": "https://telnyx.com/agent-signup.md",
+      "webhooks_guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
+      "webhooks_repo_mirror": "https://telnyx.com/guides/webhooks.md",
+      "voice_ai_agents_guide": "https://telnyx.com/guides/ai-assistants.md",
+      "voice_agent_onboarding_guide": "https://telnyx.com/guides/voice-agent-onboarding.md",
+      "x402_payments_guide": "https://telnyx.com/guides/x402-payments.md",
+      "zero_signup_first_run": "https://telnyx.com/api/inference"
     },
     "constraints": {
       "grpc_supported": false,

@@ -4,7 +4,7 @@ Primary agent entrypoint: https://telnyx.com/agents/start
 Summary
 Telnyx is a communications and AI infrastructure platform for agents that need programmable voice, messaging, phone numbers, SIP trunking, inference, webhook delivery, and MCP access. This file is the text-first retrieval index for the stable agent-consumption artifacts that should be visible without JavaScript.
 
-Named discovery targets that should resolve directly from this file include Telnyx Auth, Telnyx MCP, Telnyx OpenAPI, Telnyx Agent Skills, and Telnyx Webhooks.
+Named discovery targets that should resolve directly from this file include Telnyx Auth, Telnyx MCP, Telnyx OpenAPI, Telnyx Agent Skills, Telnyx Webhooks, Telnyx Voice AI Agents, and Telnyx x402 Payments.
 
 What an agent should learn first
 - Telnyx exposes both direct REST discovery and MCP discovery.
@@ -12,6 +12,8 @@ What an agent should learn first
 - The stable auth contract lives in the public auth and protected-resource documents.
 - The named assistant guides are the fastest path for voice-assistant discovery, and the hosted OpenAI examples there currently use openai/gpt-5.4.
 - Telnyx Webhooks has an explicit public guide for webhook setup, signature verification, delivery inspection, and retry behavior.
+- Telnyx Voice AI Agents has explicit crawlable guides for assistant creation and voice-agent onboarding.
+- Telnyx x402 Payments has an explicit crawlable guide for quote creation, EIP-712 signing, and account funding on Base.
 - Governed examples exist for agents that should not begin with broad raw-tool access.
 
 Core discovery surfaces
@@ -33,6 +35,9 @@ Core discovery surfaces
 - Pricing: https://telnyx.com/ai/pricing.json
 - Telnyx Webhooks guide: https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks
 - Telnyx Webhooks repo mirror: https://telnyx.com/guides/webhooks.md
+- Telnyx Voice AI Agents guide: https://telnyx.com/guides/ai-assistants.md
+- Voice-agent onboarding guide: https://telnyx.com/guides/voice-agent-onboarding.md
+- Telnyx x402 Payments guide: https://telnyx.com/guides/x402-payments.md
 - Signup guide: https://telnyx.com/agent-signup.md
 
 How to choose a surface
@@ -41,6 +46,7 @@ How to choose a surface
 - Use https://telnyx.com/.well-known/openapi.json when the workflow needs endpoint-level REST exploration or code generation.
 - Use https://developers.telnyx.com/apps when the workflow should stay on a focused, governed MCP App with narrower tool exposure.
 - Use https://telnyx.com/guides/ai-assistants.md and https://telnyx.com/guides/voice-agent-onboarding.md when the task is specifically first-run assistant creation, answer-webhook wiring, or GPT-5.4-hosted assistant evaluation.
+- Use https://telnyx.com/guides/x402-payments.md when the task is specifically x402 account funding.
 - Read the Telnyx Webhooks guide at https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks before implementing inbound webhook handlers or retry logic.
 
 Governed examples

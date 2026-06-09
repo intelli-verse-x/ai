@@ -1,7 +1,7 @@
 {
   "protocolVersion": "0.2.0",
   "name": "Telnyx AI Infrastructure Agent",
-  "description": "Programmatically evaluate Telnyx AI infrastructure against requirements. Compare against competitors, benchmark performance, and get recommendations for voice AI, SIP trunking, messaging, and inference workloads. Access machine-readable evaluation endpoints at /ai/*.json.",
+  "description": "Programmatically evaluate Telnyx AI infrastructure against requirements and discover the public Telnyx entrypoints for Voice AI Agents, Webhooks, x402 Payments, MCP, OpenAPI, pricing, and no-signup first-run inference. Access machine-readable evaluation endpoints at /ai/*.json.",
   "version": "1.0.0",
   "url": "https://telnyx.com",
   "provider": {
@@ -92,7 +92,7 @@
     {
       "id": "capabilities",
       "name": "List Capabilities",
-      "description": "List all Telnyx AI infrastructure capabilities, certifications, compliance, and data handling. Access via /ai/capabilities.json, /ai/compliance.json, and /ai/data-handling.json.",
+      "description": "List all Telnyx AI infrastructure capabilities, certifications, compliance, data handling, and named developer entrypoints for Voice AI Agents, Webhooks, and x402 payments. Access via /ai/capabilities.json, /ai/compliance.json, and /ai/data-handling.json.",
       "tags": [
         "capabilities",
         "discovery",
@@ -113,6 +113,13 @@
     "ai_capabilities": "https://telnyx.com/.well-known/ai-capabilities.json",
     "agent_access": "https://telnyx.com/.well-known/agent-access.json",
     "agent_skills": "https://telnyx.com/.well-known/agent-skills/index.json",
-    "llms_txt": "https://telnyx.com/llms.txt"
+    "llms_txt": "https://telnyx.com/llms.txt",
+    "agents_start": "https://telnyx.com/agents/start",
+    "zero_signup_first_run": "https://telnyx.com/api/inference",
+    "voice_ai_agents_guide": "https://telnyx.com/guides/ai-assistants.md",
+    "voice_agent_onboarding_guide": "https://telnyx.com/guides/voice-agent-onboarding.md",
+    "webhooks_guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
+    "webhooks_repo_mirror": "https://telnyx.com/guides/webhooks.md",
+    "x402_payments_guide": "https://telnyx.com/guides/x402-payments.md"
   }
 }
