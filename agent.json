@@ -166,6 +166,20 @@
       }
     },
     {
+      "id": "external_coding_agents",
+      "name": "External Coding Agents",
+      "description": "Curated Telnyx package for external coding agents that need one bounded starting point for onboarding, voice AI, messaging, and focused MCP app selection.",
+      "guide": "/guides/external-coding-agents.md",
+      "docs": "https://telnyx.com/agents/start",
+      "requires": ["ai_assistants", "messaging", "webhooks"],
+      "governance": {
+        "risk_class": "read_only",
+        "approval_expectation": "none",
+        "memory_scope": "app_scoped",
+        "model_behavior": "app_defined"
+      }
+    },
+    {
       "id": "ai_receptionist_missed_call",
       "name": "AI Receptionist Missed-Call Capture",
       "description": "Run a bounded SMB inbound workflow that answers with a Telnyx AI receptionist, transfers live callers when possible, and captures callback requests with SMS follow-up when the call cannot be completed live.",

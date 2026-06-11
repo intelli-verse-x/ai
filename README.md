@@ -193,6 +193,8 @@ Install individual skills for your coding assistant via the [Skills CLI](https:/
 npx skills add team-telnyx/ai --skill <SKILL> --agent <AGENT>
 ```
 
+For a multi-surface Telnyx entrypoint aimed at external coding agents, start with `telnyx-external-coding-agents`, then add only the product-specific language skills the workflow needs.
+
 > [!NOTE]
 > See [Skills](/skills/README.md) for full install instrcuctions and comprehensive list of available skills
 
@@ -280,6 +282,8 @@ For a production-shaped but still bounded inbound workflow, use [AI Receptionist
 For Edge Compute specifically, the goal is to make the handoff testable fast: start from a real `telnyx-edge` example, deploy it, and let `team-telnyx/ai` orchestrate against that live endpoint.
 
 For the managed-agent packaging pattern that ties discovery, skills, MCP apps, and least-privilege operations together, see [Managed Telecom Agents](/managed-telecom-agents.md).
+
+For the external coding-agent package that bundles onboarding, voice AI, messaging, and focused MCP-app selection into one starting point, see [External Coding Agents](/guides/external-coding-agents.md).
 
 For Hermes Agent or OpenClaw SMS integrations, use [`telnyx-hermes-sms/README.md`](/telnyx-hermes-sms/README.md). That repo-owned subdirectory is the fastest path when the goal is "wire Telnyx SMS into Hermes" rather than "call Telnyx APIs directly from a generic agent framework" or patch Hermes core yourself.
 

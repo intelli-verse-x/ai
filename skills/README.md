@@ -27,6 +27,8 @@ Choose your setup:
 - [Skills CLI (Codex, Cursor, etc.)](#skills-cli-installation)
 - [Claude Code plugins](#install-claude-code-plugins)
 
+If you are starting from a generic coding agent and need a single Telnyx entrypoint before loading product-specific skills, install `telnyx-external-coding-agents` first.
+
 ### Skills CLI installation
 
 Install a skill for your agent:
@@ -173,6 +175,7 @@ npx skills add team-telnyx/ai --skill telnyx-messaging-python --agent cursor
 
 | Skill | Description |
 |-------|-------------|
+| `telnyx-external-coding-agents` | Curated entrypoint for external coding agents covering onboarding, voice AI, messaging, and focused MCP app selection |
 | `telnyx-storage-*` | S3-compatible cloud storage |
 | `telnyx-video-*` | Video rooms and conferencing |
 | `telnyx-fax-*` | Programmable fax |
