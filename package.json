@@ -1,12 +1,14 @@
 {
   "name": "telnyx-ai",
   "private": true,
-  "description": "Telnyx AI skills monorepo — SDKs, CLI, guides, and agent skills",
+  "description": "Telnyx AI skills monorepo \u2014 SDKs, CLI, guides, and agent skills",
   "scripts": {
     "test:guides": "npx tsx --test tests/guides.test.ts",
     "test:guides-api": "npx tsx --test tests/guides-api.test.ts"
   },
   "devDependencies": {
-    "tsx": "^4.19.0"
+    "dotenv": "^8.2.0",
+    "node-fetch": "^3.3.2",
+    "tsx": "^4.22.4"
   }
 }
