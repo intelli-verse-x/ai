@@ -27,6 +27,7 @@ cd cli && npm ci
 cd apps/link-desktop && npm ci
 cd tools/typescript && npm ci
 cd tools/link && npm ci
+cd tools/link-skill-registry && npm ci
 cd tools/mcp && npm ci
 cd tools/mcp-apps && npm ci
 cd tools/python && pip install -e ".[dev]"
@@ -41,6 +42,7 @@ cd tools/python && pip install -e ".[dev]"
 | `tools/python/`  | `cd tools/python && pytest`        |
 | `tools/typescript/` | `cd tools/typescript && npm test` |
 | `tools/link/`    | `cd tools/link && npm run typecheck && npm test` |
+| `tools/link-skill-registry/` | `cd tools/link-skill-registry && npm run build` |
 | `tools/mcp/`     | `cd tools/mcp && npm run build`    |
 | `tools/mcp-apps/`| `cd tools/mcp-apps && npm run typecheck && npm run build && npm test` |
 | `guides/`        | `npm run test:guides` (from root)  |
@@ -62,6 +64,7 @@ For the Telnyx Link desktop shell, use `./script/build_and_run.sh` from the repo
 | `tools/python/`         | Python agent toolkit (PyPI: `telnyx-agent-toolkit`).                      |
 | `tools/typescript/`     | TypeScript agent toolkit (npm).                                           |
 | `tools/link/`           | Telnyx Link MVP skeleton for internal employee AI companion workflows.    |
+| `tools/link-skill-registry/` | Private Link Skill Registry Edge service for skill stars, installs/downloads, and run counts. |
 | `tools/mcp/`            | MCP proxy server for the generic Telnyx API MCP endpoint.                |
 | `tools/mcp-apps/`       | Focused app-layer MCP servers with MCP Apps UI resources.                |
 | `tools/ffl-cli/`        | Filling-from-life CLI tooling.                                            |

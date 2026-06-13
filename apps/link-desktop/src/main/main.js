@@ -1,17 +1,24 @@
-import { app, BrowserWindow, ipcMain, nativeImage, safeStorage, session, shell } from "electron";
-import { execFile } from "node:child_process";
+import { app, BrowserWindow, dialog, ipcMain, nativeImage, safeStorage, session, shell } from "electron";
+import { execFile, spawn } from "node:child_process";
 import crypto from "node:crypto";
+import { lookup as dnsLookup } from "node:dns/promises";
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import http from "node:http";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
+import extractZip from "extract-zip";
 import {
   createDefaultToolRegistry,
   discoverSkills,
   formatSharedChannelResponse,
   InMemoryAuditLogger,
+  importLocalLinkApp,
   LinkRuntime,
+  inspectLocalLinkApp,
+  MessageGatewayService,
   metadataForTool,
 } from "../../../../tools/link/dist/index.js";
 
@@ -20,22 +27,253 @@ const execFileAsync = promisify(execFile);
 const repoRoot = path.resolve(__dirname, "../../../..");
 const auditLogger = new InMemoryAuditLogger();
 const runtime = new LinkRuntime({ auditLogger });
-const stateVersion = 5;
+const nativeFetch = globalThis.fetch.bind(globalThis);
+const stateVersion = 9;
 const defaultAgentControlPlaneUrl = "http://agent-control-plane.query.prod.telnyx.io:8000";
 const defaultA2aDiscoveryUrl = "http://a2a-discovery.query.prod.telnyx.io:4000";
 const defaultAuthInternalUrl = "https://auth-internal.query.prod.telnyx.io:6674";
 const defaultHindsightUrl = "https://api-internal.telnyx.com/hindsight";
 const defaultLinkAppPublisherUrl = "https://link-app-publisher.query.prod.telnyx.io";
+const defaultSkillRegistryUrl = "https://link-skill-registry.query.prod.telnyx.io";
+const defaultMessageGatewayUrl = "https://link-message-gateway.query.prod.telnyx.io";
+const defaultTelnyxEdgeApiEndpoint = "https://apidev.telnyx.com";
+const localPublishInspectionContract = {
+  manifestCandidates: ["link-app.yml", "link-app.yaml", "link-app.json"],
+  gitHeadCommand: ["rev-parse", "HEAD"],
+};
+const localEdgePreviewServers = new Map();
 const defaultLiteLlmBaseUrl = "http://litellm-aiswe.query.prod.telnyx.io:4000";
 const defaultGuruApiBaseUrl = "https://api.getguru.com/api/v1";
+const defaultGuruMcpUrl = "https://mcp.api.getguru.com/mcp";
+const defaultGuruOAuthScope = "read:*";
+const defaultGuruOAuthRedirectUri = "http://localhost:57937/auth/guru/callback";
+const defaultGuruOAuthAuthorizeUrl = "https://api.getguru.com/oauth/authorize";
+const defaultGuruOAuthTokenUrl = "https://api.getguru.com/oauth/token";
+const defaultPylonMcpUrl = "https://mcp.usepylon.com";
+const defaultPylonOAuthScope = "openid profile email offline_access";
 const defaultIntercomApiBaseUrl = "https://api.intercom.io";
 const defaultMintlifyApiBaseUrl = "https://api.mintlify.com";
 const defaultMintlifyDocsDomain = "developers.telnyx.com";
-const appIconPath = path.resolve(__dirname, "../../public/triforce-26.png");
+const defaultAgentMailApiBaseUrl = "https://api.agentmail.to/v0";
+const defaultTelnyxApiBaseUrl = "https://api.telnyx.com";
+const agentMailApiKeyField = "AGENTMAIL_API_KEY";
+const agentMailDomainField = "AGENTMAIL_DOMAIN";
+const telnyxVoiceConnectionIdField = "TELNYX_VOICE_CONNECTION_ID";
+const telnyxMeetCallerIdField = "TELNYX_MEET_CALLER_ID";
+const telnyxMeetWebhookUrlField = "TELNYX_MEET_WEBHOOK_URL";
+const telnyxMeetConversationRelayWsUrlField = "TELNYX_MEET_CONVERSATION_RELAY_WS_URL";
+const linkMeetingAgentAdapterUrlField = "LINK_MEETING_AGENT_ADAPTER_URL";
+const googleMeetApiBaseUrlField = "GOOGLE_MEET_API_BASE_URL";
+const defaultMeetBotConsentGreeting = "Hi, this is a Telnyx meeting bot. I am joining to help with the meeting.";
+const googleWorkspaceAgentConnectionField = "GOOGLE_WORKSPACE_AGENT_CONNECTION_ID";
+const googleWorkspaceVerifiedField = "GOOGLE_WORKSPACE_AGENT_VERIFIED_AT";
+const googleWorkspaceAccessTokenField = "GOOGLE_WORKSPACE_ACCESS_TOKEN";
+const googleWorkspaceRefreshTokenField = "GOOGLE_WORKSPACE_REFRESH_TOKEN";
+const googleWorkspaceTokenExpiresAtField = "GOOGLE_WORKSPACE_TOKEN_EXPIRES_AT";
+const googleOAuthClientIdField = "GOOGLE_OAUTH_CLIENT_ID";
+const googleOAuthClientSecretField = "GOOGLE_OAUTH_CLIENT_SECRET";
+const googleInboxAgentConnectionField = "GOOGLE_INBOX_AGENT_CONNECTION_ID";
+const googleInboxVerifiedField = "GOOGLE_INBOX_VERIFIED_AT";
+const googleTasksAgentConnectionField = "GOOGLE_TASKS_AGENT_CONNECTION_ID";
+const googleTasksVerifiedField = "GOOGLE_TASKS_VERIFIED_AT";
+const googleWorkspaceSetupUtilsRepo = "team-telnyx/openclaw-itops-setup-utils";
+const googleWorkspaceSetupScriptPath = "gog-setup";
+const gogAccountField = "GOG_ACCOUNT";
+const gogKeyringPasswordField = "GOG_KEYRING_PASSWORD";
+const linkSkillRepo = "team-telnyx/link";
+const githubAppVerificationRepo = "team-telnyx/link";
+const githubAppClientIdField = "GITHUB_APP_CLIENT_ID";
+const githubUserAccessTokenField = "GITHUB_USER_ACCESS_TOKEN";
+const githubUserLoginField = "GITHUB_USER_LOGIN";
+const guruOAuthClientIdField = "GURU_OAUTH_CLIENT_ID";
+const guruOAuthClientSecretField = "GURU_OAUTH_CLIENT_SECRET";
+const guruOAuthScopeField = "GURU_OAUTH_SCOPE";
+const guruOAuthRedirectUriField = "GURU_OAUTH_REDIRECT_URI";
+const guruOAuthAccessTokenField = "GURU_OAUTH_ACCESS_TOKEN";
+const guruOAuthRefreshTokenField = "GURU_OAUTH_REFRESH_TOKEN";
+const guruOAuthTokenExpiresAtField = "GURU_OAUTH_TOKEN_EXPIRES_AT";
+const guruOAuthUserIdField = "GURU_OAUTH_USER_ID";
+const pylonMcpUrlField = "PYLON_MCP_URL";
+const pylonMcpClientIdField = "PYLON_MCP_CLIENT_ID";
+const pylonMcpAccessTokenField = "PYLON_MCP_ACCESS_TOKEN";
+const pylonMcpRefreshTokenField = "PYLON_MCP_REFRESH_TOKEN";
+const pylonMcpTokenExpiresAtField = "PYLON_MCP_TOKEN_EXPIRES_AT";
+const pylonMcpAllowedTools = new Set([
+  "search_issues",
+  "get_issue",
+  "get_issue_messages",
+  "search_accounts",
+  "get_account",
+  "get_contact",
+  "get_user",
+  "get_me",
+  "create_issue",
+  "pylon_search_issues",
+  "pylon_get_issue",
+  "pylon_get_issue_messages",
+  "pylon_search_accounts",
+  "pylon_get_account",
+  "pylon_get_contact",
+  "pylon_get_user",
+  "pylon_get_me",
+  "pylon_create_issue",
+]);
+const pylonMcpBlockedTools = new Set([
+  "update_issue",
+  "update_account",
+  "pylon_update_issue",
+  "pylon_update_account",
+]);
+let linkDesktopConfigCache;
+const googleCalendarAccessTokenField = "GOOGLE_CALENDAR_ACCESS_TOKEN";
+const googleDriveAccessTokenField = "GOOGLE_DRIVE_ACCESS_TOKEN";
+const googleContactsAccessTokenField = "GOOGLE_CONTACTS_ACCESS_TOKEN";
+const defaultGoogleCalendarApiBaseUrl = "https://www.googleapis.com/calendar/v3";
+const defaultGooglePeopleApiBaseUrl = "https://people.googleapis.com/v1";
+const defaultGoogleOAuthTokenUrl = "https://oauth2.googleapis.com/token";
+const appDisplayName = "Link";
+const appIconPath = path.resolve(__dirname, "../../public/link-icon.png");
+const knowledgeAgentAskUrl = "https://api.telnyx.com/v2/knowledge_agent/ask";
 const keyScopedHindsightBankId = "hindsight-key-scoped";
 const aidaAgentId = "agent-aida";
 const aidaMcpUrl = "https://api-internal.telnyx.com/aida/mcp/";
-const mcpProxyFallbackServers = [];
+const mcpProxyFallbackServers = [
+  {
+    id: "telnyx-mcp-server",
+    name: "Telnyx MCP Server",
+    description: "Official Telnyx MCP server for telephony, messaging, phone numbers, calls, and AI assistants.",
+    ownerSquad: "developer-experience",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/telnyx-mcp-server",
+  },
+  {
+    id: "telnyx-debugging-mcp",
+    name: "Telnyx Debugging MCP",
+    description: "Debug Telnyx records, call flows, sessions, recordings, CDRs, PCAPs, and webhook deliveries.",
+    ownerSquad: "support-engineering",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/telnyx-debugging-mcp",
+  },
+  {
+    id: "telnyx-mcp",
+    name: "Telnyx Product Debugging",
+    description: "Internal Telnyx debugging MCP with account, debugging, and extra record lookup tools.",
+    ownerSquad: "support-engineering",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/telnyx-mcp",
+  },
+  {
+    id: "pylon-mcp-server",
+    name: "Pylon MCP Server",
+    description: "Pylon issue, account, contact, and user context. Link v1 allows read tools plus create_issue and blocks update tools.",
+    ownerSquad: "support-engineering",
+    toolCount: 9,
+    status: "active",
+    sourceRepo: "team-telnyx/pylon-mcp-server",
+  },
+  {
+    id: "noc-tools",
+    name: "NOC Tools",
+    description: "Internal NOC MCP tools for call, message, and user management workflows.",
+    ownerSquad: "noc",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/noc-tools",
+  },
+  {
+    id: "rate-deck-mcp",
+    name: "Rate Deck MCP",
+    description: "Rate deck management for tariffs, margins, wireless rates, voice rates, and alpha rates.",
+    ownerSquad: "pricing",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/rate-deck-mcp",
+  },
+  {
+    id: "infra-svc-minerva-mcp",
+    name: "Minerva 10DLC MCP",
+    description: "Telnyx-hosted Minerva 10DLC campaign builder MCP/API service.",
+    ownerSquad: "messaging",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/infra-svc-minerva-mcp",
+  },
+  {
+    id: "ap-invoices-mcp-generated",
+    name: "AP Invoices MCP",
+    description: "MCP tools for AP invoice workflows.",
+    ownerSquad: "finance",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/ap-invoices-mcp-generated",
+  },
+  {
+    id: "mysql-mcp-server",
+    name: "MySQL MCP Server",
+    description: "Internal MySQL MCP server for Telnyx infrastructure database workflows.",
+    ownerSquad: "infrastructure",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/mysql-mcp-server",
+  },
+  {
+    id: "telnyx-users-internal-private-mcp",
+    name: "Users Private MCP",
+    description: "MCP server for private Telnyx users endpoints.",
+    ownerSquad: "identity",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/telnyx-users-internal-private-mcp",
+  },
+  {
+    id: "telnyx-agent-portal",
+    name: "Telnyx Agent Portal",
+    description: "Agent-friendly Telnyx portal with MCP server, Agent API Gateway, and Agent Toolkit SDKs.",
+    ownerSquad: "agent-platform",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/telnyx-agent-portal",
+  },
+  {
+    id: "metabase-mcp-server",
+    name: "Metabase MCP Server",
+    description: "Internal MCP server for Metabase access.",
+    ownerSquad: "data",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/metabase-mcp-server",
+  },
+  {
+    id: "number-intelligence",
+    name: "Number Intelligence",
+    description: "Phone-number analysis using Telnyx Number Lookup and read-first readiness signals.",
+    ownerSquad: "product",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/mcp-apps",
+  },
+  {
+    id: "usage-cost-explorer",
+    name: "Usage & Cost Explorer",
+    description: "Balance, usage reports, billing groups, and guarded billing controls.",
+    ownerSquad: "billing",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/mcp-apps",
+  },
+  {
+    id: "voice-monitor",
+    name: "Voice Monitor",
+    description: "Read-only active-call monitoring, call timelines, call status, and recording discovery.",
+    ownerSquad: "voice",
+    toolCount: 0,
+    status: "active",
+    sourceRepo: "team-telnyx/mcp-apps",
+  },
+];
 const mcpProxyFallbackTools = [];
 const telnyxDocsSources = [
   {
@@ -58,11 +296,13 @@ const trustedRendererWebContentsIds = new Set();
 const mediaPermissionNames = new Set(["media", "microphone"]);
 const oktaFastPassLocalAppPermissionNames = new Set(["local-network-access", "unknown"]);
 const trustedAuthHostSuffixes = [".okta.com", ".okta-emea.com", ".okta-gov.com", ".oktapreview.com", ".telnyx.com"];
-const linkAppAllowedHostSuffixes = [".query.prod.telnyx.io", ".apps.telnyx.io", ".edge.telnyx.io", ".internal.telnyx.com"];
-const allowedCliCommands = new Set(["hermes", "openclaw"]);
+const linkAppAllowedHostSuffixes = [".query.prod.telnyx.io", ".apps.telnyx.io", ".edge.telnyx.io", ".telnyxcompute.com", ".internal.telnyx.com"];
+const allowedCliCommands = new Set(["hermes", "openclaw", "telnyx-edge", "telnyx-edge-dev"]);
 let automations = [];
 let activeWork = [];
 let connectorOverrides = {};
+let meetingBotIdentities = {};
+let meetingBotInvites = [];
 let workspaces = [];
 let chatSessions = [];
 let changeRequests = [];
@@ -70,10 +310,44 @@ let storedCredentials = {};
 let memoryBanks = [];
 let dojoState = emptyDojoState();
 let workboardCards = [];
+let workboardTaskSessions = [];
 let publishedApps = [];
+let livePublishedApps = [];
+let skillRegistryStats = {};
+let pendingSkillRegistryEvents = [];
+let toolCatalogItems = [];
+let pendingToolCatalogPublishes = [];
+let localMessageGatewayService = null;
 let onboardingState = emptyOnboardingState();
 let widgetLayout = emptyWidgetLayout();
+let dialerState = emptyDialerState();
+let speakSettings = emptySpeakSettings();
+let webRtcCredentialProvisionPromise = null;
 const slackAvatarCache = new Map();
+const meetingInviteJoinTimers = new Map();
+let whisperHelperProcess = null;
+let whisperLastExit = null;
+let whisperLastLogLines = [];
+const terminalSessions = new Map();
+let terminalSequence = 0;
+const defaultTerminalId = "terminal-1";
+
+function fetchTimeoutMs(init = {}) {
+  const configured = Number(init.timeoutMs || process.env.LINK_DESKTOP_FETCH_TIMEOUT_MS || 15000);
+  if (!Number.isFinite(configured) || configured <= 0) return 15000;
+  return Math.min(Math.max(Math.round(configured), 1000), 300000);
+}
+
+function fetchWithTimeout(input, init = {}) {
+  const { timeoutMs: _timeoutMs, ...fetchInit } = init || {};
+  if (fetchInit.signal) return nativeFetch(input, fetchInit);
+  return nativeFetch(input, {
+    ...fetchInit,
+    signal: AbortSignal.timeout(fetchTimeoutMs(init)),
+  });
+}
+
+const fetch = fetchWithTimeout;
 
 const connectorCatalog = [
   {
@@ -109,35 +383,71 @@ const connectorCatalog = [
     category: "Knowledge",
     description: "Search verified cards, docs, and knowledge-base context.",
     envGroups: [
+      [guruOAuthRefreshTokenField],
+      [guruOAuthAccessTokenField],
+      ["GURU_EMAIL", "GURU_API_TOKEN"],
       ["GURU_USER_EMAIL", "GURU_USER_TOKEN"],
       ["GURU_USERNAME", "GURU_USER_TOKEN"],
       ["GURU_COLLECTION_ID", "GURU_COLLECTION_TOKEN"],
     ],
-    requiredAccess: ["Guru user token from Apps & Integrations", "GURU_USER_EMAIL or GURU_USERNAME"],
+    requiredAccess: ["Guru OAuth client configured for Telnyx Link", "User approval through Guru SSO", "Legacy Guru API token fallback is still supported"],
+  },
+  {
+    id: "pylon",
+    name: "Pylon",
+    category: "Support",
+    description: "Search Pylon issues, accounts, contacts, and create new issues through the approved Pylon MCP server.",
+    envGroups: [
+      [pylonMcpRefreshTokenField],
+      [pylonMcpAccessTokenField],
+      [pylonMcpUrlField, pylonMcpRefreshTokenField],
+      [pylonMcpUrlField, pylonMcpAccessTokenField],
+    ],
+    requiredAccess: [
+      "team-telnyx/pylon-mcp-server compatible MCP endpoint",
+      "User-scoped Pylon MCP OAuth access token",
+      "Link v1 allows read tools and create_issue; update_issue and update_account are blocked",
+    ],
   },
   {
     id: "google-drive",
     name: "Google Drive",
     category: "Knowledge",
     description: "Search Google Docs, Drive files, and meeting artifacts.",
-    envGroups: [["GOOGLE_DRIVE_ACCESS_TOKEN"], ["GOOGLE_WORKSPACE_ACCESS_TOKEN"]],
-    requiredAccess: ["Google Drive OAuth or GOOGLE_DRIVE_ACCESS_TOKEN"],
+    envGroups: [[googleDriveAccessTokenField], [googleWorkspaceAccessTokenField], [googleWorkspaceVerifiedField]],
+    requiredAccess: ["openclaw-itops-setup-utils/gog-setup connection or GOOGLE_DRIVE_ACCESS_TOKEN"],
   },
   {
     id: "google-calendar",
     name: "Google Calendar",
     category: "Calendar",
     description: "Sync meetings, availability, and call artifacts for Link calendar workflows.",
-    envGroups: [["GOOGLE_WORKSPACE_ACCESS_TOKEN"], ["GOOGLE_CALENDAR_ACCESS_TOKEN"]],
-    requiredAccess: ["Google Calendar OAuth or GOOGLE_WORKSPACE_ACCESS_TOKEN"],
+    envGroups: [[googleCalendarAccessTokenField], [googleWorkspaceAccessTokenField], [googleWorkspaceVerifiedField]],
+    requiredAccess: ["openclaw-itops-setup-utils/gog-setup connection or GOOGLE_CALENDAR_ACCESS_TOKEN"],
+  },
+  {
+    id: "google-inbox",
+    name: "Google Inbox",
+    category: "Communications",
+    description: "Read Gmail inbox threads and save Gmail drafts without exposing send from Link.",
+    envGroups: [[googleInboxVerifiedField], [googleInboxAgentConnectionField]],
+    requiredAccess: ["gog Gmail authorization", "Link app-level Gmail no-send guard"],
+  },
+  {
+    id: "google-tasks",
+    name: "Google Tasks",
+    category: "Taskbox",
+    description: "Sync Google Tasks into Taskbox and create or update tasks through gog.",
+    envGroups: [[googleTasksVerifiedField], [googleTasksAgentConnectionField]],
+    requiredAccess: ["gog Google Tasks authorization", "Taskbox list/add/update/done-only command guard"],
   },
   {
     id: "telnyx-docs",
     name: "Telnyx Docs",
     category: "Knowledge",
-    description: "Query Telnyx Support Center and Developer Docs, then suggest documentation updates when bot answers are wrong or incomplete.",
+    description: "Query built-in Telnyx Help Center, Developer Docs, and Guru-backed skill context, then suggest documentation updates when bot answers are wrong or incomplete.",
     envGroups: [["INTERCOM_ACCESS_TOKEN"], ["MINTLIFY_API_KEY"], ["GURU_USER_EMAIL", "GURU_USER_TOKEN"]],
-    requiredAccess: ["Intercom Help Center token", "Mintlify Developer Docs token", "Guru user token", "GitHub approval for documentation PRs"],
+    requiredAccess: ["Built-in Help Center and Developer Docs search", "Guru-backed Link skills", "optional source API tokens for enrichment", "GitHub approval for documentation PRs"],
   },
   {
     id: "github",
@@ -156,12 +466,31 @@ const connectorCatalog = [
     requiredAccess: ["Slack workspace OAuth or SLACK_BOT_TOKEN"],
   },
   {
+    id: "agentmail",
+    name: "AgentMail",
+    category: "Communications",
+    description: "Create deterministic inbox identities for bots that Link can invite to Calendar meetings.",
+    envGroups: [[agentMailApiKeyField]],
+    requiredAccess: ["AgentMail API key", "optional AGENTMAIL_DOMAIN for custom inbox domains"],
+  },
+  {
     id: "telnyx",
     name: "Telnyx",
     category: "Internal systems",
     description: "Use account, messaging, network, and billing context.",
     envGroups: [["TELNYX_API_KEY"]],
     requiredAccess: ["Telnyx internal API credentials"],
+  },
+  {
+    id: "telnyx-meet-bridge",
+    name: "Telnyx Meet Bridge",
+    category: "Voice",
+    description: "Dial Google Meet SIP or phone entry points through Telnyx and bridge meeting audio to assistants or generic agents.",
+    envGroups: [
+      ["TELNYX_API_KEY", telnyxVoiceConnectionIdField, telnyxMeetCallerIdField, telnyxMeetWebhookUrlField],
+      ["TELNYX_API_KEY", telnyxVoiceConnectionIdField, telnyxMeetCallerIdField, telnyxMeetWebhookUrlField, telnyxMeetConversationRelayWsUrlField],
+    ],
+    requiredAccess: ["Telnyx API key", "voice connection id", "caller id", "public Telnyx webhook URL", "public Conversation Relay wss:// URL for generic agents"],
   },
   {
     id: "aida",
@@ -188,12 +517,40 @@ const connectorCatalog = [
     requiredAccess: ["Company VPN", "Okta Rev2 session or Telnyx API key", "optional LINK_APP_PUBLISHER_URL override"],
   },
   {
+    id: "link-skill-registry",
+    name: "Link Skill Registry",
+    category: "Skills",
+    description: "Track internal skill stars, installs/downloads, and runs through the managed VPN-only registry service.",
+    envGroups: [["TELNYX_AUTH_REV2"], ["TELNYX_API_KEY"], ["LINK_SKILL_REGISTRY_URL", "TELNYX_AUTH_REV2"], ["LINK_SKILL_REGISTRY_URL", "TELNYX_API_KEY"]],
+    requiredAccess: ["Company VPN", "Okta Rev2 session or Telnyx API key", "optional LINK_SKILL_REGISTRY_URL override"],
+  },
+  {
+    id: "link-message-gateway",
+    name: "Link Message Gateway",
+    category: "Communications",
+    description: "Create delivery envelopes for Slack, Google Chat, and A2A recipients while Link owns routing, retries, and audit state.",
+    envGroups: [["TELNYX_AUTH_REV2"], ["TELNYX_API_KEY"], ["LINK_MESSAGE_GATEWAY_URL", "TELNYX_AUTH_REV2"], ["LINK_MESSAGE_GATEWAY_URL", "TELNYX_API_KEY"]],
+    requiredAccess: ["Company VPN", "Okta Rev2 session or Telnyx API key", "Slack/Google Chat/A2A adapters configured on the hosted gateway", "optional LINK_MESSAGE_GATEWAY_URL override"],
+  },
+  {
+    id: "edge-compute",
+    name: "Telnyx Edge Compute",
+    category: "Apps",
+    description: "Build and host serverless HTTP functions and static apps on the Telnyx Edge Compute dev environment.",
+    envGroups: [["TELNYX_API_KEY"], ["TELNYX_AUTH_REV2"]],
+    requiredAccess: ["telnyx-edge CLI", "apidev.telnyx.com endpoint", "Telnyx API key or telnyx-edge auth login"],
+  },
+  {
     id: "tableau-widgets",
     name: "Tableau Widgets",
     category: "Analytics",
-    description: "List and refresh standardized Link widgets from the strict-access Tableau widgets service.",
-    envGroups: [["TABLEAU_WIDGETS_SERVICE_URL", "TELNYX_AUTH_REV2"], ["TABLEAU_WIDGETS_SERVICE_URL", "TELNYX_API_KEY"]],
-    requiredAccess: ["TABLEAU_WIDGETS_SERVICE_URL", "Okta Rev2 session or Telnyx API key", "ACP identity and Tableau view entitlement"],
+    description: "Embed standard Tableau reports in Link and optionally refresh normalized widgets from the strict-access service.",
+    envGroups: [
+      ["TABLEAU_REVENUE_OVERVIEW_URL"],
+      ["TABLEAU_WIDGETS_SERVICE_URL", "TELNYX_AUTH_REV2"],
+      ["TABLEAU_WIDGETS_SERVICE_URL", "TELNYX_API_KEY"],
+    ],
+    requiredAccess: ["Standard Tableau view URLs", "optional strict-access service", "ACP identity and Tableau view entitlement"],
   },
   {
     id: "linear",
@@ -209,14 +566,85 @@ const credentialDefinitions = [
   { id: "agent-control-plane", label: "Agent Control Plane", fields: ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"], help: "Okta sign-in creates the Agent Control Plane session Link uses for internal agents and tools. TELNYX_AUTH_REV2 is stored securely after sign-in." },
   { id: "mcp-proxy", label: "Telnyx MCP Proxy", fields: ["MCP_PROXY_URL"], help: "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry." },
   { id: "link-app-publisher", label: "Link App Publisher", fields: ["LINK_APP_PUBLISHER_URL"], help: "Optional VPN-only publisher service override. Link defaults to the internal managed publisher endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY." },
-  { id: "tableau-widgets", label: "Tableau Widgets", fields: ["TABLEAU_WIDGETS_SERVICE_URL"], help: "URL for the strict-access Tableau widget service. Tableau connected-app secrets stay server-side; Link sends only the signed-in user's Telnyx auth context." },
-  { id: "litellm", label: "Telnyx LiteLLM", fields: ["LITELLM_API_KEY"], help: "Get your LiteLLM Key by asking the AI-swe-Agent bot for one in Slack. Link uses Agent Control Plane routes automatically for hosted Hermes and OpenClaw agents." },
-  { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_KEY"], help: "Per-user, bank-scoped key from the Hindsight bank API Keys tab. Hindsight infers the bank from this key." },
+  { id: "link-skill-registry", label: "Link Skill Registry", fields: ["LINK_SKILL_REGISTRY_URL"], help: "Optional VPN-only skill registry override. Link defaults to the internal managed registry endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "link-message-gateway", label: "Link Message Gateway", fields: ["LINK_MESSAGE_GATEWAY_URL"], help: "Optional VPN-only message gateway override. Link defaults to the internal managed gateway and authenticates with Okta Rev2 or TELNYX_API_KEY." },
+  { id: "tableau-widgets", label: "Tableau Widgets", fields: ["TABLEAU_WIDGETS_SERVICE_URL", "TABLEAU_REVENUE_OVERVIEW_URL", "TABLEAU_SALES_PIPELINE_URL", "TABLEAU_SUPPORT_HEALTH_URL", "TABLEAU_MESSAGING_QUALITY_URL", "TABLEAU_PRODUCT_ADOPTION_URL", "TABLEAU_CUSTOMER_USAGE_URL"], help: "URLs for standard embedded Tableau reports plus the optional strict-access widget service. Tableau controls embedded view access for each signed-in user." },
+  { id: "litellm", label: "Telnyx Inference", fields: ["LITELLM_API_KEY"], help: "Get your LiteLLM Key by asking the AI-swe-Agent bot for one in Slack. Link uses Agent Control Plane routes automatically for hosted Hermes and OpenClaw agents." },
+  { id: "hindsight", label: "Hindsight", fields: ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"], help: "Per-user Hindsight API key plus the memory bank id used for retain operations. Link can still infer the bank from live bank selection or compatible key claims." },
   { id: "linear", label: "Linear", fields: ["LINEAR_API_KEY"], help: "Linear API key for issue and project lookup." },
-  { id: "telnyx", label: "Telnyx", fields: ["TELNYX_API_KEY"], help: "Telnyx API key for account, phone, messaging, and network operations." },
-  { id: "github", label: "GitHub", fields: ["GH_TOKEN"], help: "Fine-grained GitHub token for approved draft PR creation." },
+  { id: "telnyx", label: "Telnyx API Key", fields: ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"], help: "Telnyx API key for account, phone, messaging, and WebRTC token generation." },
+  { id: "telnyx-meet-bridge", label: "Telnyx Meet Bridge", fields: [telnyxVoiceConnectionIdField, telnyxMeetCallerIdField, telnyxMeetWebhookUrlField, telnyxMeetConversationRelayWsUrlField, linkMeetingAgentAdapterUrlField], help: "Runtime settings for Google Meet live joins. Telnyx Assistants can join by assistant id; generic agents require a public Conversation Relay wss:// URL and may use the Link hosted agent adapter URL." },
+  { id: "agentmail", label: "AgentMail", fields: [agentMailApiKeyField, agentMailDomainField], help: "AgentMail creates one deterministic inbox per meeting bot. Link uses that email identity as the Calendar attendee." },
+  { id: "github", label: "GitHub", fields: [githubUserAccessTokenField, githubAppClientIdField, "GH_TOKEN"], help: "Pair GitHub with a read-only Telnyx Link GitHub App so Link can access approved Telnyx repositories without asking users to create personal access tokens." },
+  { id: "guru", label: "Guru", fields: [guruOAuthClientIdField, guruOAuthClientSecretField, guruOAuthScopeField, guruOAuthRedirectUriField, guruOAuthAccessTokenField, guruOAuthRefreshTokenField, guruOAuthTokenExpiresAtField, guruOAuthUserIdField], help: "Connect Guru through OAuth so Link can search Guru MCP cards after the user approves access through Guru SSO. Admins can provide the OAuth client settings through env or managed app config." },
+  { id: "pylon", label: "Pylon", fields: [pylonMcpUrlField, pylonMcpClientIdField, pylonMcpAccessTokenField, pylonMcpRefreshTokenField, pylonMcpTokenExpiresAtField], help: "Connect the team-telnyx/pylon-mcp-server compatible endpoint through Pylon OAuth so Link can search tickets and create issues through user-scoped Pylon MCP access. Link blocks update_issue and update_account in v1." },
   { id: "slack", label: "Slack", fields: ["SLACK_USER_TOKEN", "SLACK_BOT_TOKEN"], help: "Slack user token discovers and DMs bot users; bot token can post where the app has access." },
-  { id: "google-workspace", label: "Google Workspace", fields: ["GOOGLE_WORKSPACE_ACCESS_TOKEN"], help: "Connect Google Workspace so Link can load Calendar events, Drive docs, Meet artifacts, notes, and transcripts for your agents." },
+  { id: "google-workspace", label: "Google Workspace", fields: [googleWorkspaceAgentConnectionField, gogAccountField, gogKeyringPasswordField], help: "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup. Link launches Google sign-in through gog and verifies Calendar and Contacts before marking this connected." },
+  { id: "google-inbox", label: "Google Inbox", fields: [googleInboxAgentConnectionField, googleInboxVerifiedField, gogAccountField, gogKeyringPasswordField], help: "Connect Gmail through gog. Link can read inbox threads and save Gmail drafts, but blocks all Gmail send commands at the app level." },
+  { id: "google-tasks", label: "Google Tasks", fields: [googleTasksAgentConnectionField, googleTasksVerifiedField, gogAccountField, gogKeyringPasswordField], help: "Connect Google Tasks through gog so Taskbox can sync, create, update, and complete Google tasks without delete or clear commands." },
+];
+
+const standardTableauWidgetDefinitions = [
+  {
+    id: "standard-revenue-overview",
+    title: "Revenue overview",
+    category: "Revenue",
+    description: "Standard executive revenue, pipeline, and bookings report.",
+    cadence: "Refreshes hourly",
+    refreshTtlSeconds: 300,
+    envName: "TABLEAU_REVENUE_OVERVIEW_URL",
+    chart: { type: "bar", xField: "stage", yField: "amount", metricField: "amount", metricFormat: "currency" },
+  },
+  {
+    id: "standard-sales-pipeline",
+    title: "Sales pipeline coverage",
+    category: "Revenue",
+    description: "Standard pipeline coverage, stage health, and commit visibility.",
+    cadence: "Refreshes hourly",
+    refreshTtlSeconds: 300,
+    envName: "TABLEAU_SALES_PIPELINE_URL",
+    chart: { type: "area", xField: "week", yField: "coverage", metricField: "coverage", metricFormat: "number" },
+  },
+  {
+    id: "standard-support-health",
+    title: "Support operations health",
+    category: "Operations",
+    description: "Standard ticket volume, backlog, and response health report.",
+    cadence: "Refreshes daily",
+    refreshTtlSeconds: 900,
+    envName: "TABLEAU_SUPPORT_HEALTH_URL",
+    chart: { type: "line", xField: "day", yField: "tickets", metricField: "tickets", metricFormat: "number" },
+  },
+  {
+    id: "standard-messaging-quality",
+    title: "Messaging delivery quality",
+    category: "Operations",
+    description: "Standard delivery quality, route health, and failure trends report.",
+    cadence: "Refreshes hourly",
+    refreshTtlSeconds: 600,
+    envName: "TABLEAU_MESSAGING_QUALITY_URL",
+    chart: { type: "line", xField: "day", yField: "delivery_rate", metricField: "delivery_rate", metricFormat: "percent" },
+  },
+  {
+    id: "standard-product-adoption",
+    title: "Product adoption",
+    category: "Product",
+    description: "Standard product adoption, activation, and active account report.",
+    cadence: "Refreshes daily",
+    refreshTtlSeconds: 900,
+    envName: "TABLEAU_PRODUCT_ADOPTION_URL",
+    chart: { type: "area", xField: "week", yField: "active_accounts", metricField: "active_accounts", metricFormat: "number" },
+  },
+  {
+    id: "standard-customer-usage",
+    title: "Customer usage trends",
+    category: "Product",
+    description: "Standard usage, growth, and customer activity report.",
+    cadence: "Refreshes daily",
+    refreshTtlSeconds: 900,
+    envName: "TABLEAU_CUSTOMER_USAGE_URL",
+    chart: { type: "bar", xField: "product", yField: "usage", metricField: "usage", metricFormat: "number" },
+  },
 ];
 
 function createWindow() {
@@ -226,7 +654,8 @@ function createWindow() {
     height: 920,
     minWidth: 1120,
     minHeight: 760,
-    title: "Telnyx Link",
+    show: false,
+    title: appDisplayName,
     icon: appIcon,
     backgroundColor: "#f7f6f4",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
@@ -243,6 +672,12 @@ function createWindow() {
   });
   registerTrustedRendererWindow(win);
 
+  win.once("ready-to-show", () => {
+    win.show();
+    win.focus();
+    if (process.platform === "darwin") app.focus({ steal: true });
+  });
+
   if (process.env.VITE_DEV_SERVER_URL) {
     void win.loadURL(checkedRendererDevServerUrl().toString());
   } else {
@@ -251,7 +686,8 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  app.setName("Telnyx Link");
+  app.setName(appDisplayName);
+  app.setAboutPanelOptions({ applicationName: appDisplayName });
   const appIcon = nativeImage.createFromPath(appIconPath);
   if (process.platform === "darwin" && !appIcon.isEmpty()) {
     app.dock.setIcon(appIcon);
@@ -259,6 +695,7 @@ app.whenReady().then(async () => {
 
   await loadStoredCredentials();
   await loadDesktopState();
+  schedulePersistedMeetingInvites();
   configureWebPermissions();
   registerIpc();
   createWindow();
@@ -270,6 +707,11 @@ app.whenReady().then(async () => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  stopWhisperHelper();
+  stopTerminalProcess();
 });
 
 function configureWebPermissions() {
@@ -398,9 +840,17 @@ function registerIpc() {
     return { response: lastMessage?.content ?? "", routedTo: "Telnyx LiteLLM" };
   });
 
-  secureIpcHandle("link:run-skill", async (_event, skillName) => runtime.runSkill(skillName, { query: skillName }, "desktop_user"));
+  secureIpcHandle("link:run-skill", async (_event, skillName) => {
+    const result = await runtime.runSkill(skillName, { query: skillName }, "desktop_user");
+    void recordSkillRegistryEvent({ skillName, source: "link", eventType: "run" });
+    return result;
+  });
 
   secureIpcHandle("link:list-skills", () => listSkills());
+  secureIpcHandle("link:get-skill-markdown", (_event, skillName) => getSkillMarkdown(skillName));
+  secureIpcHandle("link:skill-registry-event", (_event, input) => recordSkillRegistryEvent(input));
+  secureIpcHandle("link:list-tool-catalog", () => listToolCatalog());
+  secureIpcHandle("link:publish-tool-manifest", (_event, input) => publishToolManifest(input));
   secureIpcHandle("link:list-tools", () => listTools());
 
   secureIpcHandle("link:shared-channel-draft", (_event, input) => {
@@ -429,6 +879,25 @@ function registerIpc() {
   secureIpcHandle("link:list-connectors", () => listConnectors());
   secureIpcHandle("link:list-credentials", () => listCredentials());
   secureIpcHandle("link:save-credential", (_event, input) => saveCredential(input));
+  secureIpcHandle("link:github-connect-device", () => connectGitHubWithDeviceFlow());
+  secureIpcHandle("link:google-workspace-connect-skill", () => connectGoogleWorkspaceWithSkill());
+  secureIpcHandle("link:guru-connect-oauth", () => connectGuruWithOAuth());
+  secureIpcHandle("link:pylon-connect-oauth", () => connectPylonWithOAuth());
+  secureIpcHandle("link:pylon-create-issue", (_event, input) => createPylonIssue(input));
+  secureIpcHandle("link:google-calendar-events", () => listGoogleCalendarEvents());
+  secureIpcHandle("link:meeting-bots", () => listMeetingBots());
+  secureIpcHandle("link:meeting-bot-preflight", (_event, input) => preflightMeetingBotInvite(input));
+  secureIpcHandle("link:meeting-bot-agentmail-identity", (_event, input) => ensureBotAgentMailIdentity(input));
+  secureIpcHandle("link:meeting-bot-invite", (_event, input) => inviteBotToCalendarEvent(input));
+  secureIpcHandle("link:meeting-bot-cancel", (_event, input) => cancelMeetingBotInvite(input));
+  secureIpcHandle("link:meeting-bot-invites", (_event, input) => listMeetingBotInvites(input));
+  secureIpcHandle("link:google-contacts", () => listGoogleContacts());
+  secureIpcHandle("link:google-inbox-connect-gog", () => connectGoogleInboxWithGog());
+  secureIpcHandle("link:google-inbox-threads", (_event, input) => listGoogleInboxThreads(input));
+  secureIpcHandle("link:google-inbox-thread", (_event, input) => getGoogleInboxThread(input));
+  secureIpcHandle("link:google-inbox-create-draft", (_event, input) => createGoogleInboxDraft(input));
+  secureIpcHandle("link:google-inbox-update-draft", (_event, input) => updateGoogleInboxDraft(input));
+  secureIpcHandle("link:google-tasks-connect-gog", () => connectGoogleTasksWithGog());
   secureIpcHandle("link:list-onboarding", () => listOnboarding());
   secureIpcHandle("link:update-onboarding", (_event, input) => updateOnboarding(input));
 
@@ -443,16 +912,37 @@ function registerIpc() {
   secureIpcHandle("link:list-widget-layout", () => listWidgetLayout());
   secureIpcHandle("link:save-widget-layout", (_event, input) => saveWidgetLayout(input));
   secureIpcHandle("link:refresh-widget-data", (_event, input) => refreshWidgetData(input));
+  secureIpcHandle("link:list-dialer-configs", () => listDialerConfigs());
+  secureIpcHandle("link:save-dialer-config", (_event, input) => saveDialerConfig(input));
+  secureIpcHandle("link:activate-dialer-config", (_event, id) => activateDialerConfig(id));
+  secureIpcHandle("link:get-active-dialer-config", () => getActiveDialerConfig());
+  secureIpcHandle("link:get-webrtc-token", (_event, input) => getWebRtcToken(input));
+  secureIpcHandle("link:get-webrtc-status", () => getWebRtcStatus());
+  secureIpcHandle("link:get-speak-settings", () => getSpeakSettings());
+  secureIpcHandle("link:save-speak-settings", (_event, input) => saveSpeakSettings(input));
+  secureIpcHandle("link:whisper-status", () => getWhisperStatus());
+  secureIpcHandle("link:whisper-build", () => buildWhisperHelper());
+  secureIpcHandle("link:whisper-start", () => startWhisperHelper());
+  secureIpcHandle("link:whisper-stop", () => stopWhisperHelper());
+  secureIpcHandle("link:tts-list-voices", (_event, input) => listTelnyxTtsVoices(input));
+  secureIpcHandle("link:tts-generate-sample", (_event, input) => generateTelnyxTtsSample(input));
+  secureIpcHandle("link:terminal-status", (_event, input) => getTerminalStatus(input));
+  secureIpcHandle("link:terminal-start", (event, input) => startTerminalProcess(event.sender, input));
+  secureIpcHandle("link:terminal-write", (_event, input) => writeTerminalInput(input));
+  secureIpcHandle("link:terminal-stop", (_event, input) => stopTerminalProcess(input));
 
   secureIpcHandle("link:agent-control-plane-sign-in", () => signInAgentControlPlane());
   secureIpcHandle("link:agent-control-plane-sign-out", () => signOutAgentControlPlane());
   secureIpcHandle("link:agent-control-plane-auth-status", () => getAgentControlPlaneAuthStatus());
-  secureIpcHandle("link:agent-control-plane-open-setup", () => openAgentControlPlaneSetup());
+  secureIpcHandle("link:agent-control-plane-open-setup", (_event, input) => openAgentControlPlaneSetup(input));
   secureIpcHandle("link:list-hosted-agents", () => listHostedAgents());
   secureIpcHandle("link:list-workspaces", () => listWorkspaces());
   secureIpcHandle("link:search-explorer", (_event, input) => searchExplorer(input));
+  secureIpcHandle("link:ask-knowledge-agent", (_event, input) => askKnowledgeAgent(input));
   secureIpcHandle("link:list-chat-sessions", () => chatSessions);
+  secureIpcHandle("link:create-chat-session", (_event, input) => createChatSession(input));
   secureIpcHandle("link:send-chat-message", (_event, input) => sendChatMessage(input));
+  secureIpcHandle("link:select-chat-attachments", () => selectChatAttachments());
   secureIpcHandle("link:rename-chat-session", (_event, input) => renameChatSession(input));
   secureIpcHandle("link:voice-transcribe", (_event, input) => transcribeAudio(input));
   secureIpcHandle("link:create-change-request", (_event, input) => createChangeRequest(input));
@@ -465,26 +955,697 @@ function registerIpc() {
   secureIpcHandle("link:workboard-create-card", (_event, input) => createWorkboardCard(input));
   secureIpcHandle("link:workboard-update-card", (_event, input) => updateWorkboardCard(input));
   secureIpcHandle("link:workboard-dispatch", (_event, input) => dispatchWorkboard(input));
+  secureIpcHandle("link:workboard-ensure-task-session", (_event, input) => ensureWorkboardTaskSession(input));
+  secureIpcHandle("link:workboard-dispatch-task", (_event, input) => dispatchWorkboardTask(input));
   secureIpcHandle("link:phone-list-account-numbers", () => listAccountPhoneNumbers());
   secureIpcHandle("link:phone-list-assistants", () => listPhoneAssistants());
+  secureIpcHandle("link:phone-start-ai-assistant", (_event, input) => startAiAssistantOnCall(input));
   secureIpcHandle("link:list-memory-banks", () => listMemoryBanks());
   secureIpcHandle("link:recall-memory", (_event, input) => recallMemory(input));
+  secureIpcHandle("link:retain-memory", (_event, input) => retainMemory(input));
   secureIpcHandle("link:list-dojo-state", () => dojoState);
+  secureIpcHandle("link:publisher-readiness", () => getPublisherReadiness());
+  secureIpcHandle("link:message-gateway-readiness", () => getMessageGatewayReadiness());
+  secureIpcHandle("link:message-gateway-list-messages", (_event, input) => listGatewayMessages(input));
+  secureIpcHandle("link:message-gateway-send-message", (_event, input) => sendGatewayMessage(input));
+  secureIpcHandle("link:message-gateway-list-events", (_event, input) => listGatewayMessageEvents(input));
   secureIpcHandle("link:publisher-list-apps", () => listPublishedApps());
+  secureIpcHandle("link:publisher-select-local-app", () => selectLocalPublishApp());
   secureIpcHandle("link:publisher-create-intent", (_event, input) => createPublishIntent(input));
   secureIpcHandle("link:publisher-create-version", (_event, input) => createPublishedAppVersion(input));
   secureIpcHandle("link:publisher-review-app", (_event, input) => reviewPublishedApp(input));
+  secureIpcHandle("link:publisher-rollback-app", (_event, input) => rollbackPublishedApp(input));
+  secureIpcHandle("link:publisher-transfer-app", (_event, input) => transferPublishedApp(input));
+  secureIpcHandle("link:publisher-deprecate-app", (_event, input) => deprecatePublishedApp(input));
   secureIpcHandle("link:publisher-duplicate-app", (_event, id) => duplicatePublishedApp(id));
   secureIpcHandle("link:publisher-open-app", (_event, id) => openPublishedApp(id));
+  secureIpcHandle("link:edge-compute-status", () => getEdgeComputeStatus({ seedAuth: true }));
+  secureIpcHandle("link:edge-slug-availability", (_event, input) => checkEdgeSlugAvailability(input));
+  secureIpcHandle("link:edge-list-local-draft-apps", () => listLocalEdgeDraftApps());
+  secureIpcHandle("link:edge-import-local-app", (_event, input) => importLocalEdgeApp(input));
+  secureIpcHandle("link:edge-delete-local-draft-app", (_event, input) => deleteLocalEdgeDraftApp(input));
+  secureIpcHandle("link:edge-preview-local-app", (_event, input) => previewLocalEdgeApp(input));
+  secureIpcHandle("link:edge-deploy-local-app", (_event, input) => deployLocalEdgeApp(input));
   secureIpcHandle("link:audit-events", () => auditLogger.all());
 }
 
 async function listSkills() {
+  await listToolCatalog().catch(() => toolCatalogItems);
   const [linkSkills, telnyxSkills] = await Promise.all([discoverSkills(), discoverTelnyxSkills()]);
-  return [
-    ...linkSkills.map((skill) => ({ ...skill.metadata, source: "link" })),
+  const linkSkillRows = await Promise.all(linkSkills.map(async (skill) => ({
+    ...skill.metadata,
+    source: "link",
+    updatedAt: await skillFileUpdatedAt(skill.path),
+  })));
+  const skills = [
+    ...linkSkillRows,
     ...telnyxSkills,
+    ...toolCatalogItems
+      .filter((tool) => tool.artifactType === "skill" && tool.status !== "deprecated")
+      .map(toolCatalogItemToSkill),
   ].sort((left, right) => left.name.localeCompare(right.name));
+  return enrichSkillsWithRegistryStats(skills);
+}
+
+async function skillFileUpdatedAt(filePath) {
+  const stat = await fs.stat(filePath).catch(() => null);
+  return stat?.mtime ? stat.mtime.toISOString() : "";
+}
+
+async function enrichSkillsWithRegistryStats(skills) {
+  await flushPendingSkillRegistryEvents().catch(() => {});
+  const skillIds = skills.map(skillRegistrySkillId);
+  const liveStats = await fetchSkillRegistryJson(`/skills?ids=${encodeURIComponent(skillIds.join(","))}`)
+    .then((payload) => Array.isArray(payload.skills) ? payload.skills.map(normalizeSkillRegistryStats).filter(Boolean) : [])
+    .catch(() => []);
+  for (const stats of liveStats) {
+    skillRegistryStats[stats.skillId] = mergeSkillRegistryStats(skillRegistryStats[stats.skillId], stats);
+  }
+  if (liveStats.length > 0) void saveDesktopState();
+
+  return skills.map((skill) => {
+    const skillId = skillRegistrySkillId(skill);
+    return {
+      ...skill,
+      ...defaultSkillRegistryStats(skillId, skill),
+      ...(skillRegistryStats[skillId] || {}),
+      skillId,
+    };
+  });
+}
+
+async function recordSkillRegistryEvent(input = {}) {
+  const skillName = normalizeRequiredString(input.skillName ?? input.skill_name, "skill_name");
+  const source = normalizeOptionalString(input.source);
+  const eventType = normalizeSkillRegistryEventType(input.eventType ?? input.event_type);
+  const skillId = normalizeOptionalString(input.skillId ?? input.skill_id) || skillRegistrySkillId({ name: skillName, source });
+  const payload = {
+    event_type: eventType,
+    skill_name: skillName,
+    source,
+  };
+
+  try {
+    const response = await fetchSkillRegistryJson(`/skills/${encodeURIComponent(skillId)}/events`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    const stats = normalizeSkillRegistryStats(response.skill) || defaultSkillRegistryStats(skillId, { name: skillName, source });
+    skillRegistryStats[skillId] = mergeSkillRegistryStats(skillRegistryStats[skillId], stats);
+    await saveDesktopState();
+    return skillRegistryStats[skillId];
+  } catch (error) {
+    const stats = applyLocalSkillRegistryEvent(skillId, { skillName, source, eventType });
+    pendingSkillRegistryEvents = [
+      ...pendingSkillRegistryEvents,
+      { id: crypto.randomUUID(), skillId, skillName, source, eventType, createdAt: new Date().toISOString() },
+    ].slice(-500);
+    await saveDesktopState();
+    return stats;
+  }
+}
+
+async function flushPendingSkillRegistryEvents() {
+  if (pendingSkillRegistryEvents.length === 0) return;
+  const remaining = [];
+  for (const event of pendingSkillRegistryEvents) {
+    try {
+      await fetchSkillRegistryJson(`/skills/${encodeURIComponent(event.skillId)}/events`, {
+        method: "POST",
+        body: JSON.stringify({
+          event_type: event.eventType,
+          skill_name: event.skillName,
+          source: event.source,
+        }),
+      });
+    } catch {
+      remaining.push(event);
+    }
+  }
+  if (remaining.length !== pendingSkillRegistryEvents.length) {
+    pendingSkillRegistryEvents = remaining;
+    await saveDesktopState();
+  }
+}
+
+async function listToolCatalog() {
+  await flushPendingToolCatalogPublishes().catch(() => {});
+  const liveTools = await fetchSkillRegistryJson("/catalog")
+    .then((payload) => Array.isArray(payload.tools) ? payload.tools.map(normalizeToolCatalogItem).filter(Boolean) : [])
+    .catch(() => []);
+  if (liveTools.length > 0) {
+    toolCatalogItems = mergeToolCatalogItems(toolCatalogItems, liveTools);
+    for (const tool of liveTools) {
+      if (tool.stats) {
+        skillRegistryStats[tool.stats.skillId] = mergeSkillRegistryStats(skillRegistryStats[tool.stats.skillId], normalizeSkillRegistryStats(tool.stats));
+      }
+    }
+    await saveDesktopState();
+  }
+  return toolCatalogItems
+    .map((tool) => ({
+      ...tool,
+      stats: skillRegistryStats[tool.toolId] || defaultSkillRegistryStats(tool.toolId, { name: tool.name, source: tool.source }),
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function publishToolManifest(input = {}) {
+  const manifest = normalizeToolManifestInput(input);
+  const localTool = localToolCatalogItem(manifest);
+
+  try {
+    const response = await fetchSkillRegistryJson("/catalog", {
+      method: "POST",
+      body: JSON.stringify(registryPayloadForToolManifest(manifest)),
+    });
+    const remoteTool = normalizeToolCatalogItem(response.tool);
+    if (!remoteTool) throw new Error("Link Skill Registry returned malformed tool catalog data.");
+    toolCatalogItems = mergeToolCatalogItems(toolCatalogItems, [remoteTool]);
+    if (remoteTool.stats) {
+      skillRegistryStats[remoteTool.stats.skillId] = mergeSkillRegistryStats(skillRegistryStats[remoteTool.stats.skillId], normalizeSkillRegistryStats(remoteTool.stats));
+    }
+    pendingToolCatalogPublishes = pendingToolCatalogPublishes.filter((item) => item.toolId !== remoteTool.toolId);
+    await saveDesktopState();
+    return {
+      ...remoteTool,
+      stats: skillRegistryStats[remoteTool.toolId] || defaultSkillRegistryStats(remoteTool.toolId, { name: remoteTool.name, source: remoteTool.source }),
+    };
+  } catch {
+    toolCatalogItems = mergeToolCatalogItems(toolCatalogItems, [localTool]);
+    pendingToolCatalogPublishes = [
+      ...pendingToolCatalogPublishes.filter((item) => item.toolId !== localTool.toolId),
+      { ...manifest, queuedAt: new Date().toISOString() },
+    ].slice(-200);
+    await saveDesktopState();
+    return localTool;
+  }
+}
+
+async function flushPendingToolCatalogPublishes() {
+  if (pendingToolCatalogPublishes.length === 0) return;
+  const remaining = [];
+  for (const pending of pendingToolCatalogPublishes) {
+    try {
+      const response = await fetchSkillRegistryJson("/catalog", {
+        method: "POST",
+        body: JSON.stringify(registryPayloadForToolManifest(pending)),
+      });
+      const remoteTool = normalizeToolCatalogItem(response.tool);
+      if (remoteTool) toolCatalogItems = mergeToolCatalogItems(toolCatalogItems, [remoteTool]);
+    } catch {
+      remaining.push(pending);
+    }
+  }
+  if (remaining.length !== pendingToolCatalogPublishes.length) {
+    pendingToolCatalogPublishes = remaining;
+    await saveDesktopState();
+  }
+}
+
+async function fetchSkillRegistryJson(pathname, init = {}) {
+  const baseUrl = skillRegistryUrl();
+  const headers = {
+    Accept: "application/json",
+    ...(init.body ? { "Content-Type": "application/json" } : {}),
+    ...skillRegistryHeaders(),
+    ...(init.headers || {}),
+  };
+  const response = await fetch(`${baseUrl}${pathname}`, { ...init, headers });
+  if (!response.ok) throw new Error(`Link Skill Registry request failed: ${response.status}`);
+  return response.json();
+}
+
+function skillRegistryUrl() {
+  return (credentialValue("LINK_SKILL_REGISTRY_URL") || process.env.LINK_SKILL_REGISTRY_URL || defaultSkillRegistryUrl).replace(/\/$/, "");
+}
+
+function skillRegistryHeaders() {
+  const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
+  if (!token) throw new Error("Link Skill Registry requires Okta Rev2 auth or TELNYX_API_KEY.");
+  const headers = { Authorization: `Bearer ${token}` };
+  const actor = process.env.TELNYX_ACTOR || credentialValue("TELNYX_AUTH_USER_NAME") || credentialValue("TELNYX_AUTH_USER_ID");
+  if (actor) headers["X-Telnyx-Actor"] = actor;
+  if (process.env.TELNYX_ON_BEHALF_OF) headers["X-On-Behalf-Of"] = process.env.TELNYX_ON_BEHALF_OF;
+  if (process.env.TELNYX_GROUPS) headers["X-Telnyx-Groups"] = process.env.TELNYX_GROUPS;
+  return headers;
+}
+
+function applyLocalSkillRegistryEvent(skillId, event) {
+  const current = skillRegistryStats[skillId] || defaultSkillRegistryStats(skillId, { name: event.skillName, source: event.source });
+  const next = {
+    ...current,
+    skillId,
+    skillName: event.skillName || current.skillName,
+    source: event.source || current.source,
+    updatedAt: new Date().toISOString(),
+  };
+  if (event.eventType === "star" && !next.starredByActor) {
+    next.starredByActor = true;
+    next.starCount += 1;
+  } else if (event.eventType === "unstar" && next.starredByActor) {
+    next.starredByActor = false;
+    next.starCount = Math.max(0, next.starCount - 1);
+  } else if (event.eventType === "install" && !next.installedByActor) {
+    next.installedByActor = true;
+    next.installCount += 1;
+    next.downloadCount = next.installCount;
+  } else if (event.eventType === "run") {
+    next.runCount += 1;
+  } else if (event.eventType === "view") {
+    next.viewCount += 1;
+  }
+  skillRegistryStats[skillId] = next;
+  return next;
+}
+
+function normalizeSkillRegistryStats(value) {
+  if (!value || typeof value !== "object") return null;
+  const skillId = normalizeOptionalString(value.skillId ?? value.skill_id);
+  if (!skillId) return null;
+  return {
+    skillId,
+    skillName: normalizeOptionalString(value.skillName ?? value.skill_name),
+    source: normalizeOptionalString(value.source),
+    starCount: normalizeCount(value.starCount ?? value.star_count),
+    installCount: normalizeCount(value.installCount ?? value.install_count),
+    downloadCount: normalizeCount(value.downloadCount ?? value.download_count ?? value.installCount ?? value.install_count),
+    runCount: normalizeCount(value.runCount ?? value.run_count),
+    viewCount: normalizeCount(value.viewCount ?? value.view_count),
+    starredByActor: Boolean(value.starredByActor ?? value.starred_by_actor),
+    installedByActor: Boolean(value.installedByActor ?? value.installed_by_actor),
+    updatedAt: normalizeOptionalString(value.updatedAt ?? value.updated_at) || new Date().toISOString(),
+  };
+}
+
+function normalizeStoredSkillRegistryStats(value) {
+  const entries = Object.entries(value || {});
+  return Object.fromEntries(entries
+    .map(([key, stats]) => {
+      const normalized = normalizeSkillRegistryStats({ ...(stats || {}), skillId: stats?.skillId || key });
+      return normalized ? [normalized.skillId, normalized] : null;
+    })
+    .filter(Boolean));
+}
+
+function normalizePendingSkillRegistryEvent(value) {
+  if (!value || typeof value !== "object") return null;
+  const skillId = normalizeOptionalString(value.skillId);
+  const eventType = normalizeOptionalString(value.eventType);
+  if (!skillId || !["star", "unstar", "install", "run", "view"].includes(eventType)) return null;
+  return {
+    id: normalizeOptionalString(value.id) || crypto.randomUUID(),
+    skillId,
+    skillName: normalizeOptionalString(value.skillName),
+    source: normalizeOptionalString(value.source),
+    eventType,
+    createdAt: normalizeOptionalString(value.createdAt) || new Date().toISOString(),
+  };
+}
+
+function mergeSkillRegistryStats(localStats, liveStats) {
+  return {
+    ...defaultSkillRegistryStats(liveStats.skillId, { name: liveStats.skillName, source: liveStats.source }),
+    ...(localStats || {}),
+    ...liveStats,
+    starCount: Math.max(normalizeCount(localStats?.starCount), normalizeCount(liveStats.starCount)),
+    installCount: Math.max(normalizeCount(localStats?.installCount), normalizeCount(liveStats.installCount)),
+    downloadCount: Math.max(normalizeCount(localStats?.downloadCount), normalizeCount(liveStats.downloadCount)),
+    runCount: Math.max(normalizeCount(localStats?.runCount), normalizeCount(liveStats.runCount)),
+    viewCount: Math.max(normalizeCount(localStats?.viewCount), normalizeCount(liveStats.viewCount)),
+    starredByActor: Boolean(localStats?.starredByActor || liveStats.starredByActor),
+    installedByActor: Boolean(localStats?.installedByActor || liveStats.installedByActor),
+  };
+}
+
+function defaultSkillRegistryStats(skillId, skill = {}) {
+  return {
+    skillId,
+    skillName: normalizeOptionalString(skill.name ?? skill.skillName),
+    source: normalizeOptionalString(skill.source),
+    starCount: 0,
+    installCount: 0,
+    downloadCount: 0,
+    runCount: 0,
+    viewCount: 0,
+    starredByActor: false,
+    installedByActor: false,
+    updatedAt: new Date(0).toISOString(),
+  };
+}
+
+function normalizeToolManifestInput(input = {}) {
+  const name = normalizeRequiredString(input.name, "name");
+  const artifactType = normalizeToolArtifactType(input.artifactType ?? input.artifact_type);
+  const riskLevel = normalizeRiskLevel(input.riskLevel ?? input.risk_level);
+  const customerSafe = Boolean(input.customerSafe ?? input.customer_safe);
+  const approvalRequired = typeof (input.approvalRequired ?? input.approval_required) === "boolean"
+    ? Boolean(input.approvalRequired ?? input.approval_required)
+    : customerSafe || riskLevel === "high" || artifactType !== "skill";
+  const source = "tool-studio";
+  const toolId = normalizeOptionalString(input.toolId ?? input.tool_id) || `${source}:${slugifyId(name)}`;
+  return {
+    toolId,
+    name,
+    description: normalizeRequiredString(input.description, "description"),
+    owner: normalizeRequiredString(input.owner, "owner"),
+    team: normalizeRequiredString(input.team, "team"),
+    audience: normalizeOptionalString(input.audience) || "Telnyx employees",
+    artifactType,
+    inputs: normalizeOptionalString(input.inputs) || "User prompt or selected chat context.",
+    outputs: normalizeOptionalString(input.outputs) || "Reviewable bot output.",
+    toolsRequired: normalizeStringList(input.toolsRequired ?? input.tools_required),
+    riskLevel,
+    customerSafe,
+    approvalRequired,
+    sourceOfTruth: normalizeOptionalString(input.sourceOfTruth ?? input.source_of_truth) || "Git-backed Link tool definition.",
+    repeatedChecks: normalizeOptionalString(input.repeatedChecks ?? input.repeated_checks) || "Run the included test fixture before sharing.",
+    humanCheckpoints: normalizeOptionalString(input.humanCheckpoints ?? input.human_checkpoints) || "Human owner reviews public or destructive actions.",
+    testFixture: normalizeOptionalString(input.testFixture ?? input.test_fixture) || "Use the latest real chat request as the fixture.",
+    reviewers: normalizeStringList(input.reviewers),
+    version: normalizeOptionalString(input.version) || "1.0.0",
+    visibility: normalizeToolVisibility(input.visibility),
+    skillMarkdown: normalizeOptionalString(input.skillMarkdown ?? input.skill_markdown),
+    checklist: normalizeStringList(input.checklist),
+  };
+}
+
+function normalizePendingToolManifest(value) {
+  try {
+    return normalizeToolManifestInput(value);
+  } catch {
+    return null;
+  }
+}
+
+function registryPayloadForToolManifest(manifest) {
+  return {
+    tool_id: manifest.toolId,
+    name: manifest.name,
+    description: manifest.description,
+    owner: manifest.owner,
+    team: manifest.team,
+    audience: manifest.audience,
+    artifact_type: manifest.artifactType,
+    inputs: manifest.inputs,
+    outputs: manifest.outputs,
+    tools_required: manifest.toolsRequired,
+    risk_level: manifest.riskLevel,
+    customer_safe: manifest.customerSafe,
+    approval_required: manifest.approvalRequired,
+    source_of_truth: manifest.sourceOfTruth,
+    repeated_checks: manifest.repeatedChecks,
+    human_checkpoints: manifest.humanCheckpoints,
+    test_fixture: manifest.testFixture,
+    reviewers: manifest.reviewers,
+    version: manifest.version,
+    visibility: manifest.visibility,
+    source: "tool-studio",
+    skill_markdown: manifest.skillMarkdown,
+    checklist: manifest.checklist,
+  };
+}
+
+function localToolCatalogItem(manifest) {
+  const updatedAt = new Date().toISOString();
+  return {
+    ...manifest,
+    source: "tool-studio",
+    status: "published",
+    stats: skillRegistryStats[manifest.toolId] || defaultSkillRegistryStats(manifest.toolId, { name: manifest.name, source: "tool-studio" }),
+    createdAt: toolCatalogItems.find((item) => item.toolId === manifest.toolId)?.createdAt || updatedAt,
+    updatedAt,
+    versions: [
+      ...(toolCatalogItems.find((item) => item.toolId === manifest.toolId)?.versions || []),
+      { version: manifest.version, submittedAt: updatedAt, source: "local-fallback" },
+    ],
+  };
+}
+
+function normalizeToolCatalogItem(value) {
+  if (!value || typeof value !== "object") return null;
+  const toolId = normalizeOptionalString(value.toolId ?? value.tool_id);
+  const name = normalizeOptionalString(value.name);
+  if (!toolId || !name) return null;
+  const stats = normalizeSkillRegistryStats(value.stats) || defaultSkillRegistryStats(toolId, { name, source: value.source });
+  return {
+    toolId,
+    name,
+    description: normalizeOptionalString(value.description) || "Tool Studio catalog item.",
+    owner: normalizeOptionalString(value.owner) || "Telnyx",
+    team: normalizeOptionalString(value.team) || "Telnyx",
+    audience: normalizeOptionalString(value.audience) || "Telnyx employees",
+    artifactType: normalizeToolArtifactType(value.artifactType ?? value.artifact_type),
+    inputs: normalizeOptionalString(value.inputs) || "User prompt or selected chat context.",
+    outputs: normalizeOptionalString(value.outputs) || "Reviewable bot output.",
+    toolsRequired: normalizeStringList(value.toolsRequired ?? value.tools_required),
+    riskLevel: normalizeRiskLevel(value.riskLevel ?? value.risk_level),
+    customerSafe: Boolean(value.customerSafe ?? value.customer_safe),
+    approvalRequired: Boolean(value.approvalRequired ?? value.approval_required),
+    sourceOfTruth: normalizeOptionalString(value.sourceOfTruth ?? value.source_of_truth) || "Git-backed Link tool definition.",
+    repeatedChecks: normalizeOptionalString(value.repeatedChecks ?? value.repeated_checks) || "Run the included test fixture before sharing.",
+    humanCheckpoints: normalizeOptionalString(value.humanCheckpoints ?? value.human_checkpoints) || "Human owner reviews public or destructive actions.",
+    testFixture: normalizeOptionalString(value.testFixture ?? value.test_fixture) || "Use the latest real chat request as the fixture.",
+    reviewers: normalizeStringList(value.reviewers),
+    version: normalizeOptionalString(value.version) || "1.0.0",
+    visibility: normalizeToolVisibility(value.visibility),
+    source: normalizeOptionalString(value.source) || "tool-studio",
+    status: normalizeToolStatus(value.status),
+    skillMarkdown: normalizeOptionalString(value.skillMarkdown ?? value.skill_markdown),
+    checklist: normalizeStringList(value.checklist),
+    versions: Array.isArray(value.versions) ? value.versions.map(normalizeToolVersion).filter(Boolean) : [],
+    stats,
+    createdAt: normalizeOptionalString(value.createdAt ?? value.created_at) || new Date(0).toISOString(),
+    updatedAt: normalizeOptionalString(value.updatedAt ?? value.updated_at) || stats.updatedAt || new Date(0).toISOString(),
+    deprecatedAt: normalizeOptionalString(value.deprecatedAt ?? value.deprecated_at) || undefined,
+  };
+}
+
+function normalizeToolVersion(value) {
+  if (!value || typeof value !== "object") return null;
+  const version = normalizeOptionalString(value.version);
+  if (!version) return null;
+  return {
+    version,
+    submittedAt: normalizeOptionalString(value.submittedAt ?? value.submitted_at) || new Date(0).toISOString(),
+    submittedBy: normalizeOptionalString(value.submittedBy ?? value.submitted_by) || undefined,
+    source: normalizeOptionalString(value.source) || undefined,
+  };
+}
+
+function mergeToolCatalogItems(current, incoming) {
+  const byId = new Map(current.map((item) => [item.toolId, item]));
+  for (const item of incoming) {
+    byId.set(item.toolId, {
+      ...(byId.get(item.toolId) || {}),
+      ...item,
+      versions: mergeToolVersions(byId.get(item.toolId)?.versions || [], item.versions || []),
+    });
+  }
+  return [...byId.values()].sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function mergeToolVersions(current, incoming) {
+  const byVersion = new Map(current.map((item) => [item.version, item]));
+  for (const item of incoming) byVersion.set(item.version, item);
+  return [...byVersion.values()].sort((left, right) => left.submittedAt.localeCompare(right.submittedAt));
+}
+
+function toolCatalogItemToSkill(tool) {
+  return {
+    skillId: tool.toolId,
+    name: tool.name,
+    description: tool.description,
+    owner: tool.owner,
+    team: tool.team,
+    riskLevel: tool.riskLevel,
+    toolsRequired: tool.toolsRequired,
+    customerSafe: tool.customerSafe,
+    approvalRequired: tool.approvalRequired,
+    source: "tool-studio",
+    product: tool.artifactType === "skill" ? "workflow" : tool.artifactType,
+    language: tool.artifactType === "skill" ? "skill" : "tool",
+    artifactType: tool.artifactType,
+    audience: tool.audience,
+    sourceOfTruth: tool.sourceOfTruth,
+    repeatedChecks: tool.repeatedChecks,
+    humanCheckpoints: tool.humanCheckpoints,
+    testFixture: tool.testFixture,
+    reviewers: tool.reviewers,
+    version: tool.version,
+    visibility: tool.visibility,
+    status: tool.status,
+    updatedAt: tool.updatedAt,
+  };
+}
+
+function normalizeToolArtifactType(value) {
+  const text = normalizeOptionalString(value);
+  return text === "mcp_tool" || text === "link_app" ? text : "skill";
+}
+
+function normalizeToolVisibility(value) {
+  const text = normalizeOptionalString(value);
+  return text === "private" || text === "internal" ? text : "squad";
+}
+
+function normalizeToolStatus(value) {
+  const text = normalizeOptionalString(value);
+  return ["draft", "reviewing", "published", "deprecated"].includes(text) ? text : "published";
+}
+
+function skillRegistrySkillId(skill) {
+  const source = normalizeOptionalString(skill.source) || "skill";
+  return `${slugifyId(source)}:${slugifyId(skill.name || "skill")}`;
+}
+
+function normalizeSkillRegistryEventType(value) {
+  const eventType = normalizeOptionalString(value);
+  if (["star", "unstar", "install", "run", "view"].includes(eventType)) return eventType;
+  throw new Error("Skill registry eventType must be one of star, unstar, install, run, or view.");
+}
+
+function normalizeCount(value) {
+  const count = Number(value);
+  return Number.isInteger(count) && count >= 0 ? count : 0;
+}
+
+async function getSkillMarkdown(inputName) {
+  const name = normalizeRequiredString(inputName, "skill_name");
+  const catalogSkill = toolCatalogItems.find((tool) => tool.name.toLowerCase() === name.toLowerCase() && tool.skillMarkdown);
+  if (catalogSkill) {
+    return {
+      name: catalogSkill.name,
+      markdown: catalogSkill.skillMarkdown,
+      sourcePath: `tool-studio/${catalogSkill.toolId}/SKILL.md`,
+      sourceUrl: `https://github.com/${linkSkillRepo}`,
+    };
+  }
+  const source = skillMarkdownSource(name);
+  const failures = [];
+
+  try {
+    const markdown = await readGitHubRepoText(source.path, source.repo);
+    return {
+      name,
+      markdown,
+      sourcePath: source.path,
+      sourceUrl: githubBlobUrl(source.repo, source.path),
+    };
+  } catch (error) {
+    failures.push(errorMessage(error));
+  }
+
+  if (source.localFallback) {
+    try {
+      const markdown = await fs.readFile(path.join(repoRoot, source.path), "utf8");
+      return {
+        name,
+        markdown,
+        sourcePath: source.path,
+        sourceUrl: githubBlobUrl(source.repo, source.path),
+      };
+    } catch {
+      failures.push(`Packaged fallback is unavailable for ${source.path}.`);
+    }
+  }
+
+  const generated = generatedSkillMarkdown(name);
+  if (generated) return generated;
+
+  throw new Error(`Unable to load SKILL.md for ${name}. ${failures.filter(Boolean).join(" ")}`);
+}
+
+function skillMarkdownSource(name) {
+  const slug = slugifyId(name);
+  const linkSkillPaths = {
+    "account-briefing": "tools/link/skills/account-briefing.md",
+    "competitive-battlecard-draft": "tools/link/skills/competitive-battlecard-draft.md",
+    "customer-escalation-summary": "tools/link/skills/customer-escalation-summary.md",
+    "incident-thread-summarizer": "tools/link/skills/incident-thread-summarizer.md",
+    "make-html-slides": "tools/link/skills/make-html-slides.md",
+    "outbound-prospecting-mcp": "tools/link/skills/outbound-prospecting-mcp.md",
+    "product-launch-readiness": "tools/link/skills/product-launch-readiness.md",
+    "shared-slack-channel-response-draft": "tools/link/skills/shared-slack-channel-response-draft.md",
+    "sms-delivery-investigation": "tools/link/skills/sms-delivery-investigation.md",
+    "support-reply-draft": "tools/link/skills/support-reply-draft.md",
+    "voice-call-investigation": "tools/link/skills/voice-call-investigation.md",
+    "weekly-team-update": "tools/link/skills/weekly-team-update.md",
+  };
+
+  if (linkSkillPaths[slug]) {
+    return {
+      repo: linkSkillRepo,
+      path: linkSkillPaths[slug],
+      localFallback: true,
+    };
+  }
+
+  return {
+    repo: linkSkillRepo,
+    path: `skills/${slug}/SKILL.md`,
+    localFallback: true,
+  };
+}
+
+function generatedSkillMarkdown(name) {
+  const slug = slugifyId(name);
+  const managedCatalogSkills = {
+    "product-launch-readiness": {
+      title: "Product Launch Readiness",
+      description: "Uses Guru-backed launch, docs, issue, and code context to check readiness, risks, owners, and next actions.",
+      owner: "Product",
+      team: "Product",
+      riskLevel: "medium",
+      customerSafe: false,
+      approvalRequired: false,
+    },
+    "support-reply-draft": {
+      title: "Support Reply Draft",
+      description: "Uses Guru-backed knowledge search with ticket and account context to draft customer-safe support replies for review.",
+      owner: "Support",
+      team: "Customer Support",
+      riskLevel: "medium",
+      customerSafe: true,
+      approvalRequired: true,
+    },
+  };
+  const metadata = managedCatalogSkills[slug];
+  if (!metadata) return null;
+  const sourcePath = `catalog/${slug}/SKILL.md`;
+  const markdown = [
+    "---",
+    `name: ${metadata.title}`,
+    `description: ${metadata.description}`,
+    `owner: ${metadata.owner}`,
+    `team: ${metadata.team}`,
+    `risk_level: ${metadata.riskLevel}`,
+    "tools_required:",
+    "  - guru.search",
+    "  - github.repo_search",
+    "  - linear_jira.search",
+    `customer_safe: ${metadata.customerSafe}`,
+    `approval_required: ${metadata.approvalRequired}`,
+    "---",
+    "",
+    "## When to use it",
+    "",
+    metadata.description,
+    "",
+    "## Source",
+    "",
+    "This managed catalog summary is generated on demand when the reviewed SKILL.md cannot be loaded from GitHub.",
+  ].join("\n");
+  return {
+    name: metadata.title,
+    markdown,
+    sourcePath,
+    sourceUrl: `https://github.com/${linkSkillRepo}`,
+  };
+}
+
+function githubBlobUrl(repo, repoPath) {
+  return `https://github.com/${repo}/blob/main/${repoPath}`;
 }
 
 async function discoverTelnyxSkills() {
@@ -502,7 +1663,7 @@ async function discoverTelnyxSkills() {
     const markdown = await fs.readFile(skillPath, "utf8").catch(() => "");
     if (!markdown) continue;
     const metadata = parseTelnyxSkillMetadata(markdown, entry.name);
-    if (metadata) skills.push(metadata);
+    if (metadata) skills.push({ ...metadata, updatedAt: await skillFileUpdatedAt(skillPath) });
   }
 
   return skills;
@@ -620,16 +1781,20 @@ function decideWork(id, decision) {
   return activeWork.find((item) => item.id === id);
 }
 
-async function sendChatMessage({ sessionId, workspaceId = "workspace-link", content, agentId, agentName, approvalMode = "auto", modelMode = "default-litellm", contextScope = "workspace" }) {
+async function sendChatMessage({ sessionId, workspaceId = "workspace-link", content, systemInstruction, agentId, agentName, agentSource, approvalMode = "auto", modelMode = "default-litellm", contextScope = "workspace" }) {
   const trimmed = String(content ?? "").trim();
   if (!trimmed) throw new Error("Chat message cannot be empty.");
+  const hiddenInstruction = String(systemInstruction ?? "").trim();
   const targetAgent = [agentName, agentId].filter(Boolean).join(" / ") || "Personal OpenClaw";
-  const assistantDisplayName = agentName || (agentId ? targetAgent : "Telnyx AI Assistant");
+  const assistantDisplayName = agentName || (agentId ? targetAgent : "Link");
   const aidaRoute = isAidaAgentSelection(agentId, agentName);
+  const a2aRoute = isA2aAgentSelection(agentId, agentSource);
   const chatSettings = `Approval mode: ${approvalMode}. Runtime route: ${modelMode}. Context scope: ${contextScope}.`;
   const docsInstruction = telnyxDocsRouteInstruction();
   const hindsightInstruction = hindsightAgentCapabilityInstruction();
-  const routeInstruction = aidaRoute
+  const routeInstruction = a2aRoute
+    ? `Route this conversation through the selected A2A-discovered agent: ${targetAgent}. ${chatSettings} ${docsInstruction}`
+    : aidaRoute
     ? `${aidaAgentRouteInstruction(chatSettings)} ${docsInstruction}`
     : `Route this conversation through ${targetAgent}. ${chatSettings} ${docsInstruction}`;
 
@@ -652,12 +1817,14 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
   sessionItem.messages = [
     ...sessionItem.messages,
     createMessage("system", `Selected Link chat agent: ${targetAgent}. ${chatSettings} ${hindsightInstruction}`),
+    ...(hiddenInstruction ? [createMessage("system", hiddenInstruction)] : []),
     createMessage("user", trimmed),
   ];
 
-  const liveResponse = await runLiveChatRoute({ agentId, agentName, prompt: trimmed, messages: sessionItem.messages });
-  const responseText = liveResponse.ok ? liveResponse.content : liveRuntimeUnavailableMessage(aidaRoute, liveResponse.error);
-  const responseSources = await searchTelnyxDocs(trimmed, workspaceId);
+  const liveResponse = await runLiveChatRoute({ agentId, agentName, agentSource, prompt: trimmed, systemInstruction: hiddenInstruction, messages: sessionItem.messages, sessionItem });
+  const responseText = liveResponse.ok ? liveResponse.content : liveRuntimeUnavailableMessage(aidaRoute, liveResponse.error, a2aRoute);
+  const responseSources = (await searchTelnyxDocs(trimmed, workspaceId))
+    .filter((source) => !String(source.id || "").startsWith("explorer-docs-fallback-"));
 
   sessionItem.messages = [
     ...sessionItem.messages,
@@ -685,6 +1852,62 @@ async function sendChatMessage({ sessionId, workspaceId = "workspace-link", cont
   return sessionItem;
 }
 
+async function createChatSession({
+  workspaceId = "workspace-link",
+  agentId,
+  agentName,
+  agentSource,
+  agentType,
+  approvalMode = "auto",
+  modelMode = "auto-agent-runtime",
+  contextScope = "workspace",
+  title,
+} = {}) {
+  const selectedAgentId = String(agentId || "").trim();
+  const selectedAgentName = String(agentName || "").trim();
+  const selectedAgentSource = String(agentSource || "").trim();
+  const runtimeType = String(agentType || "").trim().toLowerCase();
+  const isHostedAgent = runtimeType === "hermes" || runtimeType === "openclaw";
+  const isA2aAgent = isA2aAgentSelection(selectedAgentId, selectedAgentSource);
+  const targetAgent = [selectedAgentName, selectedAgentId].filter(Boolean).join(" / ") || "Link";
+  const assistantDisplayName = selectedAgentName || (selectedAgentId ? targetAgent : "Link");
+  const chatSettings = `Approval mode: ${approvalMode}. Runtime route: ${modelMode}. Context scope: ${contextScope}.`;
+  const docsInstruction = telnyxDocsRouteInstruction();
+  const hindsightInstruction = hindsightAgentCapabilityInstruction();
+  const workboardInstruction = workboardStatusGuideInstruction();
+  const routeInstruction = isA2aAgent
+    ? `Route this conversation through the selected A2A-discovered agent: ${targetAgent}. ${chatSettings} ${docsInstruction} ${workboardInstruction}`
+    : isHostedAgent
+    ? `Route this conversation through the selected ${runtimeType === "hermes" ? "Hermes" : "OpenClaw"} Agent Control Plane agent: ${targetAgent}. ${chatSettings} ${docsInstruction} ${workboardInstruction}`
+    : `Route this conversation through ${targetAgent}. ${chatSettings} ${docsInstruction} ${workboardInstruction}`;
+  const now = new Date().toISOString();
+  const sessionTitle = String(title || "").trim() || `New ${isA2aAgent ? "A2A" : runtimeType === "hermes" ? "Hermes" : "OpenClaw"} session`;
+  const sessionItem = {
+    id: `chat-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title: sessionTitle.slice(0, 120),
+    workspaceId,
+    model: isA2aAgent ? "a2a-discovery" : isHostedAgent ? runtimeType : liteLlmModel(),
+    status: "active",
+    updatedAt: now,
+    ...(isA2aAgent ? { a2a: { targetAgentId: selectedAgentId } } : {}),
+    messages: [
+      createMessage("system", `You are ${assistantDisplayName}. Telnyx Link is only the desktop client routing this conversation, not your assistant identity. ${routeInstruction} ${hindsightInstruction}`),
+      createMessage("system", `Selected Link chat agent: ${targetAgent}. New session initialized for ${isA2aAgent ? "a2a-discovery" : isHostedAgent ? runtimeType : "default"} runtime. ${chatSettings} ${hindsightInstruction} ${workboardInstruction}`),
+    ],
+  };
+
+  chatSessions = [sessionItem, ...chatSessions];
+  addWorkspaceTab(workspaceId, {
+    id: `tab-${sessionItem.id}`,
+    title: sessionItem.title,
+    kind: "chat",
+    status: "open",
+    updatedAt: now,
+  });
+  await saveDesktopState();
+  return sessionItem;
+}
+
 async function renameChatSession({ sessionId, title }) {
   const trimmedTitle = String(title ?? "").trim();
   if (!sessionId) throw new Error("Session id is required.");
@@ -701,6 +1924,10 @@ async function renameChatSession({ sessionId, title }) {
 
 function isAidaAgentSelection(agentId, agentName) {
   return [agentId, agentName].filter(Boolean).some((value) => /(^|[-_\s/])aida($|[-_\s/])/i.test(String(value)));
+}
+
+function isA2aAgentSelection(agentId, agentSource) {
+  return Boolean(agentId && agentSource === "a2a-discovery");
 }
 
 function aidaAgentRouteInstruction(chatSettings) {
@@ -730,17 +1957,20 @@ function createAidaAgentHandoff(prompt, chatSettings) {
   ].join("\n");
 }
 
-function liveRuntimeUnavailableMessage(aidaRoute, detail = "") {
+function liveRuntimeUnavailableMessage(aidaRoute, detail = "", a2aRoute = false) {
   const suffix = detail ? `\n\nRuntime detail: ${detail}` : "";
+  if (a2aRoute) {
+    return `The selected A2A agent did not return a live response. Confirm VPN access, A2A discovery availability, and that the agent accepts Link desktop messages.${suffix}`;
+  }
   if (aidaRoute) {
     return `AIDA is selected, but no live agent runtime returned a response. Confirm Agent Control Plane is signed in and the selected agent is deployed with chat enabled.${suffix}`;
   }
-  return `No agent runtime returned a response. Choose a hosted Hermes/OpenClaw agent or confirm your Telnyx LiteLLM API key is saved for generic chat fallback.${suffix}`;
+  return `No agent runtime returned a response. Choose a hosted Hermes/OpenClaw agent or confirm your LiteLLM API key is saved for generic chat fallback.${suffix}`;
 }
 
 function telnyxDocsRouteInstruction() {
-  const sources = telnyxDocsSources.map((source) => `${source.title}: ${source.url}`).join("; ");
-  return `When answering Telnyx product or implementation questions, query or cite the Telnyx documentation sources before relying on memory. Sources: ${sources}. If the user says the bot is wrong or docs are missing, help draft a documentation update suggestion for an approved GitHub PR in team-telnyx/link.`;
+  const productSources = telnyxDocsSources.map((source) => `${source.title}: ${source.url}`).join("; ");
+  return `When answering Telnyx product or implementation questions, query or cite the Telnyx documentation sources before relying on memory. Sources: ${productSources}. If the user says the bot is wrong or docs are missing, help draft a documentation update suggestion for an approved GitHub PR in team-telnyx/link or the source repository that owns the cited document.`;
 }
 
 function hindsightAgentCapabilityInstruction() {
@@ -750,12 +1980,20 @@ function hindsightAgentCapabilityInstruction() {
   return `${hindsightAgentCapabilityBase} ${status}`;
 }
 
-async function runLiveChatRoute({ agentId, agentName, prompt, messages }) {
+async function runLiveChatRoute({ agentId, agentName, agentSource, prompt, systemInstruction, messages, sessionItem }) {
   const agentRuntimePrompt = [
     hindsightAgentCapabilityInstruction(),
+    workboardStatusGuideInstruction(),
+    systemInstruction,
     "",
     `User request: ${prompt}`,
-  ].join("\n");
+  ].filter((item) => item !== undefined && item !== null).join("\n");
+  const a2aResponse = await runA2aDiscoveryChat({ agentId, agentSource, prompt: agentRuntimePrompt, sessionItem }).catch((error) => ({
+    ok: false,
+    error: errorMessage(error),
+  }));
+  if (a2aResponse.ok) return a2aResponse;
+
   const acpResponse = await runAgentControlPlaneChat({ agentId, agentName, prompt: agentRuntimePrompt }).catch((error) => ({
     ok: false,
     error: errorMessage(error),
@@ -767,7 +2005,97 @@ async function runLiveChatRoute({ agentId, agentName, prompt, messages }) {
 
   return {
     ok: false,
-    error: [acpResponse.error, liteLlmResponse.error].filter(Boolean).join(" "),
+    error: [isA2aAgentSelection(agentId, agentSource) ? a2aResponse.error : "", acpResponse.error, liteLlmResponse.error].filter(Boolean).join(" "),
+  };
+}
+
+async function runA2aDiscoveryChat({ agentId, agentSource, prompt, sessionItem }) {
+  if (!isA2aAgentSelection(agentId, agentSource)) {
+    return { ok: false, error: "No A2A-discovered agent was selected." };
+  }
+
+  const targetAgentId = String(agentId || "").trim();
+  const knownAgent = await getA2aDiscoveryAgent(targetAgentId);
+  if (!knownAgent) {
+    return { ok: false, error: "Selected agent was not found in A2A discovery." };
+  }
+  if (knownAgent.available === false) {
+    return { ok: false, error: `${knownAgent.displayName} is not currently available in A2A discovery.` };
+  }
+
+  const previousContextId = sessionItem?.a2a?.targetAgentId === targetAgentId ? sessionItem.a2a.contextId : undefined;
+  const message = {
+    kind: "message",
+    messageId: `link-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    role: "user",
+    parts: [
+      {
+        kind: "text",
+        text: prompt,
+      },
+    ],
+    ...(previousContextId ? { contextId: previousContextId } : {}),
+    metadata: {
+      source: "telnyx-link-desktop",
+    },
+  };
+  const payload = {
+    jsonrpc: "2.0",
+    id: `link-rpc-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    method: "message/send",
+    params: {
+      message,
+      configuration: { blocking: true },
+    },
+  };
+  const response = await fetch(`${a2aDiscoveryUrl()}/a2a/${encodeURIComponent(targetAgentId)}/rpc`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "A2A-Version": "1.0",
+      "X-A2A-Timeout": "120000",
+      "X-A2A-Idempotency-Key": payload.id,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    return {
+      ok: false,
+      error: `A2A discovery chat returned ${response.status} ${response.statusText}. ${detail.slice(0, 500)}`.trim(),
+    };
+  }
+
+  const rpcPayload = await response.json().catch(() => ({}));
+  if (rpcPayload.error) {
+    return {
+      ok: false,
+      error: `A2A ${rpcPayload.error.code ?? "error"}: ${rpcPayload.error.message ?? JSON.stringify(rpcPayload.error).slice(0, 500)}`,
+    };
+  }
+
+  const task = normalizeA2aTask(rpcPayload);
+  const content = extractA2aText(task) || extractA2aText(rpcPayload) || a2aTaskStatusText(task, knownAgent.displayName);
+  if (!content) {
+    return { ok: false, error: "A2A discovery chat returned no message content." };
+  }
+
+  const contextId = task?.contextId ?? rpcPayload.result?.contextId ?? rpcPayload.contextId;
+  const taskId = task?.id ?? task?.taskId ?? rpcPayload.result?.id ?? rpcPayload.result?.taskId;
+  if (sessionItem) {
+    sessionItem.a2a = {
+      targetAgentId,
+      ...(contextId ? { contextId } : {}),
+      ...(taskId ? { taskId } : {}),
+    };
+  }
+
+  return {
+    ok: true,
+    content,
+    route: "a2a-discovery",
   };
 }
 
@@ -874,6 +2202,53 @@ function extractChatContent(payload) {
       payload.choices?.[0]?.message?.content ??
       "",
   ).trim();
+}
+
+function normalizeA2aTask(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  return payload.result?.task ?? payload.result ?? payload.task ?? payload;
+}
+
+function extractA2aText(payload) {
+  if (typeof payload === "string") return payload.trim();
+  if (!payload || typeof payload !== "object") return "";
+
+  const parts = [
+    ...(Array.isArray(payload.parts) ? payload.parts : []),
+    ...(Array.isArray(payload.message?.parts) ? payload.message.parts : []),
+    ...(Array.isArray(payload.status?.message?.parts) ? payload.status.message.parts : []),
+    ...(Array.isArray(payload.artifacts) ? payload.artifacts.flatMap((artifact) => artifact.parts ?? []) : []),
+    ...(Array.isArray(payload.result?.artifacts) ? payload.result.artifacts.flatMap((artifact) => artifact.parts ?? []) : []),
+    ...(Array.isArray(payload.result?.task?.artifacts) ? payload.result.task.artifacts.flatMap((artifact) => artifact.parts ?? []) : []),
+  ];
+  const text = parts
+    .map((part) => part?.text ?? part?.textPart?.text ?? part?.data?.text)
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  if (text) return text;
+
+  return String(
+    payload.text ??
+      payload.content ??
+      payload.message?.text ??
+      payload.status?.message?.text ??
+      payload.result?.text ??
+      payload.result?.content ??
+      payload.result?.message?.text ??
+      "",
+  ).trim();
+}
+
+function a2aTaskStatusText(task, agentName) {
+  if (!task || typeof task !== "object") return "";
+  const state = task.status?.state ?? task.state;
+  const taskId = task.id ?? task.taskId;
+  if (!state && !taskId) return "";
+  return [
+    `${agentName || "The A2A agent"} accepted the request${state ? ` and is ${state}` : ""}.`,
+    taskId ? `Task ID: ${taskId}` : "",
+  ].filter(Boolean).join("\n");
 }
 
 async function transcribeAudio(input = {}) {
@@ -1023,10 +2398,11 @@ function listWorkspaces() {
 async function searchExplorer({ query = "", workspaceId } = {}) {
   const term = String(query || "").trim();
   if (!term) return [];
-  const [skills, agents, guruResults, docsResults] = await Promise.all([
+  const [skills, agents, guruResults, pylonResults, docsResults] = await Promise.all([
     listSkills(),
     listAgents(),
     searchGuru(term, workspaceId),
+    searchPylon(term, workspaceId),
     searchTelnyxDocs(term, workspaceId),
   ]);
   const linkFileResults = activeWork.slice(0, 4).map((item) => ({
@@ -1043,6 +2419,7 @@ async function searchExplorer({ query = "", workspaceId } = {}) {
   return [
     ...docsResults,
     ...guruResults,
+    ...pylonResults,
     ...linkFileResults,
     ...skills.slice(0, 3).map((skill) => ({
       id: `explorer-skill-${skill.name}`,
@@ -1050,7 +2427,7 @@ async function searchExplorer({ query = "", workspaceId } = {}) {
       source: "skill",
       type: "skill",
       permission: "allowed",
-      freshness: skill.source === "telnyx" ? "Root skills repository" : "Link skill",
+      freshness: skill.source === "tool-studio" ? "Tool Studio catalog" : skill.source === "telnyx" ? "Root skills repository" : "Link skill",
       excerpt: skill.description,
     })),
     ...agents.slice(0, 2).map((agent) => ({
@@ -1073,7 +2450,133 @@ async function searchTelnyxDocs(term, workspaceId) {
     searchIntercomHelpCenter(trimmed, workspaceId),
     searchMintlifyDocs(trimmed, workspaceId),
   ]);
-  return [...supportResults, ...developerResults];
+  const fallbackResults = fallbackTelnyxDocsResults(trimmed, workspaceId);
+  return [
+    ...(supportResults.length ? supportResults : fallbackResults.filter((result) => result.source === "telnyx_support")),
+    ...(developerResults.length ? developerResults : fallbackResults.filter((result) => result.source === "telnyx_developers")),
+  ];
+}
+
+async function askKnowledgeAgent(input = {}) {
+  const question = String(input?.question || "").trim();
+  if (!question) throw new Error("Ask a general Telnyx documentation question first.");
+
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000);
+
+  try {
+    const response = await fetch(knowledgeAgentAskUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ question }),
+      signal: controller.signal,
+    });
+
+    if (response.status === 429) {
+      throw new Error("Telnyx Knowledge Agent is rate limited at 10 requests per minute. Wait and try again.");
+    }
+    if (!response.ok) {
+      throw new Error(`Telnyx Knowledge Agent request failed (${response.status}). Try again later.`);
+    }
+
+    let payload;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error("Telnyx Knowledge Agent returned malformed JSON.");
+    }
+
+    const answer = String(payload?.answer || "").trim();
+    if (!answer) throw new Error("Telnyx Knowledge Agent returned an empty answer.");
+
+    return {
+      answer,
+      citations: normalizeKnowledgeAgentCitations(payload?.citations),
+      latencyMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error("Telnyx Knowledge Agent request timed out after 120 seconds. Try a shorter question or retry.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeKnowledgeAgentCitations(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (typeof item === "string") return { title: item };
+      if (!item || typeof item !== "object") return null;
+      const title = normalizeOptionalString(item.title ?? item.name ?? item.label);
+      const url = normalizeOptionalString(item.url ?? item.href ?? item.link);
+      const source = normalizeOptionalString(item.source ?? item.type);
+      if (!title && !url && !source) return null;
+      return { ...(title ? { title } : {}), ...(url ? { url } : {}), ...(source ? { source } : {}) };
+    })
+    .filter(Boolean);
+}
+
+function tokenizeSearchTerm(term) {
+  return String(term || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2);
+}
+
+function fallbackTelnyxDocsResults(term, workspaceId) {
+  const query = String(term || "").trim();
+  const supportSource = telnyxDocsSources.find((source) => source.source === "telnyx_support") ?? telnyxDocsSources[0];
+  const developerSource = telnyxDocsSources.find((source) => source.source === "telnyx_developers") ?? telnyxDocsSources[1];
+  return [
+    {
+      id: `explorer-docs-fallback-support-${slugifyId(query || "help-center")}`,
+      title: query ? `Search Help Center for "${query}"` : "Search Help Center",
+      source: "telnyx_support",
+      type: "doc",
+      permission: "allowed",
+      freshness: "Built-in public source",
+      excerpt: "Link can search Telnyx Help Center content without requiring each user to configure Intercom credentials.",
+      workspaceId: workspaceId || "workspace-link",
+      url: telnyxDocsSearchUrl(supportSource.url, query),
+    },
+    {
+      id: `explorer-docs-fallback-developers-${slugifyId(query || "developer-docs")}`,
+      title: query ? `Search Dev Docs for "${query}"` : "Search Dev Docs",
+      source: "telnyx_developers",
+      type: "doc",
+      permission: "allowed",
+      freshness: "Built-in public source",
+      excerpt: "Link can open Telnyx Developer Docs for API guides, SDK references, and implementation material without asking employees for Mintlify credentials.",
+      workspaceId: workspaceId || "workspace-link",
+      url: telnyxDocsSearchUrl(developerSource.url, query),
+    },
+  ];
+}
+
+function telnyxDocsSearchUrl(baseUrl, query) {
+  if (!query) return baseUrl;
+  try {
+    const url = new URL(baseUrl);
+    url.searchParams.set("q", query);
+    return url.toString();
+  } catch {
+    return baseUrl;
+  }
+}
+
+function slugifyId(value) {
+  return String(value || "item")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "item";
 }
 
 async function searchIntercomHelpCenter(term, workspaceId) {
@@ -1227,7 +2730,10 @@ function truncateText(value, maxLength = 420) {
 }
 
 async function searchGuru(term, workspaceId) {
-  if (!connectorReady("guru")) return [];
+  if (!connectorReady("guru")) return fallbackGuruSkillResults(term, workspaceId);
+
+  const mcpResults = await searchGuruMcp(term, workspaceId).catch(() => []);
+  if (mcpResults.length) return mcpResults;
 
   try {
     const params = new URLSearchParams({
@@ -1247,10 +2753,144 @@ async function searchGuru(term, workspaceId) {
     const payload = await response.json();
     const records = Array.isArray(payload) ? payload : payload.results ?? payload.cards ?? payload.items ?? [];
     const results = records.map((record, index) => normalizeGuruExplorerResult(record, index, workspaceId)).filter(Boolean);
-    return results;
+    return results.length ? results : fallbackGuruSkillResults(term, workspaceId);
   } catch {
-    return [];
+    return fallbackGuruSkillResults(term, workspaceId);
   }
+}
+
+async function searchGuruMcp(term, workspaceId) {
+  const authorization = await guruMcpAuthorizationHeader();
+  if (!authorization) return [];
+
+  const agentId = credentialValue("GURU_KNOWLEDGE_AGENT_ID") || await guruMcpDefaultAgentId(authorization).catch(() => "");
+  if (!agentId) return [];
+
+  const raw = await guruMcpToolCall("guru_search_documents", { query: term, agentId }, authorization);
+  const payload = parseGuruMcpPayload(raw);
+  const records = Array.isArray(payload?.documents)
+    ? payload.documents
+    : Array.isArray(payload?.data?.documents)
+      ? payload.data.documents
+      : Array.isArray(payload?.results)
+        ? payload.results
+        : Array.isArray(payload)
+          ? payload
+          : [];
+  return records
+    .filter((record) => !record?.documentType || record.documentType === "GURU")
+    .map((record, index) => normalizeGuruMcpExplorerResult(record, index, workspaceId))
+    .filter(Boolean);
+}
+
+async function guruMcpDefaultAgentId(authorization) {
+  const raw = await guruMcpToolCall("guru_list_knowledge_agents", {}, authorization);
+  const payload = parseGuruMcpPayload(raw);
+  const agents = Array.isArray(payload) ? payload : Array.isArray(payload?.agents) ? payload.agents : [];
+  return String(agents[0]?.id || "").trim();
+}
+
+async function guruMcpToolCall(toolName, args, authorization) {
+  const response = await fetch(guruMcpUrl(), {
+    method: "POST",
+    headers: {
+      Accept: "application/json, text/event-stream",
+      "Content-Type": "application/json",
+      Authorization: authorization,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "tools/call",
+      params: {
+        name: toolName,
+        arguments: args,
+      },
+    }),
+  });
+  if (!response.ok) return null;
+  const text = await response.text();
+  const payload = parseMaybeJson(extractMcpResponseText(text));
+  if (payload?.error?.message) throw new Error(payload.error.message);
+  return payload?.result?.content?.[0]?.text ?? payload?.result ?? payload;
+}
+
+function extractMcpResponseText(text) {
+  const value = String(text || "").trim();
+  if (!value.includes("\ndata:") && !value.startsWith("data:")) return value;
+  const dataLine = value.split(/\r?\n/).find((line) => line.startsWith("data:"));
+  return dataLine ? dataLine.replace(/^data:\s*/, "") : value;
+}
+
+function parseGuruMcpPayload(value) {
+  const parsed = parseMaybeJson(value);
+  if (typeof parsed === "string") return parseMaybeJson(parsed);
+  return parsed;
+}
+
+function parseMaybeJson(value) {
+  if (!value || typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeGuruMcpExplorerResult(record, index, workspaceId) {
+  const id = record.id ?? record.cardId ?? `guru-mcp-${index}`;
+  const title = record.title ?? record.preferredPhrase ?? record.name ?? "Guru card";
+  const highlighted = Array.isArray(record.highlightedBodyContent) ? record.highlightedBodyContent.join(" ") : "";
+  const excerpt = cleanDocText(highlighted || record.content || record.excerpt || record.summary || "");
+  const lastModified = record.lastModified ?? record.dateModified ?? record.updatedAt;
+  const slug = record.slug ?? record.shortUrl ?? "";
+  const url = record.url || record.shareUrl || record.webUrl || (slug ? `https://app.getguru.com/card/${slug}` : "");
+  const collection = record.collection?.name ? `Collection: ${record.collection.name}. ` : "";
+  return {
+    id: `explorer-guru-mcp-${id}`,
+    title,
+    source: "guru",
+    type: "doc",
+    permission: "allowed",
+    freshness: lastModified ? `Guru MCP - ${relativeTime(lastModified)}` : "Guru MCP",
+    excerpt: truncateText(`${collection}${excerpt || "Verified Guru knowledge card."}`),
+    workspaceId: workspaceId || "workspace-link",
+    url,
+  };
+}
+
+function fallbackGuruSkillResults(term, workspaceId) {
+  const query = String(term || "").trim();
+  const guruSkills = [
+    {
+      id: "support-reply-draft",
+      title: "Support Reply Draft",
+      excerpt: "Uses Guru-backed knowledge search with ticket and account context to draft customer-safe support replies for review.",
+    },
+    {
+      id: "product-launch-readiness",
+      title: "Product Launch Readiness",
+      excerpt: "Uses Guru-backed launch, docs, issue, and code context to check readiness, risks, owners, and next actions.",
+    },
+    {
+      id: "competitive-battlecard-draft",
+      title: "Competitive Battlecard Draft",
+      excerpt: "Uses Guru-backed sales and product knowledge to draft internal competitive positioning and validation notes.",
+    },
+  ];
+  const normalizedQuery = query.toLowerCase();
+  return guruSkills
+    .filter((skill) => !normalizedQuery || `${skill.title} ${skill.excerpt}`.toLowerCase().includes(normalizedQuery) || normalizedQuery.length >= 3)
+    .map((skill) => ({
+      id: `explorer-guru-skill-${skill.id}`,
+      title: skill.title,
+      source: "guru",
+      type: "skill",
+      permission: "allowed",
+      freshness: "Guru-backed Link skill",
+      excerpt: skill.excerpt,
+      workspaceId: workspaceId || "workspace-link",
+    }));
 }
 
 function normalizeGuruExplorerResult(record, index, workspaceId) {
@@ -1274,13 +2914,501 @@ function normalizeGuruExplorerResult(record, index, workspaceId) {
 }
 
 function guruAuthorizationHeader() {
-  const user = credentialValue("GURU_USER_EMAIL") || credentialValue("GURU_USERNAME") || credentialValue("GURU_COLLECTION_ID") || "";
-  const token = credentialValue("GURU_USER_TOKEN") || credentialValue("GURU_COLLECTION_TOKEN") || "";
+  const user = credentialValue("GURU_USER_EMAIL") || credentialValue("GURU_USERNAME") || credentialValue("GURU_COLLECTION_ID") || credentialValue("GURU_EMAIL") || "";
+  const token = credentialValue("GURU_USER_TOKEN") || credentialValue("GURU_COLLECTION_TOKEN") || credentialValue("GURU_API_TOKEN") || "";
   return `Basic ${Buffer.from(`${user}:${token}`).toString("base64")}`;
 }
 
 function guruApiBaseUrl() {
   return (process.env.GURU_API_BASE_URL || defaultGuruApiBaseUrl).replace(/\/$/, "");
+}
+
+async function guruOAuthAccessToken() {
+  const token = credentialValue(guruOAuthAccessTokenField);
+  const refreshToken = credentialValue(guruOAuthRefreshTokenField);
+  const expiresAt = credentialValue(guruOAuthTokenExpiresAtField);
+  const expiresAtMs = Date.parse(expiresAt);
+  if (token && (!refreshToken || Number.isNaN(expiresAtMs) || expiresAtMs > Date.now() + 60_000)) {
+    return token;
+  }
+  if (!refreshToken || !guruOAuthClientId() || !guruOAuthClientSecret()) return token;
+  const refreshed = await refreshGuruOAuthToken(refreshToken);
+  await saveGuruOAuthToken({ ...refreshed, refresh_token: refreshed.refresh_token || refreshToken });
+  return refreshed.access_token;
+}
+
+async function guruMcpAuthorizationHeader() {
+  const oauthToken = await guruOAuthAccessToken().catch(() => "");
+  if (oauthToken) return `Bearer ${oauthToken}`;
+  const user = credentialValue("GURU_EMAIL") || credentialValue("GURU_USER_EMAIL") || credentialValue("GURU_USERNAME") || "";
+  const token = credentialValue("GURU_API_TOKEN") || credentialValue("GURU_USER_TOKEN") || "";
+  return user && token ? `Bearer ${user}:${token}` : "";
+}
+
+function guruMcpUrl() {
+  return (process.env.GURU_MCP_URL || defaultGuruMcpUrl).replace(/\/$/, "");
+}
+
+async function searchPylon(term, workspaceId) {
+  if (!connectorReady("pylon")) return [];
+
+  const issueId = pylonIssueLookupId(term);
+  if (issueId) {
+    const directResults = await getPylonIssueExplorerResults(issueId, workspaceId).catch(() => []);
+    if (directResults.length) return directResults;
+  }
+
+  const attempts = [
+    ["search_issues", { query: term, limit: 8 }],
+    ["search_issues", { search_text: term, limit: 8 }],
+    ["search_issues", { title: term, limit: 8 }],
+    ["pylon_search_issues", { query: term, limit: 8 }],
+    ["pylon_search_issues", { search_text: term, limit: 8 }],
+    ["pylon_search_issues", { title: term, limit: 8 }],
+  ];
+
+  for (const [toolName, args] of attempts) {
+    const raw = await pylonMcpToolCall(toolName, args).catch(() => null);
+    const records = pylonMcpRecords(raw);
+    const results = records.map((record, index) => normalizePylonExplorerResult(record, index, workspaceId)).filter(Boolean);
+    if (results.length) return results;
+  }
+
+  return [];
+}
+
+async function getPylonIssueExplorerResults(issueId, workspaceId) {
+  const attempts = [
+    ["get_issue", { id: issueId }],
+    ["get_issue", { issue_id: issueId }],
+    ["get_issue", { number: issueId }],
+    ["pylon_get_issue", { id: issueId }],
+    ["pylon_get_issue", { issue_id: issueId }],
+    ["pylon_get_issue", { number: issueId }],
+  ];
+
+  for (const [toolName, args] of attempts) {
+    const raw = await pylonMcpToolCall(toolName, args).catch(() => null);
+    const records = pylonMcpRecords(raw);
+    const results = records.map((record, index) => normalizePylonExplorerResult(record, index, workspaceId)).filter(Boolean);
+    if (results.length) return results;
+  }
+
+  return [];
+}
+
+async function createPylonIssue(input = {}) {
+  if (!connectorReady("pylon")) {
+    throw new Error("Pylon MCP is not configured. Connect Pylon with OAuth or add PYLON_MCP_ACCESS_TOKEN and optionally PYLON_MCP_URL in Link settings.");
+  }
+
+  const title = normalizeRequiredString(input.title, "title");
+  const bodyHtml = normalizeRequiredString(input.body_html ?? input.bodyHtml ?? input.body ?? input.description, "body_html");
+  const args = {
+    title,
+    body_html: bodyHtml,
+    ...optionalPylonMcpArgs(input, {
+      accountId: "account_id",
+      assigneeId: "assignee_id",
+      contactId: "contact_id",
+      requesterEmail: "requester_email",
+      requesterName: "requester_name",
+      requesterId: "requester_id",
+      teamId: "team_id",
+      priority: "priority",
+    }),
+  };
+  if (Array.isArray(input.tags) && input.tags.length) args.tags = input.tags.map((tag) => String(tag).trim()).filter(Boolean);
+
+  const raw = await pylonMcpToolCall("create_issue", args).catch(async (error) => {
+    if (!/unknown tool|not found|method not found|invalid tool/i.test(String(error?.message || error))) throw error;
+    return pylonMcpToolCall("pylon_create_issue", args);
+  });
+  const records = pylonMcpRecords(raw);
+  const issue = records[0] ?? parsePylonMcpPayload(raw);
+
+  auditLogger.record({
+    actorId: "desktop_user",
+    surface: "desktop",
+    eventType: "pylon.issue_created",
+    action: "create_issue",
+    target: String(issue?.id || issue?.number || title),
+    metadata: {
+      source: "pylon_mcp",
+      url: pylonIssueLink(issue) || "",
+    },
+  });
+
+  return {
+    status: "created",
+    issue,
+    result: raw,
+  };
+}
+
+async function connectPylonWithOAuth() {
+  const oauth = await pylonOAuthMetadata();
+  const clientId = await pylonOAuthClientId(oauth);
+  const device = await requestPylonDeviceCode(oauth, clientId);
+  const verificationUri = device.verification_uri || device.verification_url || "";
+  const openUri = device.verification_uri_complete || verificationUri;
+  const decision = await dialog.showMessageBox({
+    type: "info",
+    title: "Connect Pylon",
+    message: `Enter this Pylon code: ${device.user_code}`,
+    detail: "Link will open Pylon OAuth in your browser. Approve access, then return to Link.",
+    buttons: ["Open Pylon", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (decision.response !== 0) throw new Error("Pylon connection was cancelled.");
+  if (openUri) await shell.openExternal(openUri);
+
+  const token = await pollPylonDeviceToken(oauth, clientId, device);
+  await savePylonOAuthToken(token);
+  const me = await pylonMcpToolCall("get_me", {}).catch(() => null);
+  const userId = pylonOAuthUserId(me);
+
+  auditLogger.record({
+    actorId: userId || "desktop_user",
+    surface: "desktop",
+    eventType: "credential.connected",
+    action: "pylon_oauth_device_flow",
+    target: "pylon",
+    metadata: {
+      tokenType: token.token_type || "bearer",
+      scope: token.scope || pylonOAuthScope(),
+      resource: oauth.resource,
+    },
+  });
+
+  return {
+    status: "connected",
+    userId,
+    userCode: device.user_code || "",
+    verificationUri,
+    credentials: await listCredentials(),
+    connectors: await listConnectors(),
+  };
+}
+
+function optionalPylonMcpArgs(input, mapping) {
+  return Object.entries(mapping).reduce((args, [inputKey, outputKey]) => {
+    const value = normalizeOptionalString(input[inputKey] ?? input[outputKey]);
+    if (value) args[outputKey] = value;
+    return args;
+  }, {});
+}
+
+async function pylonMcpToolCall(toolName, args = {}) {
+  assertPylonMcpToolAllowed(toolName);
+  const authorization = await pylonMcpAuthorizationHeader();
+  if (!authorization) throw new Error("Pylon MCP access token is not configured.");
+
+  const response = await fetch(pylonMcpUrl(), {
+    method: "POST",
+    headers: {
+      Accept: "application/json, text/event-stream",
+      "Content-Type": "application/json",
+      Authorization: authorization,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "tools/call",
+      params: {
+        name: toolName,
+        arguments: args,
+      },
+    }),
+  });
+  const text = await response.text();
+  if (response.status === 401 || response.status === 403) {
+    throw new Error("Pylon MCP authentication failed. Reconnect Pylon or refresh the user-scoped MCP access token.");
+  }
+  if (!response.ok) {
+    throw new Error(`Pylon MCP ${toolName} returned ${response.status}: ${truncateText(text, 500)}`);
+  }
+
+  const payload = parseMaybeJson(extractMcpResponseText(text));
+  if (payload?.error?.message) throw new Error(payload.error.message);
+  return payload?.result?.content?.[0]?.text ?? payload?.result?.structuredContent ?? payload?.result ?? payload;
+}
+
+function assertPylonMcpToolAllowed(toolName) {
+  if (pylonMcpBlockedTools.has(toolName)) {
+    throw new Error(`Pylon MCP tool ${toolName} is blocked in Link v1.`);
+  }
+  if (!pylonMcpAllowedTools.has(toolName)) {
+    throw new Error(`Pylon MCP tool ${toolName} is not enabled in Link v1.`);
+  }
+}
+
+async function pylonOAuthMetadata() {
+  const protectedResourceUrl = new URL("/.well-known/oauth-protected-resource", pylonMcpUrl()).toString();
+  const resourceMetadata = await fetchPylonOAuthJson(protectedResourceUrl, {}, "Pylon OAuth protected resource metadata");
+  const authorizationServer = Array.isArray(resourceMetadata.authorization_servers)
+    ? resourceMetadata.authorization_servers[0]
+    : resourceMetadata.authorization_server;
+  if (!authorizationServer) throw new Error("Pylon OAuth metadata did not include an authorization server.");
+
+  const authorizationMetadataUrl = new URL("/.well-known/oauth-authorization-server", authorizationServer).toString();
+  const authorizationMetadata = await fetchPylonOAuthJson(authorizationMetadataUrl, {}, "Pylon OAuth authorization metadata");
+  if (!authorizationMetadata.token_endpoint) throw new Error("Pylon OAuth metadata did not include a token endpoint.");
+  return {
+    resource: resourceMetadata.resource || pylonMcpUrl(),
+    resourceMetadata,
+    authorizationMetadata,
+  };
+}
+
+async function fetchPylonOAuthJson(url, init = {}, label = "Pylon OAuth request") {
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init.headers || {}),
+    },
+  });
+  const text = await response.text();
+  const payload = parseMaybeJson(text);
+  if (!response.ok) {
+    throw new Error(`${label} returned ${response.status}: ${truncateText(text, 500)}`);
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(`${label} did not return JSON.`);
+  }
+  return payload;
+}
+
+async function pylonOAuthClientId(oauth) {
+  const savedClientId = String(credentialValue(pylonMcpClientIdField) || "").trim();
+  if (savedClientId) return savedClientId;
+  const registrationEndpoint = oauth.authorizationMetadata.registration_endpoint;
+  if (!registrationEndpoint) {
+    throw new Error("Pylon OAuth dynamic client registration is unavailable. Save PYLON_MCP_CLIENT_ID or reconnect with a supported Pylon OAuth server.");
+  }
+
+  const registration = await fetchPylonOAuthJson(registrationEndpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_name: "Telnyx Link",
+      client_uri: "https://telnyx.com",
+      grant_types: ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"],
+      scope: pylonOAuthScope(),
+      token_endpoint_auth_method: "none",
+    }),
+  }, "Pylon OAuth client registration");
+  if (!registration.client_id) throw new Error("Pylon OAuth client registration did not return a client_id.");
+  await saveSecureCredential(pylonMcpClientIdField, registration.client_id);
+  return registration.client_id;
+}
+
+async function requestPylonDeviceCode(oauth, clientId) {
+  const endpoint = oauth.authorizationMetadata.device_authorization_endpoint;
+  if (!endpoint) throw new Error("Pylon OAuth metadata did not include a device authorization endpoint.");
+  const params = new URLSearchParams({
+    client_id: clientId,
+    scope: pylonOAuthScope(),
+  });
+  if (oauth.resource) params.set("resource", oauth.resource);
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.device_code || !payload.user_code || !(payload.verification_uri || payload.verification_url)) {
+    throw new Error(`Pylon OAuth device authorization failed: ${JSON.stringify(payload).slice(0, 500)}`);
+  }
+  return payload;
+}
+
+async function pollPylonDeviceToken(oauth, clientId, device) {
+  const startedAt = Date.now();
+  const expiresInMs = Number(device.expires_in || 900) * 1000;
+  let intervalMs = Math.max(Number(device.interval || 5), 5) * 1000;
+  while (Date.now() - startedAt < expiresInMs) {
+    await sleep(intervalMs);
+    const params = new URLSearchParams({
+      client_id: clientId,
+      device_code: device.device_code,
+      grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+    });
+    if (oauth.resource) params.set("resource", oauth.resource);
+    const response = await fetch(oauth.authorizationMetadata.token_endpoint, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (payload.access_token) return payload;
+    if (payload.error === "authorization_pending") continue;
+    if (payload.error === "slow_down") {
+      intervalMs += 5000;
+      continue;
+    }
+    if (payload.error === "expired_token") break;
+    throw new Error(`Pylon OAuth authorization failed: ${payload.error_description || payload.error || JSON.stringify(payload).slice(0, 300)}`);
+  }
+  throw new Error("Pylon OAuth authorization expired before the account was connected.");
+}
+
+async function refreshPylonOAuthToken(refreshToken) {
+  const clientId = String(credentialValue(pylonMcpClientIdField) || "").trim();
+  if (!clientId) throw new Error("Pylon OAuth client registration is missing. Reconnect Pylon.");
+  const oauth = await pylonOAuthMetadata();
+  const params = new URLSearchParams({
+    client_id: clientId,
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+  if (oauth.resource) params.set("resource", oauth.resource);
+  const token = await fetchPylonOAuthJson(oauth.authorizationMetadata.token_endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params,
+  }, "Pylon OAuth token refresh");
+  if (!token.access_token) throw new Error("Pylon OAuth refresh response did not include an access token.");
+  return token;
+}
+
+async function pylonMcpAccessToken() {
+  const token = String(credentialValue(pylonMcpAccessTokenField) || "").trim();
+  const refreshToken = String(credentialValue(pylonMcpRefreshTokenField) || "").trim();
+  const expiresAt = String(credentialValue(pylonMcpTokenExpiresAtField) || "").trim();
+  if (token && (!expiresAt || Date.parse(expiresAt) - Date.now() > 60_000)) return token;
+  if (!refreshToken) return token;
+  const refreshed = await refreshPylonOAuthToken(refreshToken);
+  await savePylonOAuthToken({ ...refreshed, refresh_token: refreshed.refresh_token || refreshToken });
+  return refreshed.access_token;
+}
+
+async function savePylonOAuthToken(token) {
+  await saveSecureCredential(pylonMcpAccessTokenField, token.access_token);
+  if (token.refresh_token) await saveSecureCredential(pylonMcpRefreshTokenField, token.refresh_token);
+  if (token.expires_in) {
+    await saveSecureCredential(pylonMcpTokenExpiresAtField, new Date(Date.now() + Number(token.expires_in) * 1000).toISOString());
+  }
+}
+
+function pylonOAuthScope() {
+  return String(process.env.PYLON_OAUTH_SCOPE || defaultPylonOAuthScope).trim();
+}
+
+function pylonOAuthUserId(value) {
+  const payload = parsePylonMcpPayload(value);
+  if (!payload || typeof payload !== "object") return "";
+  const user = payload.user ?? payload.me ?? payload.data ?? payload;
+  if (!user || typeof user !== "object") return "";
+  return String(user.id || user.user_id || user.email || "");
+}
+
+function pylonMcpRecords(value) {
+  const payload = parsePylonMcpPayload(value);
+  if (!payload) return [];
+  const candidates = [
+    payload,
+    payload.data,
+    payload.issue,
+    payload.issues,
+    payload.results,
+    payload.items,
+    payload.data?.issue,
+    payload.data?.issues,
+    payload.data?.results,
+    payload.data?.items,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+    if (isPylonRecord(candidate)) return [candidate];
+  }
+  return [];
+}
+
+function parsePylonMcpPayload(value) {
+  const parsed = parseMaybeJson(value);
+  if (typeof parsed !== "string") return parsed;
+  const fenced = parsed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  return parseMaybeJson(fenced?.[1] || parsed);
+}
+
+function isPylonRecord(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  return ["id", "issue_id", "issueId", "number", "title", "link", "url", "state", "status", "issue"].some((key) => value[key] !== undefined);
+}
+
+function normalizePylonExplorerResult(record, index, workspaceId) {
+  const issue = record?.issue ?? record?.data ?? record;
+  if (!isPylonRecord(issue)) return null;
+  const id = issue.id ?? issue.issue_id ?? issue.issueId ?? issue.number ?? `pylon-${index}`;
+  const number = issue.number ?? issue.issue_number ?? issue.issueNumber ?? issue.key ?? "";
+  const title = issue.title ?? issue.subject ?? issue.name ?? (number ? `Pylon issue ${number}` : "Pylon issue");
+  const state = issue.state ?? issue.status ?? "";
+  const account = issue.account?.name ?? issue.account_name ?? issue.accountName ?? issue.account?.id ?? "";
+  const requester = issue.requester?.email ?? issue.requester_email ?? issue.contact?.email ?? "";
+  const body = cleanDocText(issue.body_html ?? issue.bodyHtml ?? issue.body ?? issue.description ?? issue.summary ?? issue.latest_message ?? "");
+  const latest = issue.updated_at ?? issue.updatedAt ?? issue.latest_message_time ?? issue.latestMessageTime ?? issue.created_at ?? issue.createdAt;
+  const details = [
+    number ? `Issue #${number}` : "",
+    state ? `State: ${state}` : "",
+    account ? `Account: ${account}` : "",
+    requester ? `Requester: ${requester}` : "",
+    body || "Pylon issue available through the user-scoped MCP connector.",
+  ].filter(Boolean).join(". ");
+
+  return {
+    id: `explorer-pylon-${id}`,
+    title,
+    source: "pylon",
+    type: "ticket",
+    permission: "allowed",
+    freshness: latest ? `Pylon - ${relativeTime(latest)}` : "Pylon MCP",
+    excerpt: truncateText(details),
+    workspaceId: workspaceId || "workspace-link",
+    url: pylonIssueLink(issue),
+  };
+}
+
+function pylonIssueLink(issue) {
+  if (!issue || typeof issue !== "object") return "";
+  if (issue.link || issue.url || issue.webUrl) return String(issue.link || issue.url || issue.webUrl);
+  const id = issue.id ?? issue.issue_id ?? issue.issueId;
+  return id ? `https://app.usepylon.com/issues/views/all-issues?conversationID=${encodeURIComponent(String(id))}` : "";
+}
+
+function pylonIssueLookupId(term) {
+  const value = String(term || "").trim();
+  if (!value) return "";
+  const url = parseUrl(value);
+  if (url && url.hostname.toLowerCase().endsWith("usepylon.com")) {
+    return url.searchParams.get("conversationID") ||
+      url.searchParams.get("issueID") ||
+      url.searchParams.get("issueId") ||
+      url.pathname.split("/").filter(Boolean).at(-1) ||
+      "";
+  }
+  if (!/\bpylon\b|\bissue\b|\bticket\b|app\.usepylon\.com/i.test(value)) return "";
+  return value.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0] ||
+    value.match(/\b(?:ISS-|#)?(\d{2,})\b/i)?.[1] ||
+    "";
+}
+
+async function pylonMcpAuthorizationHeader() {
+  const token = String(await pylonMcpAccessToken() || "").trim();
+  if (!token) return "";
+  return /^bearer\s+/i.test(token) ? token : `Bearer ${token}`;
+}
+
+function pylonMcpUrl() {
+  return (credentialValue(pylonMcpUrlField) || process.env.PYLON_MCP_URL || defaultPylonMcpUrl).replace(/\/$/, "");
 }
 
 function stripHtml(value) {
@@ -1294,30 +3422,24 @@ function stripHtml(value) {
 async function listAgents() {
   const internalAgents = [aidaAgent()];
   const slackAgents = mergeAgents(await listSlackBotAgents().catch(() => []));
-  try {
-    const discovered = await listA2aDiscoveryAgents();
-    if (discovered.length > 0) return mergeAgents([...internalAgents, ...discovered, ...slackAgents]);
-  } catch {
-    // Fall through to the authenticated ACP adapter.
-  }
+  const [discoveredAgents, hostedAgents] = await Promise.all([
+    listA2aDiscoveryAgents().catch(() => []),
+    getAgentControlPlaneAuthStatus()
+      .then((status) => (status.ready ? listHostedAgents() : []))
+      .catch(() => []),
+  ]);
 
-  try {
-    const status = await getAgentControlPlaneAuthStatus();
-    if (!status.ready) return mergeAgents([...internalAgents, ...slackAgents]);
-    const hosted = await listHostedAgents();
-    return mergeAgents([
-      ...internalAgents,
-      ...hosted.map((agent) => ({
-        ...agent,
-        visibility: agent.type === "slack" ? "slack" : "public",
-        source: "agent-control-plane",
-        slackChannel: agent.type === "slack" ? "#telnyx-link-eng" : undefined,
-      })),
-      ...slackAgents,
-    ]);
-  } catch {
-    return mergeAgents([...internalAgents, ...slackAgents]);
-  }
+  return mergeAgents([
+    ...internalAgents,
+    ...discoveredAgents,
+    ...hostedAgents.map((agent) => ({
+      ...agent,
+      visibility: agent.type === "slack" ? "slack" : "public",
+      source: "agent-control-plane",
+      slackChannel: agent.type === "slack" ? "#telnyx-link-eng" : undefined,
+    })),
+    ...slackAgents,
+  ]);
 }
 
 function aidaAgent() {
@@ -1492,25 +3614,71 @@ const workboardProviderLabels = {
   auto: "Auto",
   hermes: "Hermes Kanban",
   openclaw: "OpenClaw Workboard",
+  google_tasks: "Google Tasks",
   local: "Link local board",
 };
 
+const workboardStatusArchitecture = [
+  {
+    id: "needs_review",
+    label: "Needs Review",
+    guidance: "Use when an agent has finished the task and has a final response ready for a human in the loop to review.",
+  },
+  {
+    id: "todo",
+    label: "To Do",
+    guidance: "Use for accepted work that has not started yet.",
+  },
+  {
+    id: "in_progress",
+    label: "In Progress",
+    guidance: "Use while the assigned human or ACP agent is actively working the task.",
+  },
+  {
+    id: "done",
+    label: "Done",
+    guidance: "Use after the human reviewer accepts the final response or closes the task.",
+  },
+];
+const workboardColumns = workboardStatusArchitecture.map((stage) => stage.id);
 const workboardColumnsByProvider = {
-  hermes: ["triage", "todo", "ready", "running", "blocked", "done", "archived"],
-  openclaw: ["triage", "backlog", "todo", "scheduled", "ready", "running", "review", "blocked", "done"],
-  local: ["triage", "backlog", "todo", "scheduled", "ready", "running", "review", "blocked", "done"],
+  hermes: workboardColumns,
+  openclaw: workboardColumns,
+  google_tasks: workboardColumns,
+  local: workboardColumns,
+};
+const workboardStatusAliases = {
+  needs_review: "needs_review",
+  review: "needs_review",
+  pending_review: "needs_review",
+  todo: "todo",
+  to_do: "todo",
+  triage: "todo",
+  backlog: "todo",
+  scheduled: "todo",
+  ready: "todo",
+  blocked: "todo",
+  in_progress: "in_progress",
+  running: "in_progress",
+  active: "in_progress",
+  started: "in_progress",
+  done: "done",
+  complete: "done",
+  completed: "done",
+  closed: "done",
+  archived: "done",
 };
 
 async function listWorkboard(input = {}) {
   const providers = await detectWorkboardProviders();
   const requested = normalizeWorkboardProvider(input.provider);
-  const provider = resolveWorkboardProvider(requested, providers);
+  const provider = resolveWorkboardProvider(requested, providers, input.preferredAgentType);
 
   if (provider === "hermes") {
     const hermes = providers.find((item) => item.id === "hermes");
     if (!hermes?.available) return unavailableWorkboardSnapshot("hermes", providers, hermes?.message ?? "Hermes CLI is not available.");
     try {
-      return await listHermesWorkboard(input.boardId, providers);
+      return decorateWorkboardSnapshotWithTaskSessions(await listHermesWorkboard(input.boardId, providers));
     } catch (error) {
       return unavailableWorkboardSnapshot("hermes", providers, errorMessage(error));
     }
@@ -1520,36 +3688,63 @@ async function listWorkboard(input = {}) {
     const openclaw = providers.find((item) => item.id === "openclaw");
     if (!openclaw?.available) return unavailableWorkboardSnapshot("openclaw", providers, openclaw?.message ?? "OpenClaw CLI is not available.");
     try {
-      return await listOpenClawWorkboard(input.boardId, providers);
+      return decorateWorkboardSnapshotWithTaskSessions(await listOpenClawWorkboard(input.boardId, providers));
     } catch (error) {
       return unavailableWorkboardSnapshot("openclaw", providers, errorMessage(error));
     }
   }
 
-  return localWorkboardSnapshot(providers, input.boardId);
+  if (provider === "google_tasks") {
+    const googleTasks = providers.find((item) => item.id === "google_tasks");
+    if (!googleTasks?.available) return unavailableWorkboardSnapshot("google_tasks", providers, googleTasks?.message ?? "Google Tasks through gog is not available.");
+    try {
+      return decorateWorkboardSnapshotWithTaskSessions(await listGoogleTasksWorkboard(input.boardId, providers));
+    } catch (error) {
+      return unavailableWorkboardSnapshot("google_tasks", providers, googleTasksUnavailableMessage(error));
+    }
+  }
+
+  return decorateWorkboardSnapshotWithTaskSessions(localWorkboardSnapshot(providers, input.boardId));
 }
 
 async function createWorkboardCard(input = {}) {
   const provider = normalizeWorkboardProvider(input.provider);
-  const resolved = provider === "auto" ? (await listWorkboard({ provider: "auto" })).provider : provider;
+  const providers = await detectWorkboardProviders();
+  const resolved = resolveWorkboardProvider(provider, providers, input.preferredAgentType);
   const title = String(input.title || "").trim();
   if (!title) throw new Error("Workboard card title is required.");
+  const shouldAutoDispatch = input.autoDispatch !== false && hasWorkboardAssignee(input);
+  const routedInput = {
+    ...input,
+    title,
+    status: shouldAutoDispatch ? "in_progress" : normalizeWorkboardStatus(input.status || "todo"),
+  };
 
   if (resolved === "hermes") {
-    await createHermesWorkboardCard({ ...input, title });
+    await createHermesWorkboardCard(routedInput);
+    if (shouldAutoDispatch) await dispatchWorkboard({ provider: "hermes", boardId: input.boardId });
     return listWorkboard({ provider: "hermes", boardId: input.boardId });
   }
 
   if (resolved === "openclaw") {
-    await createOpenClawWorkboardCard({ ...input, title });
+    await createOpenClawWorkboardCard(routedInput);
+    if (shouldAutoDispatch) await dispatchWorkboard({ provider: "openclaw", boardId: input.boardId });
     return listWorkboard({ provider: "openclaw", boardId: input.boardId });
+  }
+
+  if (resolved === "google_tasks") {
+    await createGoogleTasksWorkboardCard(routedInput);
+    return listWorkboard({ provider: "google_tasks", boardId: input.boardId });
   }
 
   const card = createLocalWorkboardCard({
     title,
     body: input.body,
-    status: normalizeWorkboardStatus(input.status || "triage", "local"),
-    assignee: input.assignee,
+    status: normalizeWorkboardStatus(routedInput.status || "todo"),
+    assignee: workboardAssigneeName(input),
+    assigneeId: input.assigneeId,
+    assigneeName: input.assigneeName,
+    assigneeType: input.assigneeType,
     priority: normalizeWorkboardPriority(input.priority),
     labels: normalizeLabels(input.labels),
     tenant: input.tenant,
@@ -1563,24 +3758,46 @@ async function createWorkboardCard(input = {}) {
 
 async function updateWorkboardCard(input = {}) {
   const provider = normalizeWorkboardProvider(input.provider);
+  const providers = await detectWorkboardProviders();
+  const resolved = resolveWorkboardProvider(provider, providers, input.preferredAgentType);
   const cardId = String(input.cardId || "").trim();
   if (!cardId) throw new Error("Workboard card id is required.");
+  const shouldAutoDispatch = input.autoDispatch !== false && hasWorkboardAssignee(input);
+  const routedInput = {
+    ...input,
+    status: shouldAutoDispatch ? "in_progress" : input.status,
+  };
 
-  if (provider === "hermes") {
-    await updateHermesWorkboardCard(input);
+  if (resolved === "hermes") {
+    await updateHermesWorkboardCard(routedInput);
+    if (shouldAutoDispatch) await dispatchWorkboard({ provider: "hermes", boardId: input.boardId });
     return listWorkboard({ provider: "hermes", boardId: input.boardId });
   }
 
-  if (provider === "openclaw") {
-    throw new Error("OpenClaw Workboard card mutation is not wired yet. Use dispatch or switch to the Link local board for manual tracking.");
+  if (resolved === "openclaw") {
+    await updateOpenClawWorkboardCard(routedInput);
+    if (shouldAutoDispatch) await dispatchWorkboard({ provider: "openclaw", boardId: input.boardId });
+    return listWorkboard({ provider: "openclaw", boardId: input.boardId });
+  }
+
+  if (resolved === "google_tasks") {
+    await updateGoogleTasksWorkboardCard(routedInput);
+    return listWorkboard({ provider: "google_tasks", boardId: input.boardId });
   }
 
   workboardCards = workboardCards.map((card) =>
     card.id === cardId
       ? {
           ...card,
-          status: input.status ? normalizeWorkboardStatus(input.status, "local") : card.status,
-          assignee: input.assignee ?? card.assignee,
+          title: input.title !== undefined ? String(input.title) : card.title,
+          body: input.body !== undefined ? input.body : card.body,
+          status: routedInput.status ? normalizeWorkboardStatus(routedInput.status) : normalizeWorkboardStatus(card.status),
+          assignee: input.assignee !== undefined || input.assigneeName !== undefined ? workboardAssigneeName(input) : card.assignee,
+          assigneeId: input.assigneeId !== undefined ? input.assigneeId : card.assigneeId,
+          assigneeName: input.assigneeName !== undefined ? input.assigneeName : card.assigneeName,
+          assigneeType: input.assigneeType !== undefined ? input.assigneeType : card.assigneeType,
+          priority: input.priority !== undefined ? normalizeWorkboardPriority(input.priority) : card.priority,
+          labels: input.labels !== undefined ? normalizeLabels(input.labels) : card.labels,
           comments: input.comment ? [...(card.comments || []), String(input.comment)] : card.comments,
           updatedAt: new Date().toISOString(),
         }
@@ -1591,7 +3808,8 @@ async function updateWorkboardCard(input = {}) {
 }
 
 async function dispatchWorkboard(input = {}) {
-  const provider = normalizeWorkboardProvider(input.provider);
+  const providers = await detectWorkboardProviders();
+  const provider = resolveWorkboardProvider(normalizeWorkboardProvider(input.provider), providers, input.preferredAgentType);
   if (provider === "hermes") {
     await runHermesKanban(input.boardId, ["dispatch", "--json"]);
     return listWorkboard({ provider: "hermes", boardId: input.boardId });
@@ -1600,23 +3818,281 @@ async function dispatchWorkboard(input = {}) {
     await runCli("openclaw", ["workboard", "dispatch"], 20000);
     return listWorkboard({ provider: "openclaw", boardId: input.boardId });
   }
+  if (provider === "google_tasks") {
+    return listWorkboard({ provider: "google_tasks", boardId: input.boardId });
+  }
 
-  workboardCards = workboardCards.map((card) =>
-    card.status === "ready"
-      ? {
-          ...card,
-          status: "running",
-          diagnostics: [...(card.diagnostics || []), "Link local dispatch marked this card running. No external worker was started."],
-          updatedAt: new Date().toISOString(),
-        }
-      : card,
-  );
+  workboardCards = workboardCards.map((card) => {
+    const normalizedStatus = normalizeWorkboardStatus(card.status);
+    if (normalizedStatus === "todo" && hasWorkboardAssignee(card)) {
+      return {
+        ...card,
+        status: "in_progress",
+        diagnostics: [...(card.diagnostics || []), "Link local dispatch marked this card in progress. No external worker was started."],
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return normalizedStatus === card.status ? card : { ...card, status: normalizedStatus, updatedAt: new Date().toISOString() };
+  });
   await saveDesktopState();
   return listWorkboard({ provider: "local", boardId: input.boardId });
 }
 
+function workboardTaskSessionKey(provider, boardId, cardId) {
+  return `${provider || "local"}:${boardId || "local"}:${cardId}`;
+}
+
+function workboardTaskSessionForCard(card) {
+  if (!card?.id) return null;
+  const key = workboardTaskSessionKey(card.provider, card.boardId, card.id);
+  return workboardTaskSessions.find((taskSession) => taskSession.key === key) || null;
+}
+
+function decorateWorkboardCardWithTaskSession(card) {
+  const taskSession = workboardTaskSessionForCard(card);
+  if (!taskSession) return card;
+  return {
+    ...card,
+    linkedSessionId: card.linkedSessionId || taskSession.sessionId,
+    linkedTaskId: card.linkedTaskId || taskSession.remoteTaskId,
+  };
+}
+
+function decorateWorkboardSnapshotWithTaskSessions(snapshot) {
+  return {
+    ...snapshot,
+    cards: Array.isArray(snapshot.cards) ? snapshot.cards.map(decorateWorkboardCardWithTaskSession) : [],
+  };
+}
+
+async function findWorkboardCardForTask(input = {}) {
+  const provider = normalizeWorkboardProvider(input.provider);
+  const boardId = input.boardId || "local";
+  const cardId = String(input.cardId || "").trim();
+  if (!cardId) throw new Error("Workboard card id is required.");
+
+  if (provider === "local") {
+    const card = workboardCards.find((item) => item.id === cardId);
+    if (card) return decorateWorkboardCardWithTaskSession({ ...card, status: normalizeWorkboardStatus(card.status) });
+  }
+
+  const snapshot = await listWorkboard({ provider, boardId, preferredAgentType: input.preferredAgentType });
+  const card = snapshot.cards.find((item) => item.id === cardId);
+  if (!card) throw new Error("Workboard task was not found.");
+  return card;
+}
+
+function resolveWorkboardTaskAgent(input = {}, card = {}) {
+  const rawAgentType = String(input.agentType || card.assigneeType || input.preferredAgentType || "").toLowerCase();
+  const agentId = String(input.agentId || card.assigneeId || "").trim();
+  const agentName = String(input.agentName || card.assigneeName || card.assignee || agentId || "Link").trim();
+  const agentSource = input.agentSource
+    || (rawAgentType.includes("a2a") ? "a2a-discovery" : agentId.startsWith("self:") ? "link" : "agent-control-plane");
+  const agentType = rawAgentType.includes("hermes") ? "hermes" : rawAgentType.includes("a2a") ? "a2a" : "openclaw";
+  return {
+    agentId,
+    agentName,
+    agentSource,
+    agentType,
+  };
+}
+
+function workboardTaskContextInstruction(card, taskSession) {
+  return [
+    "Taskbox session context.",
+    `Task card id: ${card.id}.`,
+    `Task status: ${formatWorkboardStatusForPrompt(card.status)}.`,
+    `Task title: ${card.title}.`,
+    card.body ? `Task details: ${card.body}.` : "",
+    card.labels?.length ? `Task labels: ${card.labels.join(", ")}.` : "",
+    `Linked session id: ${taskSession.sessionId}.`,
+    "No work has been submitted to the agent until a user sends a message or starts the task.",
+  ].filter(Boolean).join(" ");
+}
+
+function formatWorkboardStatusForPrompt(status) {
+  const normalized = normalizeWorkboardStatus(status);
+  if (normalized === "todo") return "To Do";
+  if (normalized === "in_progress") return "In Progress";
+  if (normalized === "needs_review") return "Needs Review";
+  if (normalized === "done") return "Done";
+  return normalized;
+}
+
+function buildWorkboardTaskDispatchPrompt(card) {
+  return [
+    "Taskbox task started. Work on this exact task and keep the Taskbox status model in sync.",
+    "",
+    `Task ID: ${card.id}`,
+    `Board: ${card.provider}/${card.boardId}`,
+    `Title: ${card.title}`,
+    card.body ? `Details: ${card.body}` : "",
+    card.labels?.length ? `Labels: ${card.labels.join(", ")}` : "",
+    card.priority ? `Priority: ${card.priority}` : "",
+    "",
+    "When your final response or artifacts are ready, move this task to Needs Review, not Done. If you are blocked, explain the blocker in this session.",
+  ].filter(Boolean).join("\n");
+}
+
+function updateLocalWorkboardTaskSessionLink(card, sessionId, status) {
+  if (card.provider !== "local") return;
+  const timestamp = new Date().toISOString();
+  workboardCards = workboardCards.map((item) =>
+    item.id === card.id
+      ? {
+          ...item,
+          linkedSessionId: sessionId,
+          status: status ? normalizeWorkboardStatus(status) : normalizeWorkboardStatus(item.status),
+          updatedAt: timestamp,
+        }
+      : item,
+  );
+}
+
+async function ensureWorkboardTaskSession(input = {}) {
+  const card = await findWorkboardCardForTask(input);
+  const provider = card.provider || normalizeWorkboardProvider(input.provider);
+  const boardId = card.boardId || input.boardId || "local";
+  const key = workboardTaskSessionKey(provider, boardId, card.id);
+  const agent = resolveWorkboardTaskAgent(input, card);
+  const now = new Date().toISOString();
+  let taskSession = workboardTaskSessions.find((item) => item.key === key);
+  let sessionItem = taskSession?.sessionId ? chatSessions.find((item) => item.id === taskSession.sessionId) : null;
+
+  if (!sessionItem) {
+    sessionItem = await createChatSession({
+      workspaceId: input.workspaceId || card.workspace || "workspace-link",
+      agentId: agent.agentSource === "link" ? undefined : agent.agentId,
+      agentName: agent.agentSource === "link" ? agent.agentName : agent.agentName,
+      agentSource: agent.agentSource,
+      agentType: agent.agentType,
+      approvalMode: input.approvalMode || "auto",
+      modelMode: input.modelMode || (agent.agentSource === "a2a-discovery" ? "a2a-discovery" : agent.agentSource === "agent-control-plane" ? "agent-control-plane" : "auto-agent-runtime"),
+      contextScope: input.contextScope || "task",
+      title: `Task: ${card.title}`,
+    });
+  }
+
+  if (!taskSession) {
+    taskSession = {
+      key,
+      provider,
+      boardId,
+      cardId: card.id,
+      sessionId: sessionItem.id,
+      agentId: agent.agentId,
+      agentName: agent.agentName,
+      agentSource: agent.agentSource,
+      agentType: agent.agentType,
+      status: "idle",
+      createdAt: now,
+      updatedAt: now,
+    };
+    workboardTaskSessions = [taskSession, ...workboardTaskSessions];
+  } else {
+    taskSession.agentId = agent.agentId || taskSession.agentId;
+    taskSession.agentName = agent.agentName || taskSession.agentName;
+    taskSession.agentSource = agent.agentSource || taskSession.agentSource;
+    taskSession.agentType = agent.agentType || taskSession.agentType;
+    taskSession.updatedAt = now;
+  }
+
+  sessionItem.task = {
+    provider,
+    boardId,
+    cardId: card.id,
+    status: taskSession.status,
+  };
+  const existingTaskContext = sessionItem.messages.some((message) => message.role === "system" && message.content.includes(`Task card id: ${card.id}.`));
+  if (!existingTaskContext) {
+    sessionItem.messages = [
+      ...sessionItem.messages,
+      createMessage("system", workboardTaskContextInstruction(card, taskSession)),
+    ];
+  }
+  sessionItem.updatedAt = now;
+
+  updateLocalWorkboardTaskSessionLink(card, sessionItem.id);
+  await saveDesktopState();
+
+  const snapshot = await listWorkboard({ provider, boardId, preferredAgentType: input.preferredAgentType });
+  return {
+    card: snapshot.cards.find((item) => item.id === card.id),
+    session: sessionItem,
+    taskSession,
+    snapshot,
+  };
+}
+
+async function dispatchWorkboardTask(input = {}) {
+  const ensured = await ensureWorkboardTaskSession(input);
+  const card = ensured.card || await findWorkboardCardForTask(input);
+  const taskSession = ensured.taskSession;
+  const sessionItem = ensured.session;
+  if (taskSession.dispatchedAt && !input.force) {
+    return {
+      ...ensured,
+      dispatched: false,
+    };
+  }
+
+  const prompt = String(input.message || "").trim() || buildWorkboardTaskDispatchPrompt(card);
+  await updateWorkboardCard({
+    provider: card.provider,
+    boardId: card.boardId,
+    preferredAgentType: input.preferredAgentType,
+    cardId: card.id,
+    status: "in_progress",
+    autoDispatch: false,
+    comment: "Started from Telnyx Link task session.",
+  });
+
+  const routedSession = await sendChatMessage({
+    sessionId: sessionItem.id,
+    workspaceId: sessionItem.workspaceId || input.workspaceId || card.workspace || "workspace-link",
+    content: prompt,
+    systemInstruction: workboardTaskContextInstruction(card, taskSession),
+    agentId: taskSession.agentSource === "link" ? undefined : taskSession.agentId,
+    agentName: taskSession.agentName,
+    agentSource: taskSession.agentSource,
+    agentType: taskSession.agentType,
+    approvalMode: input.approvalMode || "auto",
+    modelMode: input.modelMode || "agent-control-plane",
+    contextScope: input.contextScope || "task",
+  });
+
+  const now = new Date().toISOString();
+  taskSession.status = "running";
+  taskSession.dispatchedAt = now;
+  taskSession.lastDispatchPrompt = prompt;
+  taskSession.updatedAt = now;
+  if (routedSession.a2a?.taskId) taskSession.remoteTaskId = routedSession.a2a.taskId;
+  if (routedSession.a2a?.contextId) taskSession.remoteContextId = routedSession.a2a.contextId;
+  routedSession.task = {
+    provider: card.provider,
+    boardId: card.boardId,
+    cardId: card.id,
+    status: "running",
+  };
+  updateLocalWorkboardTaskSessionLink(card, routedSession.id, "in_progress");
+  await saveDesktopState();
+
+  const snapshot = await listWorkboard({ provider: card.provider, boardId: card.boardId, preferredAgentType: input.preferredAgentType });
+  return {
+    card: snapshot.cards.find((item) => item.id === card.id),
+    session: routedSession,
+    taskSession,
+    snapshot,
+    dispatched: true,
+  };
+}
+
 async function detectWorkboardProviders() {
-  const [hermes, openclaw] = await Promise.all([commandAvailable("hermes"), commandAvailable("openclaw")]);
+  const [hermes, openclaw, googleTasks] = await Promise.all([
+    commandAvailable("hermes"),
+    commandAvailable("openclaw"),
+    googleTasksConnectorReady().catch(() => false),
+  ]);
   return [
     {
       id: "hermes",
@@ -1631,6 +4107,13 @@ async function detectWorkboardProviders() {
       available: openclaw,
       mode: openclaw ? "native" : "unavailable",
       message: openclaw ? "OpenClaw CLI detected. Link will use OpenClaw Workboard commands." : "OpenClaw CLI was not found on PATH.",
+    },
+    {
+      id: "google_tasks",
+      label: workboardProviderLabels.google_tasks,
+      available: googleTasks,
+      mode: googleTasks ? "native" : "unavailable",
+      message: googleTasks ? "Google Tasks is available through gog. Link can sync, create, update, and complete tasks." : "Google Tasks through gog is not connected yet.",
     },
     {
       id: "local",
@@ -1651,20 +4134,64 @@ async function commandAvailable(command) {
   }
 }
 
-function resolveWorkboardProvider(requested, providers) {
+function resolveWorkboardProvider(requested, providers, preferredAgentType) {
   if (requested !== "auto") return requested;
-  if (providers.find((item) => item.id === "hermes")?.available) return "hermes";
+  const preferred = normalizePreferredAgentType(preferredAgentType);
+  if (preferred === "hermes" && providers.find((item) => item.id === "hermes")?.available) return "hermes";
   if (providers.find((item) => item.id === "openclaw")?.available) return "openclaw";
+  if (providers.find((item) => item.id === "google_tasks")?.available) return "google_tasks";
   return "local";
 }
 
 function normalizeWorkboardProvider(provider) {
-  return ["auto", "hermes", "openclaw", "local"].includes(provider) ? provider : "auto";
+  return ["auto", "hermes", "openclaw", "google_tasks", "local"].includes(provider) ? provider : "auto";
 }
 
-function normalizeWorkboardStatus(status, provider) {
-  const columns = workboardColumnsByProvider[provider] || workboardColumnsByProvider.local;
-  return columns.includes(status) ? status : columns[0];
+function normalizePreferredAgentType(agentType) {
+  return agentType === "hermes" ? "hermes" : "openclaw";
+}
+
+function hasWorkboardAssignee(input = {}) {
+  return Boolean(workboardAssigneeValue(input));
+}
+
+function workboardAssigneeValue(input = {}) {
+  return input.assigneeId || input.assigneeName || input.assignee;
+}
+
+function workboardAssigneeName(input = {}) {
+  return input.assigneeName || input.assignee || input.assigneeId;
+}
+
+function normalizeWorkboardStatus(status) {
+  const raw = String(status || "").trim().toLowerCase();
+  const underscored = raw.replace(/[-\s]+/g, "_");
+  return workboardStatusAliases[raw] || workboardStatusAliases[underscored] || "todo";
+}
+
+function normalizeProviderWorkboardStatus(status, provider) {
+  const raw = String(status || "").trim().toLowerCase().replace(/[-\s]+/g, "_");
+  if (provider === "hermes" && ["done", "complete", "completed"].includes(raw)) return "needs_review";
+  if ((provider === "hermes" || provider === "openclaw") && ["archived", "closed"].includes(raw)) return "done";
+  return normalizeWorkboardStatus(status);
+}
+
+function workboardProviderCommandStatus(status, provider) {
+  const normalized = normalizeWorkboardStatus(status);
+  if (provider === "openclaw") {
+    if (normalized === "needs_review") return "review";
+    if (normalized === "in_progress") return "running";
+  }
+  if (provider === "hermes") {
+    if (normalized === "needs_review") return "done";
+    if (normalized === "in_progress") return "ready";
+  }
+  return normalized;
+}
+
+function workboardStatusGuideInstruction() {
+  const stages = workboardStatusArchitecture.map((stage) => `${stage.label}: ${stage.guidance}`).join(" ");
+  return `Task board status architecture: ${stages} When actively operating on a Taskbox/workboard card, Agents must move work to Needs Review, not Done, when finished and ready for human review. Do not mention moving a task to Needs Review unless a real Taskbox/workboard card was created or updated.`;
 }
 
 function normalizeWorkboardPriority(priority) {
@@ -1706,25 +4233,33 @@ async function listHermesWorkboard(boardId, providers) {
 async function createHermesWorkboardCard(input) {
   const args = ["create", input.title, "--json"];
   if (input.body) args.push("--body", String(input.body));
-  if (input.assignee) args.push("--assignee", String(input.assignee));
+  if (hasWorkboardAssignee(input)) args.push("--assignee", String(workboardAssigneeValue(input)));
   if (input.tenant) args.push("--tenant", String(input.tenant));
   if (input.workspace) args.push("--workspace", String(input.workspace));
   if (input.priority && typeof input.priority === "number") args.push("--priority", String(input.priority));
-  if (input.status === "triage") args.push("--triage");
   await runHermesKanban(input.boardId, args);
 }
 
 async function updateHermesWorkboardCard(input) {
   const cardId = String(input.cardId || "").trim();
-  if (input.assignee !== undefined) await runHermesKanban(input.boardId, ["assign", cardId, input.assignee ? String(input.assignee) : "none"]);
+  if (input.assigneeId !== undefined || input.assigneeName !== undefined || input.assignee !== undefined) {
+    await runHermesKanban(input.boardId, ["assign", cardId, hasWorkboardAssignee(input) ? String(workboardAssigneeValue(input)) : "none"]);
+  }
   if (input.comment) await runHermesKanban(input.boardId, ["comment", cardId, String(input.comment), "--author", "Telnyx Link"]);
+  if (input.title !== undefined || input.body !== undefined || input.priority !== undefined || input.labels !== undefined) {
+    const editArgs = ["edit", cardId];
+    if (input.title !== undefined) editArgs.push("--title", String(input.title));
+    if (input.body !== undefined) editArgs.push("--body", String(input.body || ""));
+    if (input.priority !== undefined) editArgs.push("--priority", String(input.priority));
+    if (input.labels !== undefined) editArgs.push("--labels", normalizeLabels(input.labels).join(","));
+    await runHermesKanban(input.boardId, editArgs).catch(() => null);
+  }
   if (!input.status) return;
 
-  const status = normalizeWorkboardStatus(input.status, "hermes");
-  if (status === "ready") await runHermesKanban(input.boardId, ["promote", cardId]);
-  if (status === "done") await runHermesKanban(input.boardId, ["complete", cardId, "--result", "Marked done from Telnyx Link."]);
-  if (status === "blocked") await runHermesKanban(input.boardId, ["block", cardId, input.comment || "Blocked from Telnyx Link."]);
-  if (status === "archived") await runHermesKanban(input.boardId, ["archive", cardId]);
+  const status = normalizeWorkboardStatus(input.status);
+  if (status === "in_progress") await runHermesKanban(input.boardId, ["promote", cardId]);
+  if (status === "needs_review") await runHermesKanban(input.boardId, ["complete", cardId, "--result", "Final response is ready for human review from Telnyx Link."]);
+  if (status === "done") await runHermesKanban(input.boardId, ["archive", cardId]);
   if (status === "todo") await runHermesKanban(input.boardId, ["unblock", cardId]).catch(() => null);
 }
 
@@ -1737,7 +4272,8 @@ async function runHermesKanban(boardId, args) {
 
 function normalizeHermesWorkboardCard(task, boardId) {
   const id = String(task.id || task.task_id || task.taskId || crypto.randomUUID());
-  const status = normalizeWorkboardStatus(task.status, "hermes");
+  const status = normalizeProviderWorkboardStatus(task.status, "hermes");
+  const assignee = task.assignee || task.profile || task.claim_owner;
   return {
     id,
     title: String(task.title || task.name || id),
@@ -1745,7 +4281,10 @@ function normalizeHermesWorkboardCard(task, boardId) {
     status,
     priority: task.priority ?? "normal",
     labels: normalizeLabels(task.labels || task.skills),
-    assignee: task.assignee || task.profile || task.claim_owner,
+    assignee,
+    assigneeId: task.assignee_id || task.assigneeId || task.agent_id || task.agentId || assignee,
+    assigneeName: task.assignee_name || task.assigneeName || task.profile || assignee,
+    assigneeType: task.assignee_type || task.assigneeType || "hermes",
     provider: "hermes",
     boardId,
     tenant: task.tenant,
@@ -1794,23 +4333,67 @@ async function listOpenClawWorkboard(boardId, providers) {
 }
 
 async function createOpenClawWorkboardCard(input) {
-  const args = ["workboard", "create", input.title];
+  const args = ["workboard", "create", input.title, "--json"];
+  if (input.body) args.push("--body", String(input.body));
+  if (hasWorkboardAssignee(input)) args.push("--assignee", String(workboardAssigneeValue(input)));
   if (input.priority) args.push("--priority", String(input.priority));
   const labels = normalizeLabels(input.labels);
   if (labels.length > 0) args.push("--labels", labels.join(","));
+  if (input.status) args.push("--status", workboardProviderCommandStatus(input.status, "openclaw"));
   await runCli("openclaw", args, 20000);
+}
+
+async function updateOpenClawWorkboardCard(input) {
+  const cardId = String(input.cardId || "").trim();
+  const args = ["workboard", "update", cardId, "--json"];
+  if (input.title !== undefined) args.push("--title", String(input.title));
+  if (input.body !== undefined) args.push("--body", String(input.body || ""));
+  if (input.priority !== undefined) args.push("--priority", String(input.priority));
+  if (input.labels !== undefined) args.push("--labels", normalizeLabels(input.labels).join(","));
+  if (input.assigneeId !== undefined || input.assigneeName !== undefined || input.assignee !== undefined) {
+    args.push("--assignee", hasWorkboardAssignee(input) ? String(workboardAssigneeValue(input)) : "none");
+  }
+  if (input.status) args.push("--status", workboardProviderCommandStatus(input.status, "openclaw"));
+  if (input.comment) args.push("--comment", String(input.comment));
+
+  try {
+    await runCli("openclaw", args, 20000);
+    return;
+  } catch (error) {
+    const fallback = [];
+    if (input.title !== undefined || input.body !== undefined || input.priority !== undefined || input.labels !== undefined) {
+      const editArgs = ["workboard", "edit", cardId];
+      if (input.title !== undefined) editArgs.push("--title", String(input.title));
+      if (input.body !== undefined) editArgs.push("--body", String(input.body || ""));
+      if (input.priority !== undefined) editArgs.push("--priority", String(input.priority));
+      if (input.labels !== undefined) editArgs.push("--labels", normalizeLabels(input.labels).join(","));
+      fallback.push(() => runCli("openclaw", editArgs, 20000));
+    }
+    if (input.assigneeId !== undefined || input.assigneeName !== undefined || input.assignee !== undefined) {
+      fallback.push(() => runCli("openclaw", ["workboard", "assign", cardId, hasWorkboardAssignee(input) ? String(workboardAssigneeValue(input)) : "none"], 20000));
+    }
+    if (input.status) fallback.push(() => runCli("openclaw", ["workboard", "move", cardId, workboardProviderCommandStatus(input.status, "openclaw")], 20000));
+    if (input.comment) fallback.push(() => runCli("openclaw", ["workboard", "comment", cardId, String(input.comment)], 20000));
+    if (fallback.length === 0) throw error;
+    for (const command of fallback) await command();
+  }
 }
 
 function normalizeOpenClawWorkboardCard(card, boardId) {
   const id = String(card.id || card.card_id || card.cardId || crypto.randomUUID());
+  const assigneeId = card.assignee_id || card.assigneeId || card.agent_id || card.agentId || card.claim_owner;
+  const assigneeName = card.assignee_name || card.assigneeName || card.agent_name || card.agentName || card.assignee || assigneeId;
   return {
     id,
     title: String(card.title || card.name || id),
     body: card.notes || card.body || card.description,
-    status: normalizeWorkboardStatus(card.status, "openclaw"),
+    status: normalizeProviderWorkboardStatus(card.status, "openclaw"),
     priority: card.priority || "normal",
     labels: normalizeLabels(card.labels),
-    assignee: card.agent_id || card.agentId || card.assignee || card.claim_owner,
+    assignee: assigneeName || assigneeId,
+    assigneeId,
+    assigneeName,
+    assigneeType: card.assignee_type || card.assigneeType || card.agent_type || card.agentType || "openclaw",
     provider: "openclaw",
     boardId,
     sourceUrl: card.source_url || card.sourceUrl,
@@ -1827,16 +4410,233 @@ function normalizeOpenClawWorkboardCard(card, boardId) {
   };
 }
 
+const googleTasksGogExactCommandAllowlist = Object.freeze([
+  "tasks.lists.list",
+  "tasks.list",
+  "tasks.get",
+  "tasks.add",
+  "tasks.update",
+  "tasks.done",
+  "tasks.undo",
+]);
+
+async function connectGoogleTasksWithGog() {
+  const existingConnectionId = credentialValue(googleTasksAgentConnectionField);
+  const account = googleWorkspaceAccountEmail();
+  const connectionId = existingConnectionId || `google-tasks-${crypto.randomUUID()}`;
+  await ensureGoogleTasksGogAuthorized(account);
+  await verifyGoogleTasksAccess();
+  auditLogger.record({
+    actorId: "desktop_user",
+    surface: "desktop",
+    eventType: "google_tasks.connected",
+    action: "connect_google_tasks_gog",
+    target: "google-tasks",
+    metadata: {
+      account,
+      connectionField: googleTasksAgentConnectionField,
+      commands: googleTasksGogExactCommandAllowlist,
+    },
+  });
+  await saveSecureCredential(googleTasksAgentConnectionField, connectionId);
+  await saveSecureCredential(googleTasksVerifiedField, new Date().toISOString());
+  connectorOverrides = {
+    ...connectorOverrides,
+    "google-tasks": "connected",
+  };
+  await saveDesktopState();
+  return {
+    status: "connected",
+    connectionId,
+    credentials: await listCredentials(),
+    connectors: await listConnectors(),
+  };
+}
+
+async function ensureGoogleTasksGogAuthorized(account) {
+  const gog = await resolveGogCommand();
+  await ensureGoogleWorkspaceGogFileKeyring(account, gog);
+  await execFileAsync(gog, [
+    "auth",
+    "add",
+    account,
+    "--services",
+    "tasks",
+    "--force-consent",
+  ], {
+    timeout: 10 * 60_000,
+    maxBuffer: 8 * 1024 * 1024,
+    env: googleWorkspaceSetupEnv(account, gog),
+  });
+  await rememberGoogleWorkspaceGogEnvironment(account);
+}
+
+async function verifyGoogleTasksAccess() {
+  await runSafeGoogleTasksGogJson(["tasks", "lists", "list"], "Google Tasks lists", { read: true });
+}
+
+async function listGoogleTasksWorkboard(boardId, providers) {
+  const boardsPayload = await runSafeGoogleTasksGogJson(["tasks", "lists", "list"], "Google Tasks lists", { read: true });
+  const boards = normalizeGoogleTaskLists(boardsPayload);
+  const selectedBoard = resolveGoogleTaskListId(boardId, boards);
+  if (!selectedBoard) {
+    return {
+      provider: "google_tasks",
+      boardId: "primary",
+      providers,
+      boards,
+      columns: workboardColumnsByProvider.google_tasks,
+      cards: [],
+      assignees: [],
+      stats: [],
+      message: "Google Tasks is connected, but no task lists were returned.",
+    };
+  }
+  const tasksPayload = await runSafeGoogleTasksGogJson(
+    ["tasks", "list", selectedBoard, "--max", "100", "--show-completed", "--show-hidden"],
+    "Google Tasks",
+    { read: true },
+  );
+  const cards = normalizeArrayPayload(tasksPayload).map((task) => normalizeGoogleTasksWorkboardCard(task, selectedBoard));
+  return {
+    provider: "google_tasks",
+    boardId: selectedBoard,
+    providers,
+    boards,
+    columns: workboardColumnsByProvider.google_tasks,
+    cards,
+    assignees: [...new Set(cards.map((card) => card.assignee).filter(Boolean))],
+    stats: normalizeWorkboardStats(null, cards),
+    message: "Google Tasks is active. Link is syncing tasks through gog with list/add/update/complete commands only.",
+  };
+}
+
+async function createGoogleTasksWorkboardCard(input) {
+  const boardId = await resolveGoogleTasksBoardForMutation(input.boardId);
+  const args = ["tasks", "add", boardId, "--title", String(input.title)];
+  const notes = googleTasksNotesFromWorkboardInput(input);
+  if (notes) args.push("--notes", notes);
+  await runSafeGoogleTasksGogJson(args, "Google Tasks create", { read: false });
+}
+
+async function updateGoogleTasksWorkboardCard(input) {
+  const boardId = await resolveGoogleTasksBoardForMutation(input.boardId);
+  const cardId = String(input.cardId || "").trim();
+  if (!cardId) throw new Error("Google Tasks task id is required.");
+  if (input.title !== undefined || input.body !== undefined || input.labels !== undefined || input.priority !== undefined || input.status !== undefined || input.comment) {
+    const args = ["tasks", "update", boardId, cardId];
+    if (input.title !== undefined) args.push("--title", String(input.title));
+    if (input.body !== undefined || input.labels !== undefined || input.priority !== undefined || input.comment) args.push("--notes", googleTasksNotesFromWorkboardInput(input));
+    if (input.status) args.push("--status", normalizeWorkboardStatus(input.status) === "done" ? "completed" : "needsAction");
+    await runSafeGoogleTasksGogJson(args, "Google Tasks update", { read: false });
+  }
+}
+
+async function resolveGoogleTasksBoardForMutation(boardId) {
+  if (boardId && boardId !== "unavailable") return String(boardId);
+  const boardsPayload = await runSafeGoogleTasksGogJson(["tasks", "lists", "list"], "Google Tasks lists", { read: true });
+  const selectedBoard = resolveGoogleTaskListId(boardId, normalizeGoogleTaskLists(boardsPayload));
+  if (!selectedBoard) throw new Error("Google Tasks did not return a task list to use.");
+  return selectedBoard;
+}
+
+function googleTasksNotesFromWorkboardInput(input = {}) {
+  const parts = [];
+  if (input.body !== undefined && String(input.body).trim()) parts.push(String(input.body).trim());
+  const labels = normalizeLabels(input.labels);
+  if (labels.length > 0) parts.push(`Link labels: ${labels.join(", ")}`);
+  if (input.priority !== undefined) parts.push(`Link priority: ${String(input.priority)}`);
+  if (input.comment) parts.push(`Link comment: ${String(input.comment)}`);
+  return parts.join("\n\n");
+}
+
+function normalizeGoogleTaskLists(payload) {
+  const lists = normalizeArrayPayload(payload)
+    .map((item) => ({
+      id: String(item.id || item.tasklistId || item.taskListId || item.title || "").trim(),
+      name: String(item.title || item.name || item.id || "Google Tasks").trim(),
+      description: item.updated ? `Updated ${item.updated}` : "Google Tasks list synced through gog.",
+      provider: "google_tasks",
+    }))
+    .filter((item) => item.id);
+  return lists.length > 0 ? lists : [];
+}
+
+function resolveGoogleTaskListId(boardId, boards) {
+  const requested = String(boardId || "").trim();
+  if (requested && requested !== "unavailable") return requested;
+  return boards.find((board) => /my tasks/i.test(board.name))?.id || boards[0]?.id || "";
+}
+
+function normalizeGoogleTasksWorkboardCard(task, boardId) {
+  const id = String(task.id || task.taskId || crypto.randomUUID());
+  const status = String(task.status || "").toLowerCase() === "completed" || task.completed ? "done" : "todo";
+  return {
+    id,
+    title: String(task.title || id),
+    body: task.notes || task.body || "",
+    status,
+    priority: "normal",
+    labels: ["google-tasks"],
+    provider: "google_tasks",
+    boardId,
+    sourceUrl: task.selfLink || task.webViewLink || "https://tasks.google.com/",
+    linkedTaskId: id,
+    proof: task.due ? [`Due ${task.due}`] : [],
+    artifacts: [],
+    comments: [],
+    diagnostics: [],
+    createdAt: task.created || task.createdAt || task.updated || new Date().toISOString(),
+    updatedAt: task.updated || task.updatedAt || task.completed || new Date().toISOString(),
+    raw: task,
+  };
+}
+
+async function runSafeGoogleTasksGogJson(commandArgs, label, { read = true } = {}) {
+  assertSafeGoogleTasksGogArgs(commandArgs);
+  const account = googleWorkspaceAccountEmail();
+  return runGogJson([
+    `--enable-commands-exact=${googleTasksGogExactCommandAllowlist.join(",")}`,
+    "--json",
+    ...(read ? ["--wrap-untrusted"] : []),
+    ...commandArgs.map(String),
+  ], label, account);
+}
+
+function assertSafeGoogleTasksGogArgs(commandArgs) {
+  const commandPath = googleTasksGogCommandPath(commandArgs);
+  if (!googleTasksGogExactCommandAllowlist.includes(commandPath)) {
+    throw new Error(`Blocked unsafe Google Tasks command: ${commandPath || commandArgs.join(" ")}`);
+  }
+}
+
+function googleTasksGogCommandPath(commandArgs = []) {
+  const args = commandArgs.map((arg) => String(arg).trim()).filter(Boolean);
+  if (args[0] !== "tasks") return "";
+  if (args[1] === "lists" && args[2] === "list") return "tasks.lists.list";
+  if (["list", "get", "add", "update", "done", "undo"].includes(args[1])) return `tasks.${args[1]}`;
+  return "";
+}
+
+function googleTasksUnavailableMessage(error) {
+  const detail = errorMessage(error);
+  if (/aborted|AbortError|timeout|ETIMEDOUT|ECONNRESET|ERR_STREAM_PREMATURE_CLOSE/i.test(detail)) {
+    return "Google Tasks sync was interrupted before it completed. Link kept Taskbox available; reconnect Google Tasks or retry sync.";
+  }
+  return detail;
+}
+
 function localWorkboardSnapshot(providers, boardId = "local") {
+  const cards = workboardCards.map((card) => ({ ...card, status: normalizeWorkboardStatus(card.status) }));
   return {
     provider: "local",
     boardId: boardId || "local",
     providers,
     boards: [{ id: "local", name: "Link local board", description: "Link-owned fallback board for manual monitoring.", provider: "local" }],
     columns: workboardColumnsByProvider.local,
-    cards: workboardCards,
-    assignees: [...new Set(workboardCards.map((card) => card.assignee).filter(Boolean))],
-    stats: normalizeWorkboardStats(null, workboardCards),
+    cards,
+    assignees: [...new Set(cards.map((card) => card.assignee).filter(Boolean))],
+    stats: normalizeWorkboardStats(null, cards),
     message: "Link local board is active. Cards are stored in Link state and do not require Hermes or OpenClaw.",
   };
 }
@@ -1865,11 +4665,17 @@ function createLocalWorkboardCard(input) {
     priority: input.priority,
     labels: input.labels || [],
     assignee: input.assignee,
+    assigneeId: input.assigneeId,
+    assigneeName: input.assigneeName,
+    assigneeType: input.assigneeType,
     provider: "local",
     boardId: "local",
     tenant: input.tenant,
     workspace: input.workspace,
     sourceUrl: input.sourceUrl,
+    linkedSessionId: input.linkedSessionId,
+    linkedRunId: input.linkedRunId,
+    linkedTaskId: input.linkedTaskId,
     proof: [],
     artifacts: [],
     comments: [],
@@ -1883,7 +4689,7 @@ function normalizeArrayPayload(payload) {
   if (!payload) return [];
   if (typeof payload === "string") return normalizeArrayPayload(parseJsonOutput(payload));
   if (Array.isArray(payload)) return payload;
-  for (const key of ["data", "tasks", "cards", "items", "boards", "assignees", "results"]) {
+  for (const key of ["data", "tasks", "cards", "items", "boards", "assignees", "results", "threads", "messages", "drafts"]) {
     if (Array.isArray(payload[key])) return payload[key];
   }
   if (payload.card || payload.task) return [payload.card || payload.task];
@@ -1898,12 +4704,12 @@ function normalizeAssignees(payload, cards) {
 
 function normalizeWorkboardStats(payload, cards) {
   const statusCounts = workboardColumnsByProvider.local
-    .map((status) => [status, cards.filter((card) => card.status === status).length])
+    .map((status) => [status, cards.filter((card) => normalizeWorkboardStatus(card.status) === status).length])
     .filter(([, count]) => count > 0);
   const base = [
     { label: "Cards", value: cards.length },
-    { label: "Running", value: cards.filter((card) => card.status === "running").length, tone: "success" },
-    { label: "Blocked", value: cards.filter((card) => card.status === "blocked").length, tone: "warning" },
+    { label: "In Progress", value: cards.filter((card) => normalizeWorkboardStatus(card.status) === "in_progress").length, tone: "success" },
+    { label: "Needs Review", value: cards.filter((card) => normalizeWorkboardStatus(card.status) === "needs_review").length, tone: "warning" },
   ];
   if (!payload || typeof payload !== "object") return base;
   const extra = Object.entries(payload)
@@ -1948,9 +4754,13 @@ function errorMessage(error) {
   return String(error.stderr || error.message || error);
 }
 
+function stripAnsi(value) {
+  return String(value || "").replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, "");
+}
+
 async function listAccountPhoneNumbers() {
   const apiKey = requireTelnyxApiKey();
-  const response = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=100", {
+  const response = await fetch(`${telnyxApiBaseUrl()}/v2/phone_numbers?page[size]=100`, {
     headers: telnyxHeaders(apiKey),
   });
   if (!response.ok) {
@@ -1964,7 +4774,7 @@ async function listAccountPhoneNumbers() {
 
 async function listPhoneAssistants() {
   const apiKey = requireTelnyxApiKey();
-  const response = await fetch("https://api.telnyx.com/v2/ai/assistants", {
+  const response = await fetch(`${telnyxApiBaseUrl()}/v2/ai/assistants`, {
     headers: telnyxHeaders(apiKey),
   });
   if (!response.ok) {
@@ -1973,6 +4783,30 @@ async function listPhoneAssistants() {
   }
   const payload = await response.json();
   return (payload.data ?? []).map(normalizePhoneAssistantOption).filter((assistant) => assistant.id);
+}
+
+async function startAiAssistantOnCall(input = {}) {
+  const callControlId = String(input.callControlId || "").trim();
+  const assistantId = String(input.assistantId || "").trim();
+  if (!callControlId) throw new Error("A Telnyx call control ID is required to invite an AI assistant.");
+  if (!assistantId) throw new Error("Select a Telnyx Voice AI assistant before inviting it to the call.");
+
+  const apiKey = requireTelnyxApiKey();
+  const response = await fetch(`${telnyxApiBaseUrl()}/v2/calls/${encodeURIComponent(callControlId)}/actions/ai_assistant_start`, {
+    method: "POST",
+    headers: telnyxHeaders(apiKey),
+    body: JSON.stringify({
+      command_id: crypto.randomUUID(),
+      assistant: {
+        id: assistantId,
+      },
+    }),
+  });
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`Telnyx AI assistant invite returned ${response.status}: ${detail.slice(0, 500)}`);
+  }
+  return response.status === 204 ? { started: true } : await response.json();
 }
 
 function normalizePhoneNumberOption(number) {
@@ -2020,7 +4854,7 @@ function telnyxHeaders(apiKey) {
 }
 
 async function telnyxRequest(apiKey, method, pathName, body) {
-  const response = await fetch(`https://api.telnyx.com/v2${pathName}`, {
+  const response = await fetch(`${telnyxApiBaseUrl()}/v2${pathName}`, {
     method,
     headers: telnyxHeaders(apiKey),
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -2030,6 +4864,10 @@ async function telnyxRequest(apiKey, method, pathName, body) {
     throw new Error(`Telnyx ${method} ${pathName} returned ${response.status}: ${detail.slice(0, 700)}`);
   }
   return response.json();
+}
+
+function telnyxApiBaseUrl() {
+  return (process.env.TELNYX_API_BASE_URL || defaultTelnyxApiBaseUrl).replace(/\/$/, "");
 }
 
 async function listA2aDiscoveryAgents() {
@@ -2045,6 +4883,13 @@ async function listA2aDiscoveryAgents() {
     const squad = (left.squad ?? "").localeCompare(right.squad ?? "");
     return squad || left.displayName.localeCompare(right.displayName);
   });
+}
+
+async function getA2aDiscoveryAgent(agentId) {
+  const normalizedId = String(agentId || "").trim();
+  if (!normalizedId) return null;
+  const agents = await listA2aDiscoveryAgents();
+  return agents.find((agent) => agent.id === normalizedId) ?? null;
 }
 
 function normalizeA2aAgent(record) {
@@ -2135,7 +4980,21 @@ async function fetchHindsightBanks() {
 
 async function recallMemory({ query, bankId } = {}) {
   if (!credentialValue("HINDSIGHT_API_KEY") || !query) return [];
-  return fetchHindsightRecall(query, bankId === keyScopedHindsightBankId ? "" : bankId);
+  return fetchHindsightRecall(query, normalizeHindsightBankId(bankId));
+}
+
+async function retainMemory({ content, context, bankId, source } = {}) {
+  const trimmed = String(content || "").trim();
+  if (!credentialValue("HINDSIGHT_API_KEY")) {
+    throw new Error("Archive is not configured. Add HINDSIGHT_API_KEY before saving memories.");
+  }
+  if (!trimmed) throw new Error("Archive retain requires content.");
+  return fetchHindsightRetain({
+    content: trimmed,
+    context: String(context || "").trim(),
+    source: String(source || "link-desktop").trim(),
+    bankId: normalizeHindsightBankId(bankId),
+  });
 }
 
 async function fetchHindsightRecall(query, bankId) {
@@ -2160,6 +5019,82 @@ async function fetchHindsightRecall(query, bankId) {
     score: item.score ?? 0,
     source: "hindsight",
   }));
+}
+
+async function fetchHindsightRetain({ content, context, source, bankId }) {
+  const resolvedBankId = bankId || hindsightConfiguredBankId();
+  const memoryItem = {
+    content,
+    ...(context ? { context } : {}),
+    ...(source ? { metadata: { source } } : {}),
+  };
+  const payloads = [
+    { body: { items: [memoryItem] }, paths: resolvedBankId ? [`/v1/default/banks/${encodeURIComponent(resolvedBankId)}/memories`] : [] },
+    { body: { content, ...(context ? { context } : {}), ...(source ? { source } : {}) }, paths: ["/retain"] },
+    { body: { text: content, ...(context ? { context } : {}), ...(source ? { source } : {}) }, paths: ["/retain"] },
+  ];
+  const failures = [];
+  for (const candidate of payloads) {
+    for (const pathName of candidate.paths) {
+      const response = await fetch(`${hindsightUrl()}${pathName}`, {
+        method: "POST",
+        headers: hindsightHeaders(),
+        body: JSON.stringify(candidate.body),
+      });
+      const text = await response.text();
+      if (response.ok) {
+        const payload = parseJsonIfPossible(text);
+        const item = payload.item ?? payload.memory ?? payload.data ?? payload;
+        return {
+          id: String(item.id ?? item.memory_id ?? payload.id ?? payload.operation_ids?.[0] ?? `hindsight-retain-${Date.now()}`),
+          bankId: String(item.bank_id ?? payload.bank_id ?? resolvedBankId ?? keyScopedHindsightBankId),
+          status: String(payload.status ?? item.status ?? (payload.success === false ? "failed" : "retained")),
+          source: "hindsight",
+          summary: String(item.summary ?? item.text ?? item.content ?? content).slice(0, 240),
+        };
+      }
+      failures.push(`${pathName} ${response.status}: ${text.slice(0, 180)}`);
+      if (![400, 404, 405, 422].includes(response.status)) break;
+    }
+  }
+  if (!resolvedBankId) {
+    failures.unshift("No Hindsight bank id is configured. Set HINDSIGHT_BANK_ID, select a live bank, or use a key that exposes a bank_id claim.");
+  }
+  throw new Error(`Hindsight retain failed. ${failures.join(" ")}`);
+}
+
+function normalizeHindsightBankId(bankId) {
+  if (!bankId || bankId === keyScopedHindsightBankId) return "";
+  return String(bankId).trim();
+}
+
+function hindsightConfiguredBankId() {
+  return credentialValue("HINDSIGHT_BANK_ID")
+    || credentialValue("HINDSIGHT_MEMORY_BANK_ID")
+    || hindsightBankIdFromApiKey(credentialValue("HINDSIGHT_API_KEY"));
+}
+
+function hindsightBankIdFromApiKey(apiKey) {
+  const token = String(apiKey || "");
+  const parts = token.split(".");
+  if (parts.length < 2) return "";
+  try {
+    const base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = Buffer.from(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="), "base64").toString("utf8");
+    const payload = JSON.parse(json);
+    return String(payload.bank_id ?? payload.bankId ?? payload.memory_bank_id ?? payload.memoryBankId ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function parseJsonIfPossible(text) {
+  if (!text) return {};
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
 }
 
 function hindsightHeaders() {
@@ -2187,11 +5122,17 @@ function connectorCredentialMode(connector) {
 
 async function listConnectors() {
   const acpStatus = await getAgentControlPlaneAuthStatus();
-  const baseConnectors = connectorCatalog.map((connector) => {
-    const ready = connectorReady(connector.id);
+  const baseConnectors = await Promise.all(connectorCatalog.map(async (connector) => {
+    const edgeComputeStatus = connector.id === "edge-compute" ? await getEdgeComputeStatus({ seedAuth: true }) : null;
+    const ready = edgeComputeStatus
+      ? edgeComputeStatus.ready
+      : connector.id === "google-inbox" ? await googleInboxConnectorReady()
+      : connector.id === "google-tasks" ? await googleTasksConnectorReady()
+      : isGoogleConnectorId(connector.id) ? await googleConnectorReady()
+      : connectorReady(connector.id);
     const mode = connectorCredentialMode(connector);
     const acpConnectorStatus = acpStatus.ready ? "connected" : acpStatus.signedIn ? "signed_in" : null;
-    const status = ready ? "connected" : connectorOverrides[connector.id] || "needs_access";
+    const status = ready ? "connected" : connectorStatusOverride(connector.id);
     return {
       id: connector.id,
       name: connector.name,
@@ -2199,11 +5140,47 @@ async function listConnectors() {
       description: connector.description,
       requiredAccess: connector.requiredAccess,
       status: connector.id === "agent-control-plane" && acpConnectorStatus ? acpConnectorStatus : status,
-      mode: connector.id === "agent-control-plane" && acpStatus.signedIn ? "okta" : mode,
+      mode: edgeComputeStatus ? (edgeComputeStatus.authSeeded || edgeComputeStatus.authenticated ? "saved" : "live") : connector.id === "agent-control-plane" && acpStatus.signedIn ? "okta" : mode,
     };
-  });
+  }));
   const mcpServers = await listMcpProxyServerConnectors();
   return [...baseConnectors, ...mcpServers];
+}
+
+function connectorStatusOverride(id) {
+  if (isGoogleConnectorId(id) || id === "google-inbox" || id === "google-tasks") return "needs_access";
+  return connectorOverrides[id] || "needs_access";
+}
+
+function isGoogleConnectorId(id) {
+  return id === "google-drive" || id === "google-calendar";
+}
+
+async function googleConnectorReady() {
+  try {
+    await verifyGoogleWorkspaceAccess();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function googleInboxConnectorReady() {
+  try {
+    await verifyGoogleInboxAccess();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function googleTasksConnectorReady() {
+  try {
+    await verifyGoogleTasksAccess();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function listTools() {
@@ -2213,11 +5190,16 @@ async function listTools() {
 }
 
 async function listWidgetCatalog() {
+  const standardWidgets = standardTableauWidgetCatalog();
   const baseUrl = tableauWidgetsServiceUrl();
-  if (!baseUrl) return [];
-  const payload = await tableauWidgetsRequest("/api/widgets/catalog");
-  const rawWidgets = Array.isArray(payload?.widgets) ? payload.widgets : Array.isArray(payload) ? payload : [];
-  return rawWidgets.map(normalizeWidgetCatalogItem).filter(Boolean);
+  if (!baseUrl) return standardWidgets;
+  try {
+    const payload = await tableauWidgetsRequest("/api/widgets/catalog");
+    const rawWidgets = Array.isArray(payload?.widgets) ? payload.widgets : Array.isArray(payload) ? payload : [];
+    return mergeWidgetCatalog(standardWidgets, rawWidgets.map(normalizeWidgetCatalogItem).filter(Boolean));
+  } catch {
+    return standardWidgets;
+  }
 }
 
 function listWidgetLayout() {
@@ -2238,8 +5220,910 @@ async function saveWidgetLayout(input = {}) {
 async function refreshWidgetData(input = {}) {
   const widgetId = String(input.widgetId || "").trim();
   if (!widgetId) throw new Error("Widget id is required.");
-  const payload = await tableauWidgetsRequest(`/api/widgets/${encodeURIComponent(widgetId)}/data`, { method: "POST" });
-  return normalizeWidgetDataResult(payload?.data ?? payload);
+  const baseUrl = tableauWidgetsServiceUrl();
+  const standardWidget = standardTableauWidgetCatalog().find((widget) => widget.id === widgetId);
+  let serviceError = null;
+  if (baseUrl) {
+    try {
+      const payload = await tableauWidgetsRequest(`/api/widgets/${encodeURIComponent(widgetId)}/data`, { method: "POST" });
+      return normalizeWidgetDataResult(payload?.data ?? payload);
+    } catch (error) {
+      serviceError = error;
+    }
+  }
+  if (standardWidget) return standardTableauWidgetData(widgetId);
+  if (serviceError) throw serviceError;
+  throw new Error("Tableau widget data is not configured.");
+}
+
+function getSpeakSettings() {
+  speakSettings = normalizeSpeakSettings(speakSettings);
+  return { ...speakSettings };
+}
+
+async function saveSpeakSettings(input = {}) {
+  speakSettings = normalizeSpeakSettings({
+    ...speakSettings,
+    ...(input && typeof input === "object" ? input : {}),
+    updatedAt: new Date().toISOString(),
+  });
+  await saveDesktopState();
+  return getSpeakSettings();
+}
+
+function getWhisperStatus(extra = {}) {
+  const root = whisperRootPath();
+  const executablePath = whisperExecutablePath();
+  const sourceAvailable = fsSync.existsSync(path.join(root, "Package.swift"));
+  const built = fsSync.existsSync(executablePath);
+  const running = Boolean(whisperHelperProcess && !whisperHelperProcess.killed && whisperHelperProcess.exitCode === null);
+  const apiKeyReady = credentialConfigured("TELNYX_API_KEY");
+  const settings = getSpeakSettings();
+  const message = process.platform !== "darwin"
+    ? "Telnyx Whisper is only available on macOS."
+    : !sourceAvailable
+    ? "Telnyx Whisper source is not bundled with this Link build."
+    : running
+    ? "Hold fn while focused in any textbox to dictate with Telnyx Whisper."
+    : !apiKeyReady
+    ? "Save TELNYX_API_KEY in Settings before starting Telnyx Whisper."
+    : built
+    ? "Telnyx Whisper is built and ready to start."
+    : "Build Telnyx Whisper before starting the fn hold dictation flow.";
+
+  return {
+    available: process.platform === "darwin" && sourceAvailable,
+    sourceAvailable,
+    built,
+    running,
+    pid: running ? whisperHelperProcess.pid : undefined,
+    apiKeyReady,
+    shortcutLabel: settings.shortcutLabel,
+    helperPath: executablePath,
+    appBundlePath: whisperAppBundlePath(),
+    lastExit: whisperLastExit,
+    lastLogLines: whisperLastLogLines.slice(-8),
+    message,
+    updatedAt: new Date().toISOString(),
+    ...extra,
+  };
+}
+
+async function buildWhisperHelper() {
+  if (process.platform !== "darwin") throw new Error("Telnyx Whisper can only be built on macOS.");
+  const root = whisperRootPath();
+  if (!fsSync.existsSync(path.join(root, "Package.swift"))) {
+    throw new Error("Telnyx Whisper source is missing from apps/link-desktop/native/telnyx-whisper.");
+  }
+
+  const scriptPath = path.join(root, "Scripts", "build-app.sh");
+  const { stdout, stderr } = await execFileAsync("bash", [scriptPath, "release"], {
+    cwd: root,
+    timeout: 10 * 60_000,
+    maxBuffer: 8 * 1024 * 1024,
+    env: {
+      ...process.env,
+      PATH: ["/opt/homebrew/opt/swift/bin", process.env.PATH || ""].filter(Boolean).join(path.delimiter),
+    },
+  });
+  appendWhisperLog(stdout);
+  appendWhisperLog(stderr);
+  return getWhisperStatus({ buildOutput: stripAnsi([stdout, stderr].filter(Boolean).join("\n")).trim().slice(-2000) });
+}
+
+async function startWhisperHelper() {
+  if (process.platform !== "darwin") throw new Error("Telnyx Whisper can only run on macOS.");
+  if (whisperHelperProcess && !whisperHelperProcess.killed && whisperHelperProcess.exitCode === null) {
+    return getWhisperStatus();
+  }
+
+  const apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
+  if (!apiKey) throw new Error("Save TELNYX_API_KEY in Settings before starting Telnyx Whisper.");
+
+  const executablePath = whisperExecutablePath();
+  if (!fsSync.existsSync(executablePath)) {
+    await buildWhisperHelper();
+  }
+  if (!fsSync.existsSync(executablePath)) {
+    throw new Error("Telnyx Whisper built successfully but the app executable was not found.");
+  }
+
+  const settings = getSpeakSettings();
+  whisperLastExit = null;
+  whisperLastLogLines = [];
+  const child = spawn(executablePath, [], {
+    cwd: whisperRootPath(),
+    env: {
+      ...process.env,
+      TELNYX_API_KEY: apiKey,
+      TELNYX_WHISPER_SHORTCUT_MODE: settings.shortcutMode,
+      TELNYX_WHISPER_LANGUAGE: settings.sttLanguage,
+      TELNYX_WHISPER_STT_ENGINE: settings.sttEngine,
+      TELNYX_WHISPER_STT_MODEL: settings.sttModel,
+      TELNYX_WHISPER_TTS_VOICE: settings.ttsVoice,
+      TELNYX_WHISPER_LLM_CLEANUP: settings.llmCleanupEnabled ? "1" : "0",
+      TELNYX_WHISPER_SILENCE_THRESHOLD: String(settings.silenceThreshold),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  whisperHelperProcess = child;
+  child.stdout?.on("data", (chunk) => appendWhisperLog(chunk));
+  child.stderr?.on("data", (chunk) => appendWhisperLog(chunk));
+  child.once("exit", (code, signal) => {
+    whisperLastExit = {
+      code,
+      signal,
+      at: new Date().toISOString(),
+    };
+    if (whisperHelperProcess === child) whisperHelperProcess = null;
+  });
+  child.once("error", (error) => {
+    appendWhisperLog(error?.message || String(error));
+  });
+  return getWhisperStatus();
+}
+
+function stopWhisperHelper() {
+  if (whisperHelperProcess && !whisperHelperProcess.killed && whisperHelperProcess.exitCode === null) {
+    whisperHelperProcess.kill("SIGTERM");
+  }
+  whisperHelperProcess = null;
+  return getWhisperStatus({ message: "Telnyx Whisper stopped." });
+}
+
+function appendWhisperLog(chunk) {
+  const text = stripAnsi(Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk || ""));
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (!lines.length) return;
+  whisperLastLogLines = [...whisperLastLogLines, ...lines].slice(-40);
+}
+
+function whisperRootPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "native", "telnyx-whisper")
+    : path.resolve(__dirname, "../../native/telnyx-whisper");
+}
+
+function whisperAppBundlePath() {
+  return path.join(whisperRootPath(), "TelnyxDictation.app");
+}
+
+function whisperExecutablePath() {
+  return path.join(whisperAppBundlePath(), "Contents", "MacOS", "TelnyxDictation");
+}
+
+function normalizeTerminalId(input = {}) {
+  const rawId = typeof input === "string" ? input : input?.terminalId;
+  return String(rawId || defaultTerminalId).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64) || defaultTerminalId;
+}
+
+function getTerminalSession(input = {}, create = false) {
+  const terminalId = normalizeTerminalId(input);
+  const existing = terminalSessions.get(terminalId);
+  if (existing || !create) return existing;
+  const title = typeof input === "object" && input?.title ? String(input.title).slice(0, 32) : `Terminal ${terminalSessions.size + 1}`;
+  const session = {
+    id: terminalId,
+    title,
+    process: null,
+    buffer: "",
+    lastExit: null,
+    startedAt: null,
+  };
+  terminalSessions.set(terminalId, session);
+  return session;
+}
+
+function terminalSessionStatus(session) {
+  const running = Boolean(session?.process && !session.process.killed && session.process.exitCode === null);
+  return {
+    id: session?.id || defaultTerminalId,
+    title: session?.title || "Terminal 1",
+    running,
+    pid: running ? session.process.pid : undefined,
+    shell: process.env.SHELL || "/bin/zsh",
+    cwd: repoRoot,
+    buffer: session?.buffer || "",
+    lastExit: session?.lastExit || null,
+    startedAt: session?.startedAt || null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function getTerminalStatus(input = {}) {
+  const session = getTerminalSession(input, true);
+  return terminalSessionStatus(session);
+}
+
+function appendTerminalOutput(sender, session, data) {
+  const text = String(data || "");
+  if (!text) return;
+  session.buffer = `${session.buffer}${text}`.slice(-80_000);
+  if (sender && !sender.isDestroyed()) {
+    sender.send("link:terminal-output", {
+      terminalId: session.id,
+      text,
+      status: terminalSessionStatus(session),
+    });
+  }
+}
+
+function startTerminalProcess(sender, input = {}) {
+  const session = getTerminalSession(input, true);
+  if (session.process && !session.process.killed && session.process.exitCode === null) {
+    return terminalSessionStatus(session);
+  }
+  const shell = process.env.SHELL || "/bin/zsh";
+  session.buffer = "";
+  session.lastExit = null;
+  session.startedAt = new Date().toISOString();
+  session.process = spawn(shell, ["-i"], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      TERM: process.env.TERM || "xterm-256color",
+      TELNYX_LINK_TERMINAL: "1",
+    },
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  appendTerminalOutput(sender, session, `Telnyx Link terminal started in ${repoRoot}\n`);
+  session.process.stdout.on("data", (chunk) => appendTerminalOutput(sender, session, chunk));
+  session.process.stderr.on("data", (chunk) => appendTerminalOutput(sender, session, chunk));
+  session.process.on("exit", (code, signal) => {
+    session.lastExit = { code, signal, at: new Date().toISOString() };
+    appendTerminalOutput(sender, session, `\n[terminal exited${signal ? ` via ${signal}` : ""}${code === null ? "" : ` with code ${code}`}]\n`);
+    session.process = null;
+  });
+  session.process.on("error", (error) => {
+    session.lastExit = { code: null, signal: "error", at: new Date().toISOString(), message: error.message };
+    appendTerminalOutput(sender, session, `\n[terminal error: ${error.message}]\n`);
+    session.process = null;
+  });
+  return terminalSessionStatus(session);
+}
+
+function writeTerminalInput(input = {}) {
+  const session = getTerminalSession(input, false);
+  if (!session?.process || session.process.killed || session.process.exitCode !== null) {
+    throw new Error("Terminal is not running.");
+  }
+  const text = typeof input === "string" ? input : String(input.text || "");
+  if (!text) return terminalSessionStatus(session);
+  session.process.stdin.write(text);
+  return terminalSessionStatus(session);
+}
+
+function stopTerminalProcess(input = {}) {
+  const session = getTerminalSession(input, false);
+  if (session?.process && !session.process.killed && session.process.exitCode === null) {
+    session.process.kill("SIGTERM");
+  }
+  if (session) session.process = null;
+  return getTerminalStatus(input);
+}
+
+async function listTelnyxTtsVoices(input = {}) {
+  const apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
+  if (!apiKey) throw new Error("Save TELNYX_API_KEY in Settings before loading Telnyx TTS voices.");
+  const provider = String(input?.provider || "").trim().toLowerCase();
+  const params = new URLSearchParams();
+  if (provider && provider !== "all") params.set("provider", provider);
+  const url = `https://api.telnyx.com/v2/text-to-speech/voices${params.toString() ? `?${params.toString()}` : ""}`;
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Telnyx TTS voices returned ${response.status}: ${JSON.stringify(payload).slice(0, 500)}`);
+  }
+  const voices = Array.isArray(payload?.voices)
+    ? payload.voices
+    : Array.isArray(payload?.data)
+    ? payload.data
+    : [];
+  return voices.map(normalizeTelnyxTtsVoice).filter(Boolean);
+}
+
+async function generateTelnyxTtsSample(input = {}) {
+  const apiKey = String(credentialValue("TELNYX_API_KEY") || "").trim();
+  if (!apiKey) throw new Error("Save TELNYX_API_KEY in Settings before sampling Telnyx TTS voices.");
+  const voiceId = String(input?.voiceId || "").trim();
+  if (!voiceId) throw new Error("Choose a voice before sampling.");
+  const text = String(input?.text || "").replace(/\s+/g, " ").trim().slice(0, 320);
+  if (!text) throw new Error("Enter sample text before sampling a voice.");
+  const language = String(input?.language || "").trim();
+  const provider = String(input?.provider || "").trim().toLowerCase();
+  const body = {
+    voice: voiceId,
+    text,
+    output_type: "base64_output",
+    ...(language ? { language } : {}),
+    ...(provider && provider !== "all" ? { provider } : {}),
+  };
+  const response = await fetch("https://api.telnyx.com/v2/text-to-speech", {
+    method: "POST",
+    headers: {
+      Accept: "application/json, audio/mpeg, audio/*",
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const contentType = response.headers.get("content-type") || "audio/mpeg";
+  if (!response.ok) {
+    const payload = contentType.includes("application/json")
+      ? await response.json().catch(() => ({}))
+      : await response.text().catch(() => "");
+    throw new Error(`Telnyx TTS sample returned ${response.status}: ${JSON.stringify(payload).slice(0, 500)}`);
+  }
+  if (contentType.includes("application/json")) {
+    const payload = await response.json().catch(() => ({}));
+    const audioBase64 = String(payload?.base64_audio || payload?.audio || payload?.data?.base64_audio || "").trim();
+    if (!audioBase64) throw new Error("Telnyx TTS sample did not include audio.");
+    return {
+      voiceId,
+      audioBase64,
+      mimeType: String(payload?.mime_type || payload?.content_type || "audio/mpeg"),
+    };
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.length === 0) throw new Error("Telnyx TTS sample returned empty audio.");
+  return {
+    voiceId,
+    audioBase64: buffer.toString("base64"),
+    mimeType: contentType.split(";")[0] || "audio/mpeg",
+  };
+}
+
+function normalizeTelnyxTtsVoice(voice) {
+  const voiceId = String(voice?.voice_id || voice?.voiceId || voice?.id || voice?.name || "").trim();
+  if (!voiceId) return null;
+  return {
+    voiceId,
+    name: String(voice?.name || voiceId),
+    provider: String(voice?.provider || "telnyx"),
+    language: String(voice?.language || voice?.locale || ""),
+    gender: String(voice?.gender || ""),
+  };
+}
+
+function listDialerConfigs() {
+  const state = normalizeDialerState(dialerState);
+  dialerState = state;
+  return {
+    configs: dialerCatalog(state).map((config) => ({ ...config, active: config.id === state.activeConfigId })),
+    activeConfig: getActiveDialerConfig(),
+    updatedAt: state.updatedAt,
+  };
+}
+
+async function saveDialerConfig(input = {}) {
+  const now = new Date().toISOString();
+  const builtInIds = new Set(builtInDialerConfigs().map((config) => config.id));
+  const requestedId = typeof input.id === "string" ? input.id.trim() : "";
+  const id = requestedId && !builtInIds.has(requestedId) ? requestedId : `dialer-${Date.now()}`;
+  const existing = dialerState.userConfigs?.find((config) => config.id === id);
+  const normalized = normalizeDialerConfig({
+    ...input,
+    id,
+    createdAt: existing?.createdAt || input.createdAt || now,
+    updatedAt: now,
+  });
+
+  dialerState = normalizeDialerState({
+    ...dialerState,
+    activeConfigId: input.active === true ? normalized.id : dialerState.activeConfigId,
+    userConfigs: [
+      normalized,
+      ...(Array.isArray(dialerState.userConfigs) ? dialerState.userConfigs.filter((config) => config.id !== normalized.id) : []),
+    ],
+    updatedAt: now,
+  });
+  await saveDesktopState();
+  return listDialerConfigs();
+}
+
+async function activateDialerConfig(id) {
+  const requestedId = String(id || "").trim();
+  const exists = dialerCatalog(dialerState).some((config) => config.id === requestedId);
+  if (!exists) throw new Error(`Unknown dialer config: ${requestedId || "missing id"}`);
+  dialerState = normalizeDialerState({
+    ...dialerState,
+    activeConfigId: requestedId,
+    updatedAt: new Date().toISOString(),
+  });
+  await saveDesktopState();
+  return listDialerConfigs();
+}
+
+function getActiveDialerConfig() {
+  const state = normalizeDialerState(dialerState);
+  const active = dialerCatalog(state).find((config) => config.id === state.activeConfigId) || builtInDialerConfigs()[0];
+  return { ...active, active: true };
+}
+
+async function getWebRtcToken(input = {}) {
+  const apiKey = requireTelnyxApiKey();
+  const { credentialId } = await ensureWebRtcCredential(apiKey, {
+    callerNumber: input?.callerNumber,
+  });
+
+  const response = await fetch(`https://api.telnyx.com/v2/telephony_credentials/${encodeURIComponent(credentialId)}/token`, {
+    method: "POST",
+    headers: telnyxHeaders(apiKey),
+  });
+  const body = await response.text();
+  if (!response.ok) {
+    throw new Error(`Telnyx WebRTC token generation returned ${response.status}: ${body.slice(0, 500)}`);
+  }
+  const token = extractWebRtcToken(body);
+  if (!token) throw new Error("Telnyx WebRTC token generation did not return a token.");
+  return {
+    token,
+    issuedAt: new Date().toISOString(),
+  };
+}
+
+function getWebRtcStatus() {
+  const apiReady = credentialConfigured("TELNYX_API_KEY");
+  const connectionReady = credentialConfigured("TELNYX_WEBRTC_CONNECTION_ID");
+  const credentialReady = credentialConfigured("TELNYX_WEBRTC_CREDENTIAL_ID");
+  return {
+    telnyxApiReady: apiReady,
+    webRtcConnectionReady: connectionReady,
+    webRtcCredentialReady: credentialReady,
+    canAutoProvision: apiReady,
+    ready: apiReady,
+    message: !apiReady
+      ? "Save TELNYX_API_KEY in Settings to enable WebRTC calling. Link can create the WebRTC connection and credential automatically after the API key is saved."
+      : credentialReady
+      ? "WebRTC credentials are configured."
+      : "WebRTC credentials will be created automatically from your saved Telnyx API key.",
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function ensureWebRtcCredential(apiKey, options = {}) {
+  const existingCredentialId = String(credentialValue("TELNYX_WEBRTC_CREDENTIAL_ID") || "").trim();
+  if (existingCredentialId) {
+    return {
+      credentialId: existingCredentialId,
+      connectionId: String(credentialValue("TELNYX_WEBRTC_CONNECTION_ID") || "").trim(),
+      created: false,
+    };
+  }
+
+  if (!webRtcCredentialProvisionPromise) {
+    webRtcCredentialProvisionPromise = provisionWebRtcCredential(apiKey, options)
+      .finally(() => {
+        webRtcCredentialProvisionPromise = null;
+      });
+  }
+  return webRtcCredentialProvisionPromise;
+}
+
+async function provisionWebRtcCredential(apiKey, options = {}) {
+  const connectionId = await ensureWebRtcConnection(apiKey, options);
+  const reusableCredential = await findReusableWebRtcTelephonyCredential(apiKey, connectionId);
+  if (reusableCredential?.id) {
+    await saveSecureCredential("TELNYX_WEBRTC_CREDENTIAL_ID", reusableCredential.id);
+    return { credentialId: reusableCredential.id, connectionId, created: false };
+  }
+
+  const payload = await telnyxRequest(apiKey, "POST", "/telephony_credentials", {
+    connection_id: connectionId,
+    name: "Link Desktop WebRTC",
+    tag: "link-desktop",
+  });
+  const credentialId = String(payload?.data?.id || payload?.id || "").trim();
+  if (!credentialId) throw new Error("Telnyx created a WebRTC telephony credential but did not return an id.");
+  await saveSecureCredential("TELNYX_WEBRTC_CREDENTIAL_ID", credentialId);
+  return { credentialId, connectionId, created: true };
+}
+
+async function ensureWebRtcConnection(apiKey, options = {}) {
+  const savedConnectionId = String(credentialValue("TELNYX_WEBRTC_CONNECTION_ID") || "").trim();
+  if (savedConnectionId) return savedConnectionId;
+
+  const callerConnectionId = await findConnectionIdForCallerNumber(apiKey, options.callerNumber);
+  if (callerConnectionId) {
+    await saveSecureCredential("TELNYX_WEBRTC_CONNECTION_ID", callerConnectionId);
+    return callerConnectionId;
+  }
+
+  const reusableConnection = await findReusableCredentialConnection(apiKey);
+  if (reusableConnection?.id) {
+    await saveSecureCredential("TELNYX_WEBRTC_CONNECTION_ID", reusableConnection.id);
+    return reusableConnection.id;
+  }
+
+  const username = `link${crypto.randomBytes(8).toString("hex")}`.slice(0, 20);
+  const password = crypto.randomBytes(24).toString("base64url");
+  const payload = await telnyxRequest(apiKey, "POST", "/credential_connections", {
+    active: true,
+    user_name: username,
+    password,
+    connection_name: "Link WebRTC Desktop",
+    anchorsite_override: "Latency",
+    sip_uri_calling_preference: "internal",
+    tags: ["link-desktop", "webrtc"],
+  });
+  const connectionId = String(payload?.data?.id || payload?.id || "").trim();
+  if (!connectionId) throw new Error("Telnyx created a WebRTC credential connection but did not return an id.");
+  await saveSecureCredential("TELNYX_WEBRTC_CONNECTION_ID", connectionId);
+  return connectionId;
+}
+
+async function findConnectionIdForCallerNumber(apiKey, callerNumber) {
+  const normalizedCaller = normalizePhoneNumber(callerNumber);
+  if (!normalizedCaller) return "";
+  try {
+    const response = await fetch("https://api.telnyx.com/v2/phone_numbers?page[size]=100", {
+      headers: telnyxHeaders(apiKey),
+    });
+    if (!response.ok) return "";
+    const payload = await response.json();
+    const match = (payload.data ?? []).find((number) => normalizePhoneNumber(number.phone_number) === normalizedCaller);
+    return match ? extractPhoneNumberConnectionId(match) : "";
+  } catch {
+    return "";
+  }
+}
+
+async function findReusableCredentialConnection(apiKey) {
+  try {
+    const payload = await telnyxRequest(apiKey, "GET", "/credential_connections?page[size]=100");
+    const connections = Array.isArray(payload?.data) ? payload.data : [];
+    return connections.find((connection) => connection.connection_name === "Link WebRTC Desktop")
+      || connections.find((connection) => Array.isArray(connection.tags) && connection.tags.includes("link-desktop"))
+      || connections.find((connection) => connection.active !== false)
+      || null;
+  } catch {
+    return null;
+  }
+}
+
+async function findReusableWebRtcTelephonyCredential(apiKey, connectionId) {
+  const resourceFilter = encodeURIComponent(`connection:${connectionId}`);
+  try {
+    const payload = await telnyxRequest(apiKey, "GET", `/telephony_credentials?filter[resource_id]=${resourceFilter}&filter[tag]=link-desktop&page[size]=100`);
+    const credentials = Array.isArray(payload?.data) ? payload.data : [];
+    return credentials.find((credential) => credential.expired !== true) || null;
+  } catch {
+    return null;
+  }
+}
+
+function extractPhoneNumberConnectionId(number = {}) {
+  const candidates = [
+    number.connection_id,
+    number.connectionId,
+    number.connection?.id,
+    number.voice_settings?.connection_id,
+    number.voiceSettings?.connectionId,
+    number.call_control_application_id,
+    number.callControlApplicationId,
+  ];
+  return String(candidates.find(Boolean) || "").trim();
+}
+
+function normalizePhoneNumber(value) {
+  return String(value || "").replace(/[^\d+]/g, "");
+}
+
+function extractWebRtcToken(body) {
+  const trimmed = String(body || "").trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed === "string") return parsed.trim();
+    return String(parsed?.data?.token || parsed?.token || parsed?.access_token || "").trim();
+  } catch {
+    return trimmed;
+  }
+}
+
+function dialerCatalog(state = dialerState) {
+  const builtInIds = new Set(builtInDialerConfigs().map((config) => config.id));
+  const userConfigs = Array.isArray(state.userConfigs)
+    ? state.userConfigs.map((config) => normalizeDialerConfig(config)).filter((config) => !builtInIds.has(config.id))
+    : [];
+  return [...builtInDialerConfigs(), ...userConfigs];
+}
+
+function normalizeDialerState(input = {}) {
+  const now = new Date().toISOString();
+  const userConfigs = Array.isArray(input.userConfigs) ? input.userConfigs.map((config) => normalizeDialerConfig(config)) : [];
+  const configIds = new Set([...builtInDialerConfigs().map((config) => config.id), ...userConfigs.map((config) => config.id)]);
+  const activeConfigId = configIds.has(input.activeConfigId) ? input.activeConfigId : "standard";
+  return {
+    activeConfigId,
+    userConfigs,
+    updatedAt: typeof input.updatedAt === "string" ? input.updatedAt : now,
+  };
+}
+
+function normalizeSpeakSettings(input = {}) {
+  const source = input && typeof input === "object" ? input : {};
+  const shortcutMode = source.shortcutMode === "cmd-shift-l" ? "cmd-shift-l" : "hold-fn";
+  const silenceThreshold = Number(source.silenceThreshold);
+  return {
+    whisperEnabled: typeof source.whisperEnabled === "boolean" ? source.whisperEnabled : true,
+    shortcutMode,
+    shortcutLabel: shortcutMode === "cmd-shift-l" ? "Cmd+Shift+L" : "Hold fn",
+    sttEngine: ["Telnyx", "Deepgram", "Azure", "Google"].includes(source.sttEngine) ? source.sttEngine : "Telnyx",
+    sttModel: String(source.sttModel || "openai/whisper-large-v3-turbo"),
+    sttLanguage: String(source.sttLanguage || "en-US"),
+    silenceThreshold: Number.isFinite(silenceThreshold) ? Math.max(0.005, Math.min(0.2, silenceThreshold)) : 0.05,
+    llmCleanupEnabled: typeof source.llmCleanupEnabled === "boolean" ? source.llmCleanupEnabled : true,
+    ttsProvider: String(source.ttsProvider || "telnyx"),
+    ttsVoice: String(source.ttsVoice || "Telnyx.NaturalHD.astra"),
+    updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : new Date().toISOString(),
+  };
+}
+
+function normalizeDialerConfig(input = {}) {
+  const fallback = builtInDialerConfigs()[0];
+  const now = new Date().toISOString();
+  const validFeatureIds = new Set(dialerFeatureIds());
+  const validActionIds = new Set(dialerActionIds());
+  const source = input && typeof input === "object" ? input : {};
+  const actions = Array.isArray(source.actions) ? source.actions.map(String).filter((id) => validActionIds.has(id)) : fallback.actions;
+  const enabledFeatures = Array.isArray(source.enabledFeatures) ? source.enabledFeatures.map(String).filter((id) => validFeatureIds.has(id)) : fallback.enabledFeatures;
+  const sourceFeatureSettings = source.featureSettings && typeof source.featureSettings === "object" ? source.featureSettings : {};
+  const salesforceNotesSettings = sourceFeatureSettings["salesforce-notes-sync"] && typeof sourceFeatureSettings["salesforce-notes-sync"] === "object" ? sourceFeatureSettings["salesforce-notes-sync"] : {};
+  return {
+    id: String(source.id || fallback.id),
+    name: String(source.name || fallback.name),
+    template: typeof source.template === "string" ? source.template : null,
+    theme: source.theme === "light" ? "light" : "dark",
+    shape: source.shape === "square" ? "square" : "rounded",
+    accentColor: "green",
+    fontSize: ["small", "medium", "large"].includes(source.fontSize) ? source.fontSize : fallback.fontSize,
+    showNumpad: typeof source.showNumpad === "boolean" ? source.showNumpad : fallback.showNumpad,
+    showCountryPrefix: typeof source.showCountryPrefix === "boolean" ? source.showCountryPrefix : fallback.showCountryPrefix,
+    callerIdName: String(source.callerIdName || fallback.callerIdName),
+    outboundNumber: String(source.outboundNumber || fallback.outboundNumber),
+    enabledFeatures: [...new Set(enabledFeatures)],
+    actions: [...new Set(actions)].slice(0, 5),
+    featureSettings: {
+      ...sourceFeatureSettings,
+      crm: {
+        ...(sourceFeatureSettings.crm && typeof sourceFeatureSettings.crm === "object" ? sourceFeatureSettings.crm : {}),
+        "crm-provider": "Salesforce MCP",
+      },
+      "salesforce-notes-sync": {
+        ...salesforceNotesSettings,
+        "sf-notes-sync": salesforceNotesSettings["sf-notes-sync"] ?? true,
+        "sf-notes-target": salesforceNotesSettings["sf-notes-target"] ?? "Contact notes",
+      },
+    },
+    createdAt: typeof source.createdAt === "string" ? source.createdAt : now,
+    updatedAt: typeof source.updatedAt === "string" ? source.updatedAt : now,
+    active: Boolean(source.active),
+  };
+}
+
+function builtInDialerConfigs() {
+  const createdAt = "1970-01-01T00:00:00.000Z";
+  return [
+    {
+      id: "standard",
+      name: "Standard Dialer",
+      template: "standard",
+      theme: "dark",
+      shape: "rounded",
+      accentColor: "green",
+      fontSize: "large",
+      showNumpad: true,
+      showCountryPrefix: true,
+      callerIdName: "My Company",
+      outboundNumber: "+1 (415) 555-0100",
+      enabledFeatures: ["call-timer"],
+      actions: ["mute", "hold", "speaker", "end"],
+      featureSettings: { "call-timer": { "timer-alert": "None", "timer-position": "Center" } },
+      createdAt,
+      updatedAt: createdAt,
+      active: false,
+    },
+    {
+      id: "sales",
+      name: "Sales Dialer",
+      template: "sales",
+      theme: "dark",
+      shape: "rounded",
+      accentColor: "green",
+      fontSize: "medium",
+      showNumpad: true,
+      showCountryPrefix: true,
+      callerIdName: "Sales Team",
+      outboundNumber: "+1 (415) 555-0100",
+      enabledFeatures: ["crm", "notes", "salesforce-notes-sync", "dispositions", "recording", "call-timer", "analytics"],
+      actions: ["mute", "hold", "transfer", "end", "record"],
+      featureSettings: {
+        notes: { "notes-autosave": "10s", "notes-template": "BANT" },
+        "salesforce-notes-sync": { "sf-notes-sync": true, "sf-notes-target": "Contact notes" },
+        crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": true },
+        dispositions: { "dispo-required": true, "dispo-codes": "Sales (12 codes)" },
+        recording: { "recording-auto": true, "recording-announce": "Beep", "recording-storage": "Telnyx Cloud" },
+        "call-timer": { "timer-alert": "5 min", "timer-position": "Center" },
+        analytics: { "analytics-display": "Detailed" },
+      },
+      createdAt,
+      updatedAt: createdAt,
+      active: false,
+    },
+    {
+      id: "support",
+      name: "Support Dialer",
+      template: "support",
+      theme: "dark",
+      shape: "rounded",
+      accentColor: "green",
+      fontSize: "medium",
+      showNumpad: false,
+      showCountryPrefix: true,
+      callerIdName: "Support Center",
+      outboundNumber: "+1 (415) 555-0100",
+      enabledFeatures: ["transcription", "recording", "notes", "salesforce-notes-sync", "dispositions", "call-timer", "crm"],
+      actions: ["mute", "hold", "end"],
+      featureSettings: {
+        transcription: { "transcription-lang": "Auto-detect", "transcription-display": "Sidebar" },
+        recording: { "recording-auto": true, "recording-announce": "Voice prompt", "recording-storage": "Telnyx Cloud" },
+        notes: { "notes-autosave": "5s", "notes-template": "Basic" },
+        "salesforce-notes-sync": { "sf-notes-sync": true, "sf-notes-target": "Contact notes" },
+        dispositions: { "dispo-required": true, "dispo-codes": "Support (8 codes)" },
+        "call-timer": { "timer-alert": "10 min", "timer-position": "Top" },
+        crm: { "crm-provider": "Salesforce MCP", "crm-show-history": true, "crm-show-deals": false },
+      },
+      createdAt,
+      updatedAt: createdAt,
+      active: false,
+    },
+  ];
+}
+
+function dialerFeatureIds() {
+  return ["notes", "salesforce-notes-sync", "crm", "recording", "transcription", "dispositions", "call-timer", "analytics"];
+}
+
+function dialerActionIds() {
+  return ["mute", "hold", "transfer", "end", "speaker", "dial", "record"];
+}
+
+function emptyDialerState() {
+  return normalizeDialerState({ activeConfigId: "standard", userConfigs: [], updatedAt: new Date().toISOString() });
+}
+
+function emptySpeakSettings() {
+  return normalizeSpeakSettings({ updatedAt: new Date().toISOString() });
+}
+
+function standardTableauWidgetCatalog() {
+  return standardTableauWidgetDefinitions
+    .map((definition) => normalizeWidgetCatalogItem({
+      ...definition,
+      source: "Tableau",
+      renderMode: "tableau",
+      tableau: {
+        url: standardTableauReportUrl(definition.envName),
+        toolbar: "hidden",
+        hideTabs: true,
+        device: "desktop",
+      },
+    }))
+    .filter(Boolean);
+}
+
+function standardTableauReportUrl(envName) {
+  const viteName = envName.startsWith("VITE_") ? envName : `VITE_${envName}`;
+  return stringValue(credentialValue(envName)) || stringValue(process.env[envName]) || stringValue(credentialValue(viteName)) || stringValue(process.env[viteName]);
+}
+
+function mergeWidgetCatalog(standardWidgets, serviceWidgets) {
+  const widgetsById = new Map(standardWidgets.map((widget) => [widget.id, widget]));
+  for (const widget of serviceWidgets) {
+    if (widget?.id) widgetsById.set(widget.id, widget);
+  }
+  return [...widgetsById.values()];
+}
+
+function standardTableauWidgetData(widgetId) {
+  const updatedAt = new Date().toISOString();
+  if (widgetId === "standard-sales-pipeline") {
+    return normalizeWidgetDataResult({
+      widgetId,
+      updatedAt,
+      columns: ["week", "coverage"],
+      rows: [
+        { week: "W1", coverage: 2.8 },
+        { week: "W2", coverage: 3.1 },
+        { week: "W3", coverage: 3.4 },
+        { week: "W4", coverage: 3.7 },
+      ],
+      metric: "3.7x",
+      trend: "+0.9x vs first point",
+    });
+  }
+  if (widgetId === "standard-support-health") {
+    return normalizeWidgetDataResult({
+      widgetId,
+      updatedAt,
+      columns: ["day", "tickets"],
+      rows: [
+        { day: "Mon", tickets: 420 },
+        { day: "Tue", tickets: 388 },
+        { day: "Wed", tickets: 405 },
+        { day: "Thu", tickets: 371 },
+        { day: "Fri", tickets: 348 },
+      ],
+      metric: "348",
+      trend: "-72 vs first point",
+    });
+  }
+  if (widgetId === "standard-messaging-quality") {
+    return normalizeWidgetDataResult({
+      widgetId,
+      updatedAt,
+      columns: ["day", "delivery_rate"],
+      rows: [
+        { day: "Mon", delivery_rate: 0.974 },
+        { day: "Tue", delivery_rate: 0.978 },
+        { day: "Wed", delivery_rate: 0.982 },
+        { day: "Thu", delivery_rate: 0.976 },
+        { day: "Fri", delivery_rate: 0.981 },
+      ],
+      metric: "98.1%",
+      trend: "+0.7 pts vs first point",
+    });
+  }
+  if (widgetId === "standard-product-adoption") {
+    return normalizeWidgetDataResult({
+      widgetId,
+      updatedAt,
+      columns: ["week", "active_accounts"],
+      rows: [
+        { week: "W1", active_accounts: 1240 },
+        { week: "W2", active_accounts: 1310 },
+        { week: "W3", active_accounts: 1388 },
+        { week: "W4", active_accounts: 1462 },
+      ],
+      metric: "1,462",
+      trend: "+222 vs first point",
+    });
+  }
+  if (widgetId === "standard-customer-usage") {
+    return normalizeWidgetDataResult({
+      widgetId,
+      updatedAt,
+      columns: ["product", "usage"],
+      rows: [
+        { product: "Messaging", usage: 820000 },
+        { product: "Voice", usage: 610000 },
+        { product: "Identity", usage: 280000 },
+        { product: "Network", usage: 190000 },
+      ],
+      metric: "1.9M",
+      trend: "+18% vs prior period",
+    });
+  }
+  return normalizeWidgetDataResult({
+    widgetId,
+    updatedAt,
+    columns: ["stage", "amount"],
+    rows: [
+      { stage: "Prospect", amount: 2100000 },
+      { stage: "Qualified", amount: 4200000 },
+      { stage: "Commit", amount: 6100000 },
+      { stage: "Closed", amount: 8100000 },
+    ],
+    metric: "$8.1M",
+    trend: "+$6.0M vs first point",
+  });
 }
 
 async function tableauWidgetsRequest(pathname, init = {}) {
@@ -2285,6 +6169,9 @@ function normalizeWidgetCatalogItem(item) {
   if (!id || !title || !yField) return null;
   const category = ["Revenue", "Operations", "Product"].includes(item.category) ? item.category : "Operations";
   const type = ["kpi", "line", "bar", "area"].includes(chart.type) ? chart.type : "bar";
+  const rawTableau = item.tableau || item.tableauEmbed || item.embed;
+  const tableau = rawTableau && typeof rawTableau === "object" ? normalizeWidgetTableauSpec(rawTableau) : null;
+  const renderMode = stringValue(item.renderMode) === "tableau" || tableau ? "tableau" : "chart";
   return {
     id,
     title,
@@ -2293,6 +6180,8 @@ function normalizeWidgetCatalogItem(item) {
     description: stringValue(item.description),
     cadence: stringValue(item.cadence) || "Refreshes from Tableau",
     refreshTtlSeconds: positiveNumber(item.refreshTtlSeconds, 300),
+    renderMode,
+    ...(tableau ? { tableau } : {}),
     chart: {
       type,
       xField: stringValue(chart.xField) || undefined,
@@ -2301,6 +6190,22 @@ function normalizeWidgetCatalogItem(item) {
       metricField: stringValue(chart.metricField) || undefined,
       metricFormat: ["currency", "number", "percent"].includes(chart.metricFormat) ? chart.metricFormat : "number",
     },
+  };
+}
+
+function normalizeWidgetTableauSpec(input) {
+  const toolbar = stringValue(input.toolbar).toLowerCase();
+  const device = stringValue(input.device).toLowerCase();
+  const url = stringValue(input.url || input.src || input.viewUrl);
+  const viewId = stringValue(input.viewId || input.view || input.sheetId);
+  const sheetName = stringValue(input.sheetName || input.sheet);
+  return {
+    ...(url ? { url } : {}),
+    ...(viewId ? { viewId } : {}),
+    ...(sheetName ? { sheetName } : {}),
+    toolbar: ["top", "bottom", "hidden"].includes(toolbar) ? toolbar : "hidden",
+    hideTabs: typeof input.hideTabs === "boolean" ? input.hideTabs : true,
+    device: ["default", "desktop", "tablet", "phone"].includes(device) ? device : "desktop",
   };
 }
 
@@ -2339,7 +6244,831 @@ function positiveNumber(value, fallback) {
 
 async function listPublishedApps() {
   const liveApps = await fetchPublisherJson("/apps").then((payload) => normalizePublishedApps(payload)).catch(() => []);
-  return mergePublishedApps(liveApps.length > 0 ? liveApps : defaultPublishedApps(), publishedApps);
+  livePublishedApps = liveApps;
+  publishedApps = publishedApps.filter((app) => !isPlaceholderPublishedApp(app));
+  return mergePublishedApps(livePublishedApps, publishedApps).filter((app) => !isPlaceholderPublishedApp(app) && isEdgeHostedPublishedApp(app));
+}
+
+async function getMessageGatewayReadiness() {
+  const serviceUrl = messageGatewayUrl();
+  const authConfigured = Boolean(credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY"));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`${serviceUrl}/readyz`, {
+      headers: optionalMessageGatewayHeaders(),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    const checks = Array.isArray(payload.checks) ? payload.checks.map(normalizeMessageGatewayReadinessCheck) : [];
+    const ready = Boolean(payload.ready) && response.ok;
+    const mode = ready ? "managed" : response.status === 401 ? "unauthorized" : "reachable";
+    return {
+      serviceUrl,
+      reachable: true,
+      ready,
+      authConfigured,
+      mode,
+      checks,
+      message: messageGatewayReadinessMessage({ ready, reachable: true, authConfigured, checks, status: response.status }),
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    const detail = await messageGatewayConnectionFailureDetail(serviceUrl, error);
+    const checks = [{ name: "Message Gateway reachable", ok: false, detail }];
+    return {
+      serviceUrl,
+      reachable: false,
+      ready: false,
+      authConfigured,
+      mode: "unreachable",
+      checks,
+      message: messageGatewayReadinessMessage({ ready: false, reachable: false, authConfigured, checks, status: 0 }),
+      updatedAt: new Date().toISOString(),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function listGatewayMessages(input = {}) {
+  const filter = {
+    status: normalizeOptionalString(input.status),
+    recipient: normalizeOptionalString(input.recipient),
+  };
+  const params = new URLSearchParams();
+  if (filter.status) params.set("status", filter.status);
+  if (filter.recipient) params.set("recipient", filter.recipient);
+  const pathname = `/messages${params.toString() ? `?${params.toString()}` : ""}`;
+  try {
+    const payload = await fetchMessageGatewayJson(pathname);
+    return {
+      mode: "live",
+      serviceUrl: messageGatewayUrl(),
+      messages: normalizeGatewayMessages(payload.messages),
+    };
+  } catch (error) {
+    const service = localMessageGateway();
+    return {
+      mode: "local_fallback",
+      serviceUrl: localMessageGatewayStoragePath(),
+      warning: `Hosted Message Gateway unavailable; showing local record-only ledger. ${errorMessage(error)}`,
+      messages: normalizeGatewayMessages(service.listMessages(filter)),
+    };
+  }
+}
+
+async function sendGatewayMessage(input = {}) {
+  const payload = normalizeGatewayMessageInput(input);
+  const transport = normalizeGatewayTransport(input.transport ?? input.transportHint);
+  try {
+    const response = await fetchMessageGatewayJson("/messages", {
+      method: "POST",
+      headers: transport !== "auto" ? { "X-Link-Transport": transport } : {},
+      body: JSON.stringify(payload),
+    });
+    return {
+      mode: "live",
+      serviceUrl: messageGatewayUrl(),
+      message: normalizeGatewayMessage(response.message),
+    };
+  } catch (error) {
+    const service = localMessageGateway();
+    const actor = currentLinkActorIdentity();
+    const message = await service.createMessage(payload, {
+      id: actor.actor,
+      displayName: actor.userName || actor.actor,
+      email: actor.actor.includes("@") ? actor.actor : undefined,
+    }, transport);
+    return {
+      mode: "local_fallback",
+      serviceUrl: localMessageGatewayStoragePath(),
+      warning: `Hosted Message Gateway unavailable; envelope recorded locally with record-only adapters. ${errorMessage(error)}`,
+      message: normalizeGatewayMessage(message),
+    };
+  }
+}
+
+async function listGatewayMessageEvents(input = {}) {
+  const messageId = normalizeOptionalString(typeof input === "string" ? input : input.messageId ?? input.id);
+  if (!messageId) throw new Error("Message id is required.");
+  try {
+    const payload = await fetchMessageGatewayJson(`/messages/${encodeURIComponent(messageId)}/events`);
+    return {
+      mode: "live",
+      serviceUrl: messageGatewayUrl(),
+      events: Array.isArray(payload.events) ? payload.events : [],
+    };
+  } catch (error) {
+    const service = localMessageGateway();
+    return {
+      mode: "local_fallback",
+      serviceUrl: localMessageGatewayStoragePath(),
+      warning: `Hosted Message Gateway unavailable; showing local record-only events. ${errorMessage(error)}`,
+      events: service.listEvents(messageId),
+    };
+  }
+}
+
+async function getPublisherReadiness() {
+  const serviceUrl = linkAppPublisherUrl();
+  const authConfigured = Boolean(credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY"));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`${serviceUrl}/readyz`, {
+      headers: optionalPublisherHeaders(),
+      signal: controller.signal,
+    });
+    const payload = await response.json().catch(() => ({}));
+    const checks = Array.isArray(payload.checks) ? payload.checks.map(normalizePublisherReadinessCheck) : [];
+    const ready = Boolean(payload.ready) && response.ok;
+    const mode = normalizeOptionalString(payload.deployer?.mode) || (ready ? "production" : "unknown");
+    return {
+      serviceUrl,
+      reachable: true,
+      ready,
+      authConfigured,
+      mode,
+      checks,
+      message: publisherReadinessMessage({ ready, reachable: true, authConfigured, mode, checks, status: response.status }),
+      updatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    const detail = await publisherConnectionFailureDetail(serviceUrl, error);
+    const checks = [{ name: "Publisher service reachable", ok: false, detail }];
+    return {
+      serviceUrl,
+      reachable: false,
+      ready: false,
+      authConfigured,
+      mode: "unreachable",
+      checks,
+      message: publisherReadinessMessage({ ready: false, reachable: false, authConfigured, mode: "unreachable", checks, status: 0 }),
+      updatedAt: new Date().toISOString(),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function selectLocalPublishApp() {
+  const selection = await dialog.showOpenDialog({
+    title: "Select Link app directory",
+    properties: ["openDirectory"],
+  });
+  if (selection.canceled || !selection.filePaths[0]) return { canceled: true };
+  return inspectLocalPublishApp(selection.filePaths[0]);
+}
+
+async function importLocalEdgeApp(input = {}) {
+  const scope = normalizeLocalEdgeImportScope(input.scope ?? input.directoryScope ?? input.directory_scope);
+  const replaceExisting = Boolean(input.replaceExisting ?? input.replace_existing);
+  let sourcePath = normalizeOptionalString(input.path ?? input.filePath ?? input.file_path ?? input.directory);
+  if (!sourcePath) {
+    const selection = await dialog.showOpenDialog({
+      title: `Import ${scope === "company" ? "company" : "personal"} Edge app`,
+      properties: ["openFile", "openDirectory"],
+      filters: [
+        { name: "Link apps and Zip archives", extensions: ["zip"] },
+        { name: "Zip archives", extensions: ["zip"] },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (selection.canceled || !selection.filePaths[0]) return { canceled: true };
+    sourcePath = selection.filePaths[0];
+  }
+
+  const resolvedSourcePath = path.resolve(sourcePath);
+  const sourceStat = await fs.stat(resolvedSourcePath).catch(() => null);
+  if (!sourceStat) throw new Error("Choose a local app directory or .zip archive to import.");
+
+  let importSourceDirectory = resolvedSourcePath;
+  let extractedRoot = "";
+  try {
+    if (sourceStat.isFile()) {
+      if (!isZipFilePath(resolvedSourcePath)) throw new Error("Only .zip archives can be imported as files.");
+      extractedRoot = await extractLocalEdgeZipToTempDirectory(resolvedSourcePath);
+      importSourceDirectory = extractedRoot;
+    } else if (!sourceStat.isDirectory()) {
+      throw new Error("Choose a local app directory or .zip archive to import.");
+    }
+
+    const imported = await importLocalLinkApp(importSourceDirectory, {
+      destinationRoot: path.join(repoRoot, "edge-apps"),
+      scope,
+      slug: normalizeOptionalString(input.slug),
+      name: normalizeOptionalString(input.name),
+      description: normalizeOptionalString(input.description),
+      ownerSquad: normalizeOptionalString(input.ownerSquad ?? input.owner_squad),
+      audience: normalizeOptionalString(input.audience),
+      sourceRepo: normalizeOptionalString(input.sourceRepo ?? input.source_repo) || "https://github.com/team-telnyx/link",
+      sourceRef: normalizeOptionalString(input.sourceRef ?? input.source_ref) || "main",
+      replaceExisting,
+      verifyRemoteRef: process.env.LINK_APP_PUBLISHER_VERIFY_PUSHED_REF === "1" || process.env.LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF === "1",
+      requirePushedRef: process.env.LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF === "1",
+    });
+    auditPublisherAction("edge.local_app.imported", "import_local_edge_app", `draft-${imported.publishInput.slug}`, {
+      sourcePath: resolvedSourcePath,
+      directory: imported.directory,
+      scope,
+      replaced: imported.replaced,
+      createdManifest: imported.createdManifest,
+    });
+    return {
+      canceled: false,
+      imported: true,
+      sourcePath: resolvedSourcePath,
+      importScope: imported.scope,
+      targetDirectory: imported.targetDirectory,
+      directory: imported.directory,
+      manifestPath: imported.manifestPath,
+      packageName: imported.packageName,
+      publishInput: imported.publishInput,
+      git: imported.git,
+      warnings: imported.warnings,
+      createdManifest: imported.createdManifest,
+      replaced: imported.replaced,
+    };
+  } finally {
+    if (extractedRoot) await fs.rm(extractedRoot, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
+function normalizeLocalEdgeImportScope(value) {
+  return normalizeOptionalString(value) === "company" ? "company" : "personal";
+}
+
+function isZipFilePath(filePath) {
+  return path.extname(filePath).toLowerCase() === ".zip";
+}
+
+async function extractLocalEdgeZipToTempDirectory(zipPath) {
+  const extractedRoot = await fs.mkdtemp(path.join(tmpdir(), "link-edge-import-"));
+  const limits = { entries: 5000, bytes: 100 * 1024 * 1024 };
+  let entryCount = 0;
+  let totalBytes = 0;
+  try {
+    await extractZip(zipPath, {
+      dir: extractedRoot,
+      onEntry(entry) {
+        const fileName = String(entry.fileName || "");
+        assertSafeZipEntryName(fileName);
+        entryCount += 1;
+        totalBytes += Number(entry.uncompressedSize || 0);
+        if (entryCount > limits.entries) throw new Error("Zip archive has too many entries for Link app import.");
+        if (totalBytes > limits.bytes) throw new Error("Zip archive is larger than the 100 MB import limit.");
+      },
+    });
+    return extractedRoot;
+  } catch (error) {
+    await fs.rm(extractedRoot, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+function assertSafeZipEntryName(fileName) {
+  if (!fileName || fileName.includes("\0")) throw new Error("Zip archive contains an invalid entry name.");
+  if (fileName.startsWith("/") || /^[A-Za-z]:[\\/]/.test(fileName)) throw new Error(`Zip archive contains an absolute path: ${fileName}`);
+  if (fileName.split(/[\\/]+/).includes("..")) throw new Error(`Zip archive contains a parent-directory path: ${fileName}`);
+}
+
+const chatAttachmentTextExtensions = new Set([
+  ".c",
+  ".conf",
+  ".cpp",
+  ".cs",
+  ".css",
+  ".csv",
+  ".go",
+  ".html",
+  ".java",
+  ".js",
+  ".json",
+  ".jsx",
+  ".log",
+  ".md",
+  ".mdx",
+  ".py",
+  ".rb",
+  ".rs",
+  ".sql",
+  ".swift",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".txt",
+  ".xml",
+  ".yaml",
+  ".yml",
+]);
+const chatAttachmentMimeByExtension = {
+  ".css": "text/css",
+  ".csv": "text/csv",
+  ".gif": "image/gif",
+  ".html": "text/html",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".js": "text/javascript",
+  ".json": "application/json",
+  ".md": "text/markdown",
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".ts": "text/typescript",
+  ".txt": "text/plain",
+  ".webp": "image/webp",
+  ".xml": "application/xml",
+  ".yaml": "application/yaml",
+  ".yml": "application/yaml",
+};
+const chatAttachmentTextLimitBytes = 200 * 1024;
+const chatAttachmentImageLimitBytes = 2 * 1024 * 1024;
+const chatAttachmentMaxFiles = 8;
+
+function chatAttachmentMimeType(filePath) {
+  return chatAttachmentMimeByExtension[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+}
+
+function chatAttachmentType(filePath, mimeType) {
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType.startsWith("text/") || chatAttachmentTextExtensions.has(path.extname(filePath).toLowerCase())) return "text";
+  return "file";
+}
+
+async function readChatAttachment(filePath, index) {
+  const stat = await fs.stat(filePath);
+  if (!stat.isFile()) throw new Error("Only files can be attached.");
+  const mimeType = chatAttachmentMimeType(filePath);
+  const type = chatAttachmentType(filePath, mimeType);
+  const attachment = {
+    id: `attachment-${Date.now()}-${index}`,
+    name: path.basename(filePath),
+    path: filePath,
+    type,
+    mimeType,
+    size: stat.size,
+  };
+
+  if (type === "text") {
+    const buffer = await fs.readFile(filePath);
+    const clipped = buffer.subarray(0, chatAttachmentTextLimitBytes);
+    return {
+      ...attachment,
+      content: clipped.toString("utf8"),
+      truncated: buffer.length > clipped.length,
+    };
+  }
+
+  if (type === "image") {
+    if (stat.size > chatAttachmentImageLimitBytes) {
+      return {
+        ...attachment,
+        skippedReason: `Image is larger than ${Math.round(chatAttachmentImageLimitBytes / 1024 / 1024)} MB.`,
+      };
+    }
+    const buffer = await fs.readFile(filePath);
+    return {
+      ...attachment,
+      dataUrl: `data:${mimeType};base64,${buffer.toString("base64")}`,
+    };
+  }
+
+  return {
+    ...attachment,
+    skippedReason: "Binary file metadata attached; content was not read.",
+  };
+}
+
+async function selectChatAttachments() {
+  const selection = await dialog.showOpenDialog({
+    title: "Add photos and files",
+    properties: ["openFile", "multiSelections"],
+    filters: [
+      { name: "Supported files", extensions: ["png", "jpg", "jpeg", "webp", "gif", "pdf", "txt", "md", "mdx", "csv", "json", "yaml", "yml", "toml", "js", "jsx", "ts", "tsx", "py", "html", "css", "xml", "log"] },
+      { name: "Images", extensions: ["png", "jpg", "jpeg", "webp", "gif"] },
+      { name: "Documents", extensions: ["pdf", "txt", "md", "mdx", "csv", "json", "yaml", "yml", "toml", "log"] },
+      { name: "All files", extensions: ["*"] },
+    ],
+  });
+  if (selection.canceled || selection.filePaths.length === 0) return { canceled: true, attachments: [] };
+  const filePaths = selection.filePaths.slice(0, chatAttachmentMaxFiles);
+  const attachments = [];
+  for (let index = 0; index < filePaths.length; index += 1) {
+    try {
+      attachments.push(await readChatAttachment(filePaths[index], index));
+    } catch (error) {
+      attachments.push({
+        id: `attachment-${Date.now()}-${index}`,
+        name: path.basename(filePaths[index]),
+        path: filePaths[index],
+        type: "file",
+        mimeType: "application/octet-stream",
+        size: 0,
+        skippedReason: error instanceof Error ? error.message : "File could not be read.",
+      });
+    }
+  }
+  return { canceled: false, attachments };
+}
+
+async function inspectLocalPublishApp(directoryPath) {
+  const inspection = await inspectLocalLinkApp(String(directoryPath || ""), {
+    verifyRemoteRef: process.env.LINK_APP_PUBLISHER_VERIFY_PUSHED_REF === "1" || process.env.LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF === "1",
+    requirePushedRef: process.env.LINK_APP_PUBLISHER_REQUIRE_PUSHED_REF === "1",
+  });
+  return {
+    canceled: false,
+    directory: inspection.directory,
+    manifestPath: inspection.manifestPath,
+    packageName: inspection.packageName,
+    publishInput: inspection.publishInput,
+    git: inspection.git,
+    warnings: inspection.warnings,
+  };
+}
+
+async function directoryHasLocalLinkManifest(directoryPath) {
+  const stat = await fs.stat(directoryPath).catch(() => null);
+  if (!stat?.isDirectory()) return false;
+  for (const candidate of localPublishInspectionContract.manifestCandidates) {
+    const manifestStat = await fs.stat(path.join(directoryPath, candidate)).catch(() => null);
+    if (manifestStat?.isFile()) return true;
+  }
+  return false;
+}
+
+async function findGeneratedEdgeAppDirectory(slug) {
+  const candidates = [
+    path.join(repoRoot, "edge-apps", slug),
+    path.join(repoRoot, "edge-apps", "personal", slug),
+    path.join(repoRoot, "edge-apps", "company", slug),
+    path.join(repoRoot, "apps", slug),
+    path.join(repoRoot, "apps", `${slug}-link`),
+    path.join(repoRoot, "apps", `test-${slug}-link`),
+  ];
+  for (const candidate of candidates) {
+    if (await directoryHasLocalLinkManifest(candidate)) return candidate;
+  }
+
+  const searchRoots = [path.join(repoRoot, "edge-apps"), path.join(repoRoot, "apps")];
+  for (const searchRoot of searchRoots) {
+    for (const candidate of await localEdgeDraftCandidateDirectories(searchRoot, 2)) {
+      if (!path.basename(candidate).toLowerCase().includes(slug)) continue;
+      if (await directoryHasLocalLinkManifest(candidate)) return candidate;
+    }
+  }
+  return "";
+}
+
+async function localEdgeDraftSearchRoots() {
+  return [path.join(repoRoot, "edge-apps"), path.join(repoRoot, "apps")];
+}
+
+async function localEdgeDraftCandidateDirectories(searchRoot, maxDepth = 2) {
+  const directories = [];
+  async function walk(directory, depth) {
+    if (depth > maxDepth) return;
+    const entries = await fs.readdir(directory, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+      const candidate = path.join(directory, entry.name);
+      directories.push(candidate);
+      await walk(candidate, depth + 1);
+    }
+  }
+  await walk(searchRoot, 1);
+  return directories;
+}
+
+async function localEdgeDraftFromDirectory(directoryPath) {
+  if (!await directoryHasLocalLinkManifest(directoryPath)) return null;
+  try {
+    const inspection = await inspectLocalPublishApp(directoryPath);
+    const appInput = inspection.publishInput || {};
+    const stat = await fs.stat(inspection.directory).catch(() => null);
+    const slug = slugify(appInput.slug || path.basename(inspection.directory));
+    if (!slug) return null;
+    return {
+      id: `draft-${slug}-${Buffer.from(inspection.directory).toString("base64url").slice(0, 16)}`,
+      name: normalizeOptionalString(appInput.name) || slug,
+      slug,
+      description: normalizeOptionalString(appInput.description) || "Local draft Edge app.",
+      directory: inspection.directory,
+      manifestPath: inspection.manifestPath,
+      sourceSubdir: normalizeOptionalString(appInput.sourceSubdir),
+      outputDir: normalizeOptionalString(appInput.outputDir) || "dist",
+      buildCommand: normalizeOptionalString(appInput.buildCommand),
+      installCommand: normalizeOptionalString(appInput.installCommand),
+      updatedAt: stat?.mtime?.toISOString?.() || new Date().toISOString(),
+      status: "draft",
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function listLocalEdgeDraftApps() {
+  const drafts = [];
+  for (const searchRoot of await localEdgeDraftSearchRoots()) {
+    for (const candidate of await localEdgeDraftCandidateDirectories(searchRoot, 2)) {
+      const draft = await localEdgeDraftFromDirectory(candidate);
+      if (draft) drafts.push(draft);
+    }
+  }
+  const uniqueDrafts = [...new Map(drafts.map((draft) => [draft.directory, draft])).values()];
+  return uniqueDrafts.sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
+}
+
+async function deleteLocalEdgeDraftApp(input = {}) {
+  const requestedDirectory = normalizeOptionalString(input.directory);
+  if (!requestedDirectory) throw new Error("Choose a draft app to remove.");
+  const directory = path.resolve(requestedDirectory);
+  const searchRoots = (await localEdgeDraftSearchRoots()).map((root) => path.resolve(root));
+  const insideAllowedRoot = searchRoots.some((root) => directory.startsWith(`${root}${path.sep}`));
+  if (!insideAllowedRoot) throw new Error("Only draft apps inside this repo's edge-apps folder can be removed.");
+  if (!await directoryHasLocalLinkManifest(directory)) throw new Error("Refusing to remove a folder without link-app.yml.");
+  await fs.rm(directory, { recursive: true, force: true });
+  auditPublisherAction("edge.local_app.deleted", "delete_local_edge_draft_app", `draft-${path.basename(directory)}`, { directory });
+  return { deleted: true, directory };
+}
+
+function localEdgePreviewContentType(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".html") return "text/html; charset=utf-8";
+  if (ext === ".js" || ext === ".mjs") return "text/javascript; charset=utf-8";
+  if (ext === ".css") return "text/css; charset=utf-8";
+  if (ext === ".json" || ext === ".map") return "application/json; charset=utf-8";
+  if (ext === ".svg") return "image/svg+xml";
+  if (ext === ".png") return "image/png";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".webp") return "image/webp";
+  if (ext === ".ico") return "image/x-icon";
+  if (ext === ".woff") return "font/woff";
+  if (ext === ".woff2") return "font/woff2";
+  return "application/octet-stream";
+}
+
+function closeLocalEdgePreviewServer(key) {
+  const server = localEdgePreviewServers.get(key);
+  if (!server) return;
+  localEdgePreviewServers.delete(key);
+  server.close(() => {});
+}
+
+async function startLocalEdgePreviewServer(key, rootDirectory) {
+  closeLocalEdgePreviewServer(key);
+  const root = path.resolve(rootDirectory);
+  const server = http.createServer(async (request, response) => {
+    try {
+      const requestUrl = new URL(request.url || "/", "http://127.0.0.1");
+      const decodedPath = decodeURIComponent(requestUrl.pathname);
+      const relativePath = decodedPath.replace(/^\/+/, "") || "index.html";
+      let candidatePath = path.resolve(root, relativePath);
+      if (!candidatePath.startsWith(`${root}${path.sep}`) && candidatePath !== root) {
+        response.writeHead(403);
+        response.end("Forbidden");
+        return;
+      }
+      let stat = await fs.stat(candidatePath).catch(() => null);
+      if (stat?.isDirectory()) {
+        candidatePath = path.join(candidatePath, "index.html");
+        stat = await fs.stat(candidatePath).catch(() => null);
+      }
+      if (!stat?.isFile()) {
+        candidatePath = path.join(root, "index.html");
+        stat = await fs.stat(candidatePath).catch(() => null);
+      }
+      if (!stat?.isFile()) {
+        response.writeHead(404);
+        response.end("Not found");
+        return;
+      }
+      const body = await fs.readFile(candidatePath);
+      response.writeHead(200, {
+        "Content-Type": localEdgePreviewContentType(candidatePath),
+        "Cache-Control": "no-store",
+      });
+      response.end(body);
+    } catch (error) {
+      response.writeHead(500);
+      response.end(error instanceof Error ? error.message : "Preview server error");
+    }
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+  localEdgePreviewServers.set(key, server);
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  if (!port) throw new Error("Local preview server did not expose a port.");
+  return `http://127.0.0.1:${port}/`;
+}
+
+async function prepareLocalEdgeAppForPreview(input = {}) {
+  const requestedDirectory = normalizeOptionalString(input.directory);
+  const requestedSlug = slugify(normalizeOptionalString(input.slug ?? input.urlSlug ?? input.url_slug));
+  let directory = requestedDirectory;
+  if (!directory && requestedSlug) directory = await findGeneratedEdgeAppDirectory(requestedSlug);
+  if (!directory) {
+    throw new Error(requestedSlug ? `No generated app folder found for edge-apps/${requestedSlug}. Ask the agent to build it first.` : "Choose a URL slug before previewing.");
+  }
+
+  const inspection = await inspectLocalPublishApp(directory);
+  if (inspection.canceled || !inspection.publishInput) return { canceled: true };
+  const appInput = normalizePublishIntentInput(inspection.publishInput);
+  const previewSlug = requestedSlug || slugify(appInput.slug);
+  appInput.slug = previewSlug;
+	  const appDirectory = inspection.directory;
+	  const output = [];
+  const previewEnv = {
+    ...process.env,
+    LINK_APP_NAME: appInput.name,
+    LINK_APP_SLUG: appInput.slug,
+    LINK_APP_DEPLOYMENT_TARGET: "dev",
+    LINK_APP_OUTPUT_DIR: appInput.outputDir,
+  };
+
+  if (appInput.installCommand) {
+    output.push(await runAllowedLocalAppCommand(appInput.installCommand, appDirectory, previewEnv, "install_command"));
+  }
+  if (appInput.buildCommand) {
+    output.push(await runAllowedLocalAppCommand(appInput.buildCommand, appDirectory, previewEnv, "build_command"));
+  }
+
+  const outputDir = appInput.outputDir || "dist";
+  const outputPath = path.resolve(appDirectory, safeRelativePath(outputDir, "output_dir"));
+  const outputStat = await fs.stat(outputPath).catch(() => null);
+  if (!outputStat?.isDirectory()) throw new Error(`output_dir does not exist after build: ${outputDir}`);
+
+  return {
+    canceled: false,
+    appInput,
+    appDirectory,
+    outputPath,
+    manifestPath: inspection.manifestPath,
+    logs: output.filter(Boolean).join("\n"),
+    warnings: inspection.warnings ?? [],
+  };
+}
+
+async function previewLocalEdgeApp(input = {}) {
+  const prepared = await prepareLocalEdgeAppForPreview(input);
+  if (prepared.canceled) return { canceled: true };
+  const url = await startLocalEdgePreviewServer(prepared.appInput.slug, prepared.outputPath);
+  auditPublisherAction("edge.local_app.previewed", "preview_local_edge_app", `app-${prepared.appInput.slug}`, { url, slug: prepared.appInput.slug });
+  return {
+    canceled: false,
+    url,
+    directory: prepared.appDirectory,
+    manifestPath: prepared.manifestPath,
+    logs: redactCommandOutput(prepared.logs),
+    warnings: prepared.warnings,
+    edge: {
+      command: "local-preview",
+      endpoint: url,
+      configPath: prepared.outputPath,
+    },
+  };
+}
+
+async function deployLocalEdgeApp(input = {}) {
+  const requestedDirectory = normalizeOptionalString(input.directory);
+  const requestedSlug = slugify(normalizeOptionalString(input.slug ?? input.urlSlug ?? input.url_slug));
+  let directory = requestedDirectory;
+  if (!directory) {
+    const generatedDirectory = requestedSlug ? await findGeneratedEdgeAppDirectory(requestedSlug) : "";
+    if (generatedDirectory) {
+      directory = generatedDirectory;
+    } else {
+      const selection = await dialog.showOpenDialog({
+        title: "Select Edge app directory",
+        properties: ["openDirectory"],
+      });
+      if (selection.canceled || !selection.filePaths[0]) return { canceled: true };
+      directory = selection.filePaths[0];
+    }
+  }
+
+  const inspection = await inspectLocalPublishApp(directory);
+  if (inspection.canceled || !inspection.publishInput) return { canceled: true };
+  const appInput = normalizePublishIntentInput(inspection.publishInput);
+  const deploySlug = requestedSlug || slugify(appInput.slug);
+  const replaceExisting = Boolean(input.replaceExisting ?? input.replace_existing);
+  appInput.slug = deploySlug;
+  const appId = `app-${appInput.slug}`;
+  const existingApp = findPublishedApp(appId) || findPublishedApp(appInput.slug);
+  if (existingApp && !appOwnedByCurrentActor(existingApp)) {
+    throw new Error(`URL slug "${appInput.slug}" is already used by another owner. Choose another URL slug.`);
+  }
+  if (existingApp && !replaceExisting) {
+    throw new Error(`URL slug "${appInput.slug}" is already used by one of your apps. Enable replace existing slug to update it.`);
+  }
+  const command = await resolveTelnyxEdgeCommand();
+  const edgeStatus = await ensureTelnyxEdgeReadyForDeploy(command);
+  if (!edgeStatus.command) throw new Error(edgeStatus.message || "telnyx-edge CLI is not available.");
+  if (!edgeStatus.configured || !edgeStatus.authenticated) throw new Error(edgeStatus.message || "Edge Compute is not authenticated. Sign in with Okta in Link or save TELNYX_API_KEY.");
+
+  const appDirectory = inspection.directory;
+  const output = [];
+  const deployEnv = {
+    ...process.env,
+    LINK_APP_NAME: appInput.name,
+    LINK_APP_SLUG: appInput.slug,
+    LINK_APP_DEPLOYMENT_TARGET: "dev",
+    LINK_APP_OUTPUT_DIR: appInput.outputDir,
+  };
+
+  if (appInput.installCommand) {
+    output.push(await runAllowedLocalAppCommand(appInput.installCommand, appDirectory, deployEnv, "install_command"));
+  }
+  if (appInput.buildCommand) {
+    output.push(await runAllowedLocalAppCommand(appInput.buildCommand, appDirectory, deployEnv, "build_command"));
+  }
+  if (appInput.outputDir) {
+    const outputPath = path.resolve(appDirectory, safeRelativePath(appInput.outputDir, "output_dir"));
+    const outputStat = await fs.stat(outputPath).catch(() => null);
+    if (!outputStat?.isDirectory()) throw new Error(`output_dir does not exist after build: ${appInput.outputDir}`);
+  }
+
+	  const deployDirectory = await prepareTelnyxEdgeShipDirectory(appDirectory, appInput);
+	  let shipResult;
+	  let authRetryDetail = "";
+	  try {
+	    shipResult = await runTelnyxEdgeShip(edgeStatus.command, deployDirectory, deployEnv);
+	  } catch (error) {
+	    if (!edgeShipErrorNeedsAuthRefresh(error) || !credentialConfigured("TELNYX_AUTH_REV2")) throw error;
+	    await clearTelnyxEdgeCliAuth(edgeStatus.command);
+    const edgeSignIn = await signInTelnyxEdgeWithOkta(edgeStatus.command);
+    authRetryDetail = edgeSignIn.detail;
+    if (!edgeSignIn.signedIn) {
+      throw new Error(`Edge Compute auth could not be refreshed from Link. ${edgeSignIn.detail}`);
+    }
+	    shipResult = await runTelnyxEdgeShip(edgeStatus.command, deployDirectory, deployEnv);
+	  }
+  const combinedOutput = [output.join("\n"), authRetryDetail, shipResult.stdout, shipResult.stderr].filter(Boolean).join("\n");
+  const url = extractFirstHttpsUrl(combinedOutput);
+  if (!url || !isAllowedLinkAppUrl(url)) throw new Error(`telnyx-edge did not return an approved Link app URL. Output: ${redactCommandOutput(combinedOutput).slice(0, 1000)}`);
+
+  const now = new Date().toISOString();
+  const owner = currentLinkActorIdentity();
+  const version = {
+    ...createPublisherVersion(appId, appInput.sourceRepo, appInput.sourceRef, appInput.sourceSubdir, "preview"),
+    previewUrl: url,
+    deployedAt: now,
+    buildLogUrl: `link-local-edge://${appInput.slug}/${Date.now()}`,
+  };
+  const appRecord = {
+    id: appId,
+    name: appInput.name,
+    slug: appInput.slug,
+    description: appInput.description,
+    ownerSquad: appInput.ownerSquad,
+    audience: appInput.audience,
+    appType: appInput.appType,
+    access: "vpn",
+    riskLevel: appInput.riskLevel,
+    status: "preview",
+    sourceRepo: appInput.sourceRepo,
+    sourceRef: appInput.sourceRef,
+    sourceSubdir: appInput.sourceSubdir,
+    installCommand: appInput.installCommand,
+    buildCommand: appInput.buildCommand,
+    startCommand: appInput.startCommand,
+    outputDir: appInput.outputDir,
+    reviewers: appInput.reviewers,
+    envSchema: appInput.envSchema,
+    ownerActor: owner.actor,
+    ownerUserId: owner.userId,
+    ownerUserName: owner.userName,
+    previewUrl: url,
+    latestVersion: version,
+    versions: [version],
+    createdAt: now,
+    updatedAt: now,
+  };
+  upsertPublishedApp(appRecord);
+  auditPublisherAction("edge.local_app.deployed", "deploy_local_edge_app", appRecord.id, { url, slug: appRecord.slug });
+  await saveDesktopState();
+  return {
+    canceled: false,
+    url,
+    app: appRecord,
+    version,
+    directory: appDirectory,
+    manifestPath: inspection.manifestPath,
+    logs: redactCommandOutput(combinedOutput),
+    warnings: inspection.warnings ?? [],
+    edge: {
+      command: edgeStatus.command,
+      endpoint: edgeStatus.endpoint,
+      configPath: edgeStatus.configPath,
+    },
+  };
 }
 
 async function createPublishIntent(input = {}) {
@@ -2363,6 +7092,7 @@ async function createPublishIntent(input = {}) {
       subdir: intent.sourceSubdir,
     },
     build: {
+      install_command: intent.installCommand,
       command: intent.buildCommand,
       start_command: intent.startCommand,
       output_dir: intent.outputDir,
@@ -2372,7 +7102,10 @@ async function createPublishIntent(input = {}) {
   const liveResult = await fetchPublisherJson("/publish-intents", {
     method: "POST",
     body: JSON.stringify(payload),
-  }).then((response) => normalizePublisherMutationResult(response, "live")).catch(() => null);
+  }).then((response) => normalizePublisherMutationResult(response, "live")).catch((error) => {
+    if (!publisherLocalFallbackEnabled()) throw error;
+    return null;
+  });
 
   if (liveResult) {
     auditPublisherAction("publisher.publish_intent.created", "create_publish_intent", liveResult.app.id, { mode: "live", slug: liveResult.app.slug });
@@ -2401,7 +7134,10 @@ async function createPublishedAppVersion(input = {}) {
       source_subdir: sourceSubdir,
       notes: normalizeOptionalString(input.notes),
     }),
-  }).then((response) => normalizePublisherMutationResult(response, "live")).catch(() => null);
+  }).then((response) => normalizePublisherMutationResult(response, "live")).catch((error) => {
+    if (!publisherLocalFallbackEnabled()) throw error;
+    return null;
+  });
 
   if (liveResult) {
     auditPublisherAction("publisher.app.version_created", "create_app_version", appId, { mode: "live" });
@@ -2418,6 +7154,7 @@ async function createPublishedAppVersion(input = {}) {
     sourceRef,
     sourceSubdir,
     latestVersion: version,
+    versions: [version, ...(existing.versions || []).filter((item) => item.id !== version.id)],
     updatedAt: new Date().toISOString(),
   };
   upsertPublishedApp(app);
@@ -2440,7 +7177,10 @@ async function reviewPublishedApp(input = {}) {
   const liveResult = await fetchPublisherJson(`/apps/${encodeURIComponent(appId)}/reviews`, {
     method: "POST",
     body: JSON.stringify({ decision, notes: normalizeOptionalString(input.notes) }),
-  }).then((response) => normalizePublisherMutationResult(response, "live")).catch(() => null);
+  }).then((response) => normalizePublisherMutationResult(response, "live")).catch((error) => {
+    if (!publisherLocalFallbackEnabled()) throw error;
+    return null;
+  });
 
   if (liveResult) {
     auditPublisherAction("publisher.app.reviewed", "review_app", appId, { mode: "live", decision });
@@ -2456,6 +7196,7 @@ async function reviewPublishedApp(input = {}) {
     ...existing,
     status,
     latestVersion: version,
+    versions: version ? [version, ...(existing.versions || []).filter((item) => item.id !== version.id)] : existing.versions,
     reviewNotes: normalizeOptionalString(input.notes),
     updatedAt: now,
   };
@@ -2470,13 +7211,150 @@ async function reviewPublishedApp(input = {}) {
   };
 }
 
+async function rollbackPublishedApp(input = {}) {
+  const appId = String(input.appId || "");
+  if (!appId) throw new Error("App id is required.");
+  const versionId = normalizeOptionalString(input.versionId || input.version_id);
+
+  const liveResult = await fetchPublisherJson(`/apps/${encodeURIComponent(appId)}/rollback`, {
+    method: "POST",
+    body: JSON.stringify({
+      version_id: versionId || undefined,
+      notes: normalizeOptionalString(input.notes),
+    }),
+  }).then((response) => normalizePublisherMutationResult(response, "live")).catch((error) => {
+    if (!publisherLocalFallbackEnabled()) throw error;
+    return null;
+  });
+
+  if (liveResult) {
+    auditPublisherAction("publisher.app.rolled_back", "rollback_app", appId, { mode: "live", versionId });
+    return liveResult;
+  }
+
+  const existing = findPublishedApp(appId);
+  if (!existing) throw new Error("Published app not found.");
+  const targetVersion = versionId
+    ? existing.versions?.find((version) => version.id === versionId)
+    : existing.versions?.find((version) => version.id !== existing.latestVersion?.id);
+  if (!targetVersion) throw new Error("Rollback target version was not found.");
+  const now = new Date().toISOString();
+  const version = { ...targetVersion, status: "approved", reviewedAt: now, deployedAt: now };
+  const app = {
+    ...existing,
+    status: "approved",
+    sourceRepo: version.sourceRepo,
+    sourceRef: version.sourceRef,
+    sourceSubdir: version.sourceSubdir,
+    latestVersion: version,
+    versions: [version, ...(existing.versions || []).filter((item) => item.id !== version.id)],
+    reviewNotes: normalizeOptionalString(input.notes) || existing.reviewNotes,
+    updatedAt: now,
+  };
+  upsertPublishedApp(app);
+  auditPublisherAction("publisher.app.rolled_back", "rollback_app", app.id, { mode: "local_fallback", versionId: version.id });
+  await saveDesktopState();
+  return {
+    mode: "local_fallback",
+    message: "Publisher service was unavailable; the app was rolled back locally.",
+    app,
+    version,
+  };
+}
+
+async function transferPublishedApp(input = {}) {
+  const appId = String(input.appId || "");
+  const ownerSquad = normalizeRequiredString(input.ownerSquad ?? input.owner_squad, "owner_squad");
+  const reviewers = normalizeStringList(input.reviewers);
+  if (!appId) throw new Error("App id is required.");
+
+  const liveResult = await fetchPublisherJson(`/apps/${encodeURIComponent(appId)}/ownership`, {
+    method: "POST",
+    body: JSON.stringify({
+      owner_squad: ownerSquad,
+      reviewers,
+      notes: normalizeOptionalString(input.notes),
+    }),
+  }).then((response) => normalizePublisherMutationResult(response, "live")).catch((error) => {
+    if (!publisherLocalFallbackEnabled()) throw error;
+    return null;
+  });
+
+  if (liveResult) {
+    auditPublisherAction("publisher.app.ownership_transferred", "transfer_ownership", appId, { mode: "live", ownerSquad });
+    return liveResult;
+  }
+
+  const existing = findPublishedApp(appId);
+  if (!existing) throw new Error("Published app not found.");
+  const app = {
+    ...existing,
+    ownerSquad,
+    reviewers: reviewers.length > 0 ? reviewers : Array.from(new Set([...(existing.reviewers || []), ownerSquad])),
+    reviewNotes: normalizeOptionalString(input.notes) || existing.reviewNotes,
+    updatedAt: new Date().toISOString(),
+  };
+  upsertPublishedApp(app);
+  auditPublisherAction("publisher.app.ownership_transferred", "transfer_ownership", app.id, { mode: "local_fallback", ownerSquad });
+  await saveDesktopState();
+  return {
+    mode: "local_fallback",
+    message: "Publisher service was unavailable; ownership was updated locally.",
+    app,
+    version: app.latestVersion,
+  };
+}
+
+async function deprecatePublishedApp(input = {}) {
+  const appId = String(input.appId || "");
+  if (!appId) throw new Error("App id is required.");
+
+  const liveResult = await fetchPublisherJson(`/apps/${encodeURIComponent(appId)}/deprecations`, {
+    method: "POST",
+    body: JSON.stringify({ notes: normalizeOptionalString(input.notes) }),
+  }).then((response) => normalizePublisherMutationResult(response, "live")).catch((error) => {
+    if (!publisherLocalFallbackEnabled()) throw error;
+    return null;
+  });
+
+  if (liveResult) {
+    auditPublisherAction("publisher.app.deprecated", "deprecate_app", appId, { mode: "live" });
+    return liveResult;
+  }
+
+  const existing = findPublishedApp(appId);
+  if (!existing) throw new Error("Published app not found.");
+  const now = new Date().toISOString();
+  const version = existing.latestVersion ? { ...existing.latestVersion, status: "deprecated", reviewedAt: now } : undefined;
+  const app = {
+    ...existing,
+    status: "deprecated",
+    latestVersion: version,
+    versions: version ? [version, ...(existing.versions || []).filter((item) => item.id !== version.id)] : existing.versions,
+    reviewNotes: normalizeOptionalString(input.notes) || existing.reviewNotes,
+    updatedAt: now,
+  };
+  upsertPublishedApp(app);
+  auditPublisherAction("publisher.app.deprecated", "deprecate_app", app.id, { mode: "local_fallback" });
+  await saveDesktopState();
+  return {
+    mode: "local_fallback",
+    message: "Publisher service was unavailable; the app was deprecated locally.",
+    app,
+    version,
+  };
+}
+
 async function duplicatePublishedApp(id) {
   const appId = String(id || "");
   if (!appId) throw new Error("App id is required.");
 
   const liveResult = await fetchPublisherJson(`/apps/${encodeURIComponent(appId)}/duplicate`, {
     method: "POST",
-  }).then((payload) => normalizeDuplicateResult(payload)).catch(() => null);
+  }).then((payload) => normalizeDuplicateResult(payload)).catch((error) => {
+    if (!publisherLocalFallbackEnabled()) throw error;
+    return null;
+  });
   if (liveResult) {
     auditPublisherAction("publisher.app.duplicated", "duplicate_app", appId, { mode: "live" });
     return liveResult;
@@ -2484,7 +7362,7 @@ async function duplicatePublishedApp(id) {
 
   const app = findPublishedApp(appId);
   if (!app) throw new Error("Published app not found.");
-  const command = app.sourceRepo ? `git clone ${app.sourceRepo}` : "";
+  const commands = app.sourceRepo ? duplicateCommandsForApp(app) : [];
   auditPublisherAction("publisher.app.duplicated", "duplicate_app", app.id, { mode: "local_fallback" });
   return {
     mode: "local_fallback",
@@ -2492,7 +7370,9 @@ async function duplicatePublishedApp(id) {
     sourceRepo: app.sourceRepo,
     sourceSubdir: app.sourceSubdir,
     sourceRef: app.sourceRef,
-    command,
+    command: commands.join(" && "),
+    commands,
+    path: app.sourceRepo ? duplicatePathForApp(app) : "",
     message: app.sourceRepo
       ? "Publisher service was unavailable; use the source reference to duplicate or fork the app."
       : "No source reference is available for this app yet.",
@@ -2504,6 +7384,8 @@ async function openPublishedApp(id) {
   if (!appId) throw new Error("App id is required.");
   const app = (await listPublishedApps()).find((item) => item.id === appId || item.slug === appId);
   if (!app) throw new Error("Published app not found.");
+  if (app.status === "deprecated") throw new Error("This app is deprecated and cannot be opened from Link.");
+  if (!isPublishedAppOpenable(app)) throw new Error("This app is not ready to open from Link.");
   const url = app.vpnUrl || app.deployedUrl || app.previewUrl;
   if (!url) throw new Error("This app does not have a private VPN URL yet.");
   if (!isAllowedLinkAppUrl(url)) throw new Error("Refusing to open a non-approved Link app URL.");
@@ -2512,9 +7394,13 @@ async function openPublishedApp(id) {
   return { opened: true, url };
 }
 
+function isPublishedAppOpenable(app) {
+  return ["preview", "approved", "deployed"].includes(normalizePublisherStatus(app?.status)) && Boolean(app?.vpnUrl || app?.deployedUrl || app?.previewUrl);
+}
+
 async function listMcpProxyServerConnectors() {
   const liveServers = await fetchMcpProxyServers().catch(() => []);
-  const servers = liveServers;
+  const servers = mergeMcpProxyServers(mcpProxyFallbackServers, liveServers);
   const proxyReady = connectorReady("mcp-proxy");
   return servers.map((server) => {
     const active = server.status === "active";
@@ -2532,6 +7418,18 @@ async function listMcpProxyServerConnectors() {
       mode: "live",
     };
   });
+}
+
+function mergeMcpProxyServers(fallbackServers, liveServers) {
+  const byId = new Map();
+  for (const server of fallbackServers) {
+    byId.set(String(server.id), server);
+  }
+  for (const server of liveServers) {
+    if (!server?.id) continue;
+    byId.set(String(server.id), { ...byId.get(String(server.id)), ...server });
+  }
+  return [...byId.values()].sort((left, right) => String(left.name || left.id).localeCompare(String(right.name || right.id)));
 }
 
 async function listMcpProxyTools() {
@@ -2605,83 +7503,519 @@ async function fetchPublisherJson(pathname, init = {}) {
   return response.json();
 }
 
+async function fetchMessageGatewayJson(pathname, init = {}) {
+  const baseUrl = messageGatewayUrl();
+  const headers = {
+    Accept: "application/json",
+    ...(init.body ? { "Content-Type": "application/json" } : {}),
+    ...messageGatewayHeaders(),
+    ...(init.headers || {}),
+  };
+  const response = await fetch(`${baseUrl}${pathname}`, { ...init, headers });
+  if (!response.ok) throw new Error(`Link Message Gateway request failed: ${response.status}`);
+  return response.json();
+}
+
 function linkAppPublisherUrl() {
   return (credentialValue("LINK_APP_PUBLISHER_URL") || process.env.LINK_APP_PUBLISHER_URL || defaultLinkAppPublisherUrl).replace(/\/$/, "");
+}
+
+function messageGatewayUrl() {
+  return (credentialValue("LINK_MESSAGE_GATEWAY_URL") || process.env.LINK_MESSAGE_GATEWAY_URL || defaultMessageGatewayUrl).replace(/\/$/, "");
 }
 
 function publisherHeaders() {
   const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
   if (!token) throw new Error("Link App Publisher requires Okta Rev2 auth or TELNYX_API_KEY.");
-  return { Authorization: `Bearer ${token}` };
+  const headers = { Authorization: `Bearer ${token}` };
+  const actor = process.env.TELNYX_ACTOR || credentialValue("TELNYX_AUTH_USER_NAME") || credentialValue("TELNYX_AUTH_USER_ID");
+  if (actor) headers["X-Telnyx-Actor"] = actor;
+  if (process.env.TELNYX_ON_BEHALF_OF) headers["X-On-Behalf-Of"] = process.env.TELNYX_ON_BEHALF_OF;
+  if (process.env.TELNYX_GROUPS) headers["X-Telnyx-Groups"] = process.env.TELNYX_GROUPS;
+  return headers;
 }
 
-function defaultPublishedApps() {
-  const now = new Date().toISOString();
+function messageGatewayHeaders() {
+  const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
+  if (!token) throw new Error("Link Message Gateway requires Okta Rev2 auth or TELNYX_API_KEY.");
+  const headers = { Authorization: `Bearer ${token}` };
+  const actor = currentLinkActorIdentity();
+  if (actor.actor) headers["X-Telnyx-Actor"] = actor.actor;
+  if (actor.userName) headers["X-Telnyx-Actor-Name"] = actor.userName;
+  if (actor.actor?.includes("@")) headers["X-Telnyx-Actor-Email"] = actor.actor;
+  if (process.env.TELNYX_ON_BEHALF_OF) headers["X-On-Behalf-Of"] = process.env.TELNYX_ON_BEHALF_OF;
+  if (process.env.TELNYX_GROUPS) headers["X-Telnyx-Groups"] = process.env.TELNYX_GROUPS;
+  return headers;
+}
+
+function optionalPublisherHeaders() {
+  const headers = { Accept: "application/json" };
+  const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
+  if (!token) return headers;
+  return { ...headers, ...publisherHeaders() };
+}
+
+function optionalMessageGatewayHeaders() {
+  const headers = { Accept: "application/json" };
+  const token = credentialValue("TELNYX_AUTH_REV2") || credentialValue("TELNYX_API_KEY");
+  if (!token) return headers;
+  return { ...headers, ...messageGatewayHeaders() };
+}
+
+function normalizePublisherReadinessCheck(value) {
+  return {
+    name: normalizeOptionalString(value?.name) || "Publisher check",
+    ok: Boolean(value?.ok),
+    detail: normalizeOptionalString(value?.detail),
+  };
+}
+
+function normalizeMessageGatewayReadinessCheck(value) {
+  return {
+    name: normalizeOptionalString(value?.name) || "Message Gateway check",
+    ok: Boolean(value?.ok),
+    detail: normalizeOptionalString(value?.detail),
+  };
+}
+
+function messageGatewayReadinessMessage({ ready, reachable, authConfigured, checks, status }) {
+  if (ready) return "Message Gateway is ready for routed Slack, Google Chat, and A2A delivery.";
+  if (!reachable) {
+    return authConfigured
+      ? "Cannot reach Link Message Gateway. Check VPN, DNS, or LINK_MESSAGE_GATEWAY_URL."
+      : "Cannot reach Link Message Gateway. Connect VPN and sign in with Okta or save TELNYX_API_KEY.";
+  }
+  if (status === 401 || !authConfigured) return "Sign in with Okta or save TELNYX_API_KEY before sending through Link Message Gateway.";
+  const failedNames = checks.filter((check) => !check.ok).map((check) => check.name).filter(Boolean);
+  if (failedNames.length > 0) return `Message Gateway reachable, but not production ready: ${failedNames.join(", ")}.`;
+  return "Message Gateway is reachable, but not production ready.";
+}
+
+function publisherReadinessMessage({ ready, reachable, authConfigured, mode, checks, status }) {
+  if (ready) return "Publisher is ready for production Edge publishing.";
+  if (!reachable) {
+    return authConfigured
+      ? "Cannot reach Link App Publisher. Check VPN, DNS, or LINK_APP_PUBLISHER_URL."
+      : "Cannot reach Link App Publisher. Connect VPN and sign in with Okta or save TELNYX_API_KEY.";
+  }
+  if (status === 401 || !authConfigured) return "Sign in with Okta or save TELNYX_API_KEY before publishing.";
+  const failedNames = checks.filter((check) => !check.ok).map((check) => check.name).filter(Boolean);
+  if (failedNames.length > 0) return `Publisher reachable, but not production ready: ${failedNames.join(", ")}.`;
+  return mode === "record-only"
+    ? "Publisher is in local record-only mode, not production Edge publishing."
+    : "Publisher is reachable, but not production ready.";
+}
+
+async function publisherConnectionFailureDetail(serviceUrl, error) {
+  const fetchDetail = error instanceof Error ? error.message : String(error);
+  try {
+    const hostname = new URL(serviceUrl).hostname;
+    await dnsLookup(hostname);
+  } catch (dnsError) {
+    const dnsDetail = dnsError instanceof Error ? dnsError.message : String(dnsError);
+    try {
+      const hostname = new URL(serviceUrl).hostname;
+      return `DNS lookup failed for ${hostname}: ${dnsDetail}`;
+    } catch {
+      return `Invalid Link App Publisher URL: ${serviceUrl}`;
+    }
+  }
+  return fetchDetail;
+}
+
+async function messageGatewayConnectionFailureDetail(serviceUrl, error) {
+  const fetchDetail = error instanceof Error ? error.message : String(error);
+  try {
+    const hostname = new URL(serviceUrl).hostname;
+    await dnsLookup(hostname);
+  } catch (dnsError) {
+    const dnsDetail = dnsError instanceof Error ? dnsError.message : String(dnsError);
+    try {
+      const hostname = new URL(serviceUrl).hostname;
+      return `DNS lookup failed for ${hostname}: ${dnsDetail}`;
+    } catch {
+      return `Invalid Link Message Gateway URL: ${serviceUrl}`;
+    }
+  }
+  return fetchDetail;
+}
+
+function publisherLocalFallbackEnabled() {
+  return process.env.LINK_APP_PUBLISHER_LOCAL_FALLBACK === "1";
+}
+
+function localMessageGateway() {
+  if (!localMessageGatewayService) {
+    localMessageGatewayService = new MessageGatewayService({ storagePath: localMessageGatewayStoragePath() });
+  }
+  return localMessageGatewayService;
+}
+
+function localMessageGatewayStoragePath() {
+  return path.join(app.getPath("userData"), "link-message-gateway-ledger.json");
+}
+
+function normalizeGatewayMessageInput(input = {}) {
+  const to = Array.isArray(input.to)
+    ? input.to.map((item) => String(item).trim()).filter(Boolean)
+    : String(input.to || "").split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
+  const body = normalizeRequiredString(input.body, "body");
+  const idempotencyKey = normalizeOptionalString(input.idempotencyKey ?? input.idempotency_key) || crypto.randomUUID();
+  return {
+    to,
+    body,
+    subject: normalizeOptionalString(input.subject) || undefined,
+    metadata: input.metadata && typeof input.metadata === "object" && !Array.isArray(input.metadata)
+      ? { ...input.metadata, source: input.metadata.source || "link-desktop" }
+      : { source: "link-desktop" },
+    idempotency_key: idempotencyKey,
+  };
+}
+
+function normalizeGatewayTransport(value) {
+  const text = normalizeOptionalString(value).toLowerCase().replace(/-/g, "_");
+  return ["auto", "slack", "google_chat", "a2a"].includes(text) ? text : "auto";
+}
+
+function normalizeGatewayMessages(value) {
+  return Array.isArray(value) ? value.map(normalizeGatewayMessage).filter(Boolean) : [];
+}
+
+function normalizeGatewayMessage(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    id: normalizeOptionalString(value.id) || `msg-${Date.now()}`,
+    from: value.from && typeof value.from === "object" ? value.from : { id: "unknown" },
+    to: Array.isArray(value.to) ? value.to.map(String) : [],
+    body: normalizeOptionalString(value.body) || undefined,
+    bodyRedactedAt: normalizeOptionalString(value.bodyRedactedAt ?? value.body_redacted_at) || undefined,
+    subject: normalizeOptionalString(value.subject) || undefined,
+    metadata: value.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata) ? value.metadata : {},
+    idempotencyKey: normalizeOptionalString(value.idempotencyKey ?? value.idempotency_key),
+    transportHint: normalizeGatewayTransport(value.transportHint ?? value.transport_hint),
+    status: normalizeGatewayStatus(value.status),
+    deliveries: Array.isArray(value.deliveries) ? value.deliveries.map(normalizeGatewayDelivery).filter(Boolean) : [],
+    retryCount: Number.isInteger(value.retryCount) ? value.retryCount : 0,
+    lastError: normalizeOptionalString(value.lastError ?? value.last_error) || undefined,
+    createdAt: normalizeOptionalString(value.createdAt ?? value.created_at) || new Date().toISOString(),
+    updatedAt: normalizeOptionalString(value.updatedAt ?? value.updated_at) || new Date().toISOString(),
+  };
+}
+
+function normalizeGatewayDelivery(value) {
+  if (!value || typeof value !== "object") return null;
+  return {
+    id: normalizeOptionalString(value.id) || `delivery-${Date.now()}`,
+    recipient: normalizeOptionalString(value.recipient),
+    recipientType: value.recipientType === "agent" || value.recipient_type === "agent" ? "agent" : "person",
+    transport: normalizeGatewayTransport(value.transport) === "auto" ? "slack" : normalizeGatewayTransport(value.transport),
+    status: normalizeGatewayDeliveryStatus(value.status),
+    routeReason: normalizeOptionalString(value.routeReason ?? value.route_reason),
+    providerRecipientId: normalizeOptionalString(value.providerRecipientId ?? value.provider_recipient_id) || undefined,
+    providerMessageId: normalizeOptionalString(value.providerMessageId ?? value.provider_message_id) || undefined,
+    providerThreadId: normalizeOptionalString(value.providerThreadId ?? value.provider_thread_id) || undefined,
+    providerUrl: normalizeOptionalString(value.providerUrl ?? value.provider_url) || undefined,
+    taskId: normalizeOptionalString(value.taskId ?? value.task_id) || undefined,
+    contextId: normalizeOptionalString(value.contextId ?? value.context_id) || undefined,
+    retryCount: Number.isInteger(value.retryCount) ? value.retryCount : 0,
+    lastError: normalizeOptionalString(value.lastError ?? value.last_error) || undefined,
+    createdAt: normalizeOptionalString(value.createdAt ?? value.created_at) || new Date().toISOString(),
+    updatedAt: normalizeOptionalString(value.updatedAt ?? value.updated_at) || new Date().toISOString(),
+    metadata: value.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata) ? value.metadata : {},
+  };
+}
+
+function normalizeGatewayStatus(value) {
+  const text = normalizeOptionalString(value);
+  return ["accepted", "partial", "delivered", "failed", "rejected"].includes(text) ? text : "accepted";
+}
+
+function normalizeGatewayDeliveryStatus(value) {
+  const text = normalizeOptionalString(value);
+  return ["queued", "delivered", "retryable_failure", "failed", "rejected"].includes(text) ? text : "queued";
+}
+
+function telnyxEdgeConfigPath() {
+  return path.join(homedir(), ".telnyx-edge", "config.toml");
+}
+
+async function resolveTelnyxEdgeCommand() {
+  for (const command of telnyxEdgeCommandCandidates()) {
+    try {
+      await execFileAsync(command, ["--help"], { timeout: 3000, maxBuffer: 1024 * 512 });
+      return command;
+    } catch {
+      // Try the next binary name.
+    }
+  }
+  return "";
+}
+
+function telnyxEdgeCommandCandidates() {
+  const binaryNames = ["telnyx-edge-dev", "telnyx-edge"];
+  const platformName = process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : process.platform;
+  const archName = process.arch === "x64" ? "amd64" : process.arch;
+  const executableSuffix = process.platform === "win32" ? ".exe" : "";
+  const bundledBinDir = app.isPackaged
+    ? path.join(process.resourcesPath, "bin")
+    : path.resolve(__dirname, "../../bin");
   return [
-    {
-      id: "app-carrier-readiness",
-      name: "Carrier Readiness Hub",
-      slug: "carrier-readiness-hub",
-      description: "Check carrier launch gates, retrieve internal runbooks, and coordinate squad review before customer updates.",
-      ownerSquad: "messaging-ops.squad",
-      audience: "Messaging, NOC",
-      appType: "web",
-      access: "vpn",
-      riskLevel: "medium",
-      status: "deployed",
-      sourceRepo: "https://github.com/team-telnyx/mcp-apps",
-      sourceSubdir: "apps/carrier-readiness",
-      sourceRef: "main",
-      vpnUrl: "https://carrier-readiness.apps.telnyx.io",
-      previewUrl: "https://carrier-readiness-preview.apps.telnyx.io",
-      reviewers: ["messaging-ops.squad"],
-      envSchema: ["TELNYX_AUTH_CONTEXT"],
-      latestVersion: {
-        id: "version-carrier-readiness-1",
-        appId: "app-carrier-readiness",
-        version: "2026.06.01",
-        sourceRepo: "https://github.com/team-telnyx/mcp-apps",
-        sourceRef: "main",
-        sourceSubdir: "apps/carrier-readiness",
-        status: "deployed",
-        submittedAt: now,
-        deployedAt: now,
-      },
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: "app-release-desk",
-      name: "Release Desk",
-      slug: "release-desk",
-      description: "Publish release notes, inspect pending approvals, and hand off app-specific review steps to the owning squad.",
-      ownerSquad: "product-platform.squad",
-      audience: "Product, Engineering",
-      appType: "mcp_app",
-      access: "vpn",
-      riskLevel: "medium",
-      status: "preview",
-      sourceRepo: "https://github.com/team-telnyx/mcp-apps",
-      sourceSubdir: "apps/release-desk",
-      sourceRef: "main",
-      previewUrl: "https://release-desk-preview.apps.telnyx.io",
-      reviewers: ["product-platform.squad"],
-      envSchema: ["TELNYX_AUTH_CONTEXT", "GITHUB_APP_INSTALLATION"],
-      latestVersion: {
-        id: "version-release-desk-1",
-        appId: "app-release-desk",
-        version: "2026.06.03-preview",
-        sourceRepo: "https://github.com/team-telnyx/mcp-apps",
-        sourceRef: "main",
-        sourceSubdir: "apps/release-desk",
-        status: "preview",
-        submittedAt: now,
-        previewUrl: "https://release-desk-preview.apps.telnyx.io",
-      },
-      createdAt: now,
-      updatedAt: now,
-    },
+    ...binaryNames.map((name) => path.join(bundledBinDir, `${name}-${platformName}-${archName}${executableSuffix}`)),
+    ...binaryNames.map((name) => path.join(bundledBinDir, name)),
+    ...binaryNames,
   ];
+}
+
+function withTelnyxEdgeDevEndpoint(configText) {
+  const endpointLine = `api_endpoint = "${defaultTelnyxEdgeApiEndpoint}"`;
+  const current = String(configText || "");
+  if (/^\s*api_endpoint\s*=\s*["']https:\/\/apidev\.telnyx\.com["']\s*$/m.test(current)) return current;
+  if (/^\s*api_endpoint\s*=.*$/m.test(current)) return current.replace(/^\s*api_endpoint\s*=.*$/m, endpointLine);
+  return `${current.trimEnd()}${current.trim() ? "\n" : ""}${endpointLine}\n`;
+}
+
+async function ensureTelnyxEdgeDevConfig() {
+  const configPath = telnyxEdgeConfigPath();
+  const current = await fs.readFile(configPath, "utf8").catch(() => "");
+  const next = withTelnyxEdgeDevEndpoint(current);
+  if (next !== current) {
+    await fs.mkdir(path.dirname(configPath), { recursive: true });
+    await fs.writeFile(configPath, next, "utf8");
+  }
+  return {
+    path: configPath,
+    endpoint: defaultTelnyxEdgeApiEndpoint,
+    updated: next !== current,
+    configured: /api_endpoint\s*=\s*["']https:\/\/apidev\.telnyx\.com["']/.test(next),
+  };
+}
+
+async function seedTelnyxEdgeApiKey(command) {
+  const apiKey = credentialValue("TELNYX_API_KEY").trim();
+  if (!apiKey) return { seeded: false, detail: "No TELNYX_API_KEY saved in Link." };
+  try {
+    await execFileAsync(command, ["auth", "logout"], {
+      timeout: 10000,
+      maxBuffer: 1024 * 1024,
+      env: process.env,
+    }).catch(() => undefined);
+    await execFileAsync(command, ["auth", "api-key", "set", apiKey], {
+      timeout: 10000,
+      maxBuffer: 1024 * 1024,
+      env: process.env,
+    });
+    return { seeded: true, detail: "telnyx-edge auth is configured from Link's saved TELNYX_API_KEY." };
+  } catch (error) {
+    return { seeded: false, detail: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function signInTelnyxEdgeWithOkta(command) {
+  if (!credentialConfigured("TELNYX_AUTH_REV2")) {
+    return { signedIn: false, detail: "Sign in with Okta in Link before Edge Compute deployment." };
+  }
+  try {
+    const { stdout, stderr } = await execFileAsync(command, ["auth", "login"], {
+      timeout: 180000,
+      maxBuffer: 1024 * 1024 * 4,
+      env: process.env,
+    });
+    return {
+      signedIn: true,
+      detail: [stdout, stderr].filter(Boolean).join("\n").trim() || "Edge Compute auth completed through Okta.",
+    };
+  } catch (error) {
+    return {
+      signedIn: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function edgeStatusNeedsAuth(status) {
+  const detail = `${status?.message || ""}\n${status?.detail || ""}`;
+  return /auth|token|oauth|login|api-key/i.test(detail) && /expired|not ready|not configured|no valid|authenticate|401|invalid/i.test(detail);
+}
+
+function edgeStatusOutputHasAuthFailure(output) {
+  return /oauth token expired|failed to get valid auth token|no refresh token available|run ['"]?telnyx-edge auth login|authentication status:\s*(not authenticated|none)|token expired|no key found matching the id|provided secret|api error \(http 401\)/i.test(output);
+}
+
+function edgeShipErrorNeedsAuthRefresh(error) {
+  const detail = error instanceof Error ? `${error.message}\n${error.stack || ""}` : String(error);
+  return /no key found matching the id|provided secret|api error \(http 401\)|oauth token expired|failed to get valid auth token|no refresh token available|run ['"]?telnyx-edge auth login/i.test(detail);
+}
+
+async function clearTelnyxEdgeCliAuth(command) {
+  await execFileAsync(command, ["auth", "api-key", "clear"], {
+    timeout: 10000,
+    maxBuffer: 1024 * 1024,
+    env: process.env,
+  }).catch(() => undefined);
+  await execFileAsync(command, ["auth", "logout"], {
+    timeout: 10000,
+    maxBuffer: 1024 * 1024,
+    env: process.env,
+  }).catch(() => undefined);
+}
+
+async function runTelnyxEdgeShip(command, appDirectory, deployEnv) {
+  return execFileAsync(command, ["ship"], {
+    cwd: appDirectory,
+    env: deployEnv,
+    timeout: 180000,
+    maxBuffer: 1024 * 1024 * 8,
+  });
+}
+
+async function prepareTelnyxEdgeShipDirectory(appDirectory, appInput) {
+  const slug = slugify(appInput.slug);
+  if (!slug) throw new Error("Choose a deployment URL slug before shipping.");
+  const tempRoot = await fs.mkdtemp(path.join(tmpdir(), "link-edge-ship-"));
+  const deployDirectory = path.join(tempRoot, slug);
+  await fs.cp(appDirectory, deployDirectory, {
+    recursive: true,
+    force: true,
+    filter: (source) => {
+      const name = path.basename(source);
+      return name !== "node_modules" && name !== ".git";
+    },
+  });
+  await writeLinkAppDeployManifest(deployDirectory, appInput);
+  await fs.writeFile(path.join(deployDirectory, "func.toml"), [
+    "[edge_compute]",
+    `func_name = "${tomlString(slug)}"`,
+    "",
+  ].join("\n"), "utf8");
+  return deployDirectory;
+}
+
+async function writeLinkAppDeployManifest(deployDirectory, appInput) {
+  const manifestPath = path.join(deployDirectory, "link-app.yml");
+  const lines = [
+    ["name", appInput.name],
+    ["slug", appInput.slug],
+    ["description", appInput.description],
+    ["owner_squad", appInput.ownerSquad],
+    ["audience", appInput.audience],
+    ["app_type", appInput.appType],
+    ["source_repo", appInput.sourceRepo],
+    ["source_ref", appInput.sourceRef],
+    ["source_subdir", appInput.sourceSubdir],
+    ["install_command", appInput.installCommand],
+    ["build_command", appInput.buildCommand],
+    ["output_dir", appInput.outputDir],
+    ["environment", "dev"],
+    ["access", appInput.access],
+    ["risk_level", appInput.riskLevel],
+  ]
+    .filter(([, value]) => normalizeOptionalString(value))
+    .map(([key, value]) => `${key}: ${yamlScalar(value)}`);
+  await fs.writeFile(manifestPath, `${lines.join("\n")}\n`, "utf8");
+}
+
+function yamlScalar(value) {
+  const text = normalizeOptionalString(value);
+  if (/^[A-Za-z0-9_.:/@ -]+$/.test(text) && !/^[-?:,[\]{}#&*!|>'"%@`]/.test(text)) return text;
+  return JSON.stringify(text);
+}
+
+function tomlString(value) {
+  return String(value || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+async function getEdgeComputeStatus({ seedAuth = false } = {}) {
+  const command = await resolveTelnyxEdgeCommand();
+  const config = await ensureTelnyxEdgeDevConfig().catch((error) => ({
+    path: telnyxEdgeConfigPath(),
+    endpoint: defaultTelnyxEdgeApiEndpoint,
+    updated: false,
+    configured: false,
+    error: errorMessage(error),
+  }));
+  if (!command) {
+    return {
+      ready: false,
+      command: "",
+      endpoint: defaultTelnyxEdgeApiEndpoint,
+      configPath: config.path,
+      configured: Boolean(config.configured),
+      authenticated: false,
+      authSeeded: false,
+      message: "Install the telnyx-edge CLI to publish Edge Compute functions from Link.",
+      detail: config.error || "Neither telnyx-edge-dev nor telnyx-edge is available on PATH.",
+    };
+  }
+
+  const seeded = seedAuth ? await seedTelnyxEdgeApiKey(command) : { seeded: false, detail: "" };
+  try {
+    const { stdout, stderr } = await execFileAsync(command, ["status"], {
+      timeout: 10000,
+      maxBuffer: 1024 * 1024,
+      env: process.env,
+    });
+    const output = [stdout, stderr].filter(Boolean).join("\n").trim();
+    const endpointOk = output.includes(defaultTelnyxEdgeApiEndpoint) || Boolean(config.configured);
+    if (edgeStatusOutputHasAuthFailure(output)) {
+      return {
+        ready: false,
+        command,
+        endpoint: defaultTelnyxEdgeApiEndpoint,
+        configPath: config.path,
+        configured: endpointOk,
+        authenticated: false,
+        authSeeded: Boolean(seeded.seeded),
+        message: seeded.seeded
+          ? "Edge Compute auth was refreshed from Link, but telnyx-edge is still reporting an auth problem."
+          : "Edge Compute auth needs to be refreshed from Link.",
+        detail: output || seeded.detail,
+      };
+    }
+    return {
+      ready: endpointOk,
+      command,
+      endpoint: defaultTelnyxEdgeApiEndpoint,
+      configPath: config.path,
+      configured: endpointOk,
+      authenticated: true,
+      authSeeded: Boolean(seeded.seeded),
+      message: endpointOk
+        ? "Edge Compute is configured for apidev.telnyx.com."
+        : "Edge Compute CLI is installed, but not pointed at apidev.telnyx.com.",
+      detail: output || seeded.detail,
+    };
+  } catch (error) {
+    return {
+      ready: false,
+      command,
+      endpoint: defaultTelnyxEdgeApiEndpoint,
+      configPath: config.path,
+      configured: Boolean(config.configured),
+      authenticated: false,
+      authSeeded: Boolean(seeded.seeded),
+      message: seeded.seeded
+        ? "Edge Compute auth was seeded, but telnyx-edge status is not ready yet."
+        : "Sign in with Okta in Link or save TELNYX_API_KEY to deploy Edge Compute apps.",
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function ensureTelnyxEdgeReadyForDeploy(command) {
+  let status = await getEdgeComputeStatus({ seedAuth: true });
+  if (status.ready && status.configured && status.authenticated) return status;
+
+  if (command && edgeStatusNeedsAuth(status) && !credentialConfigured("TELNYX_API_KEY") && credentialConfigured("TELNYX_AUTH_REV2")) {
+    const edgeSignIn = await signInTelnyxEdgeWithOkta(command);
+    status = await getEdgeComputeStatus({ seedAuth: true });
+    return {
+      ...status,
+      authSeeded: Boolean(status.authSeeded || edgeSignIn.signedIn),
+      detail: [status.detail, edgeSignIn.detail].filter(Boolean).join("\n"),
+    };
+  }
+
+  return status;
 }
 
 function normalizePublishedApps(payload) {
@@ -2703,6 +8037,7 @@ function normalizePublishedApp(item) {
   const source = item.source || {};
   const build = item.build || {};
   const latestVersion = normalizePublisherVersion(item.latestVersion || item.latest_version || item.version, id);
+  const versions = normalizePublisherVersions(item.versions, id, latestVersion);
   return {
     id,
     name: name || titleize(slug),
@@ -2717,6 +8052,7 @@ function normalizePublishedApp(item) {
     sourceRepo: normalizeOptionalString(item.sourceRepo ?? item.source_repo ?? source.repo),
     sourceRef: normalizeOptionalString(item.sourceRef ?? item.source_ref ?? source.ref),
     sourceSubdir: normalizeOptionalString(item.sourceSubdir ?? item.source_subdir ?? source.subdir),
+    installCommand: normalizeOptionalString(item.installCommand ?? item.install_command ?? build.install_command),
     buildCommand: normalizeOptionalString(item.buildCommand ?? item.build_command ?? build.command),
     startCommand: normalizeOptionalString(item.startCommand ?? item.start_command ?? build.start_command),
     outputDir: normalizeOptionalString(item.outputDir ?? item.output_dir ?? build.output_dir),
@@ -2725,11 +8061,26 @@ function normalizePublishedApp(item) {
     deployedUrl: normalizeOptionalString(item.deployedUrl ?? item.deployed_url),
     reviewers: normalizeStringList(item.reviewers),
     envSchema: normalizeStringList(item.envSchema ?? item.env_schema),
+    ownerActor: normalizeOptionalString(item.ownerActor ?? item.owner_actor ?? item.createdBy ?? item.created_by ?? item.actor),
+    ownerUserId: normalizeOptionalString(item.ownerUserId ?? item.owner_user_id ?? item.userId ?? item.user_id),
+    ownerUserName: normalizeOptionalString(item.ownerUserName ?? item.owner_user_name ?? item.userName ?? item.user_name),
     latestVersion,
+    versions,
     reviewNotes: normalizeOptionalString(item.reviewNotes ?? item.review_notes),
     createdAt: normalizeOptionalString(item.createdAt ?? item.created_at) || new Date().toISOString(),
     updatedAt: normalizeOptionalString(item.updatedAt ?? item.updated_at) || new Date().toISOString(),
   };
+}
+
+function normalizePublisherVersions(items, appId, latestVersion) {
+  const versions = Array.isArray(items)
+    ? items.map((item) => normalizePublisherVersion(item, appId)).filter(Boolean)
+    : [];
+  const byId = new Map();
+  for (const version of [latestVersion, ...versions].filter(Boolean)) {
+    byId.set(version.id, version);
+  }
+  return [...byId.values()];
 }
 
 function normalizePublisherVersion(item, appId) {
@@ -2770,9 +8121,31 @@ function normalizeDuplicateResult(payload) {
     sourceSubdir: normalizeOptionalString(payload?.sourceSubdir ?? payload?.source_subdir),
     sourceRef: normalizeOptionalString(payload?.sourceRef ?? payload?.source_ref),
     command: normalizeOptionalString(payload?.command),
+    commands: Array.isArray(payload?.commands) ? payload.commands.map(normalizeOptionalString).filter(Boolean) : [],
+    path: normalizeOptionalString(payload?.path),
     url: normalizeOptionalString(payload?.url),
     message: normalizeOptionalString(payload?.message) || "Publisher service returned a duplication handoff.",
   };
+}
+
+function duplicateCommandsForApp(app) {
+  const targetDirectory = normalizeOptionalString(app.slug) || normalizeOptionalString(app.id) || "link-app";
+  const commands = [
+    `git clone ${shellQuoteForDisplay(app.sourceRepo)} ${shellQuoteForDisplay(targetDirectory)}`,
+    `cd ${shellQuoteForDisplay(targetDirectory)}`,
+    `git checkout ${shellQuoteForDisplay(app.sourceRef || "main")}`,
+  ];
+  if (app.sourceSubdir && app.sourceSubdir !== ".") commands.push(`cd ${shellQuoteForDisplay(app.sourceSubdir)}`);
+  return commands;
+}
+
+function duplicatePathForApp(app) {
+  const targetDirectory = normalizeOptionalString(app.slug) || normalizeOptionalString(app.id) || "link-app";
+  return app.sourceSubdir && app.sourceSubdir !== "." ? `${targetDirectory}/${app.sourceSubdir}` : targetDirectory;
+}
+
+function shellQuoteForDisplay(value) {
+  return `'${String(value || "").replace(/'/g, "'\\''")}'`;
 }
 
 function normalizePublishIntentInput(input) {
@@ -2784,6 +8157,7 @@ function normalizePublishIntentInput(input) {
   const sourceSubdir = normalizeOptionalString(input.sourceSubdir ?? input.source_subdir) || ".";
   if (sourceSubdir.includes("..")) throw new Error("source_subdir cannot contain parent directory segments.");
 
+  const installCommand = normalizeOptionalString(input.installCommand ?? input.install_command);
   const buildCommand = normalizeOptionalString(input.buildCommand ?? input.build_command) || "npm run build";
   const startCommand = normalizeOptionalString(input.startCommand ?? input.start_command);
   const outputDir = normalizeOptionalString(input.outputDir ?? input.output_dir);
@@ -2799,6 +8173,7 @@ function normalizePublishIntentInput(input) {
     sourceRepo,
     sourceRef: normalizeOptionalString(input.sourceRef ?? input.source_ref) || "main",
     sourceSubdir,
+    installCommand,
     buildCommand,
     startCommand,
     outputDir,
@@ -2812,6 +8187,7 @@ function createLocalPublishIntent(intent) {
   const now = new Date().toISOString();
   const appId = `app-${intent.slug}`;
   const version = createPublisherVersion(appId, intent.sourceRepo, intent.sourceRef, intent.sourceSubdir, "submitted");
+  const owner = currentLinkActorIdentity();
   const app = {
     id: appId,
     name: intent.name,
@@ -2826,12 +8202,17 @@ function createLocalPublishIntent(intent) {
     sourceRepo: intent.sourceRepo,
     sourceRef: intent.sourceRef,
     sourceSubdir: intent.sourceSubdir,
+    installCommand: intent.installCommand,
     buildCommand: intent.buildCommand,
     startCommand: intent.startCommand,
     outputDir: intent.outputDir,
     reviewers: intent.reviewers,
     envSchema: intent.envSchema,
+    ownerActor: owner.actor,
+    ownerUserId: owner.userId,
+    ownerUserName: owner.userName,
     latestVersion: version,
+    versions: [version],
     createdAt: now,
     updatedAt: now,
   };
@@ -2860,24 +8241,158 @@ function createPublisherVersion(appId, sourceRepo, sourceRef, sourceSubdir, stat
 
 function mergePublishedApps(baseApps, localApps) {
   const appsById = new Map();
-  for (const app of [...baseApps, ...localApps].map(normalizePublishedApp).filter(Boolean)) {
+  for (const app of [...baseApps, ...localApps].map(normalizePublishedApp).filter(Boolean).filter((item) => !isPlaceholderPublishedApp(item))) {
     appsById.set(app.id, app);
   }
   return [...appsById.values()].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
 }
 
+function isPlaceholderPublishedApp(app) {
+  const id = String(app?.id || "");
+  const slug = String(app?.slug || "");
+  const name = String(app?.name || "").toLowerCase();
+  const sourceRepo = String(app?.sourceRepo || "").toLowerCase();
+  const sourceSubdir = String(app?.sourceSubdir || "").toLowerCase();
+  return ["app-carrier-readiness", "app-release-desk"].includes(id)
+    || ["carrier-readiness-hub", "release-desk"].includes(slug)
+    || ["carrier readiness hub", "release desk"].includes(name)
+    || (sourceRepo.includes("team-telnyx/mcp-apps") && ["apps/carrier-readiness", "apps/release-desk"].includes(sourceSubdir));
+}
+
+function isEdgeHostedPublishedApp(app) {
+  return [app?.deployedUrl, app?.previewUrl, app?.vpnUrl]
+    .filter(Boolean)
+    .some((url) => {
+      try {
+        return isAllowedLinkAppUrl(url);
+      } catch {
+        return false;
+      }
+    });
+}
+
 function findPublishedApp(id) {
-  return mergePublishedApps(defaultPublishedApps(), publishedApps).find((item) => item.id === id || item.slug === id);
+  return mergePublishedApps(livePublishedApps, publishedApps).find((item) => item.id === id || item.slug === id);
 }
 
 function upsertPublishedApp(app) {
   publishedApps = [app, ...publishedApps.filter((item) => item.id !== app.id && item.slug !== app.slug)];
 }
 
+function currentLinkActorIdentity() {
+  const actor = normalizeOptionalString(process.env.TELNYX_ACTOR || credentialValue("TELNYX_AUTH_USER_NAME") || credentialValue("GITHUB_USER_LOGIN"));
+  const userId = normalizeOptionalString(process.env.TELNYX_ON_BEHALF_OF || credentialValue("TELNYX_AUTH_USER_ID"));
+  const userName = normalizeOptionalString(credentialValue("TELNYX_AUTH_USER_NAME") || actor);
+  return {
+    actor: actor || userId || userName || "local-user",
+    userId,
+    userName,
+  };
+}
+
+function appOwnedByCurrentActor(app) {
+  if (!app) return false;
+  const owner = currentLinkActorIdentity();
+  const ownerValues = new Set([owner.actor, owner.userId, owner.userName].filter(Boolean).map((value) => value.toLowerCase()));
+  const appValues = [
+    app.ownerActor,
+    app.ownerUserId,
+    app.ownerUserName,
+    app.createdBy,
+    app.created_by,
+    app.userId,
+    app.user_id,
+    app.userName,
+    app.user_name,
+  ].filter(Boolean).map((value) => String(value).toLowerCase());
+  if (appValues.some((value) => ownerValues.has(value))) return true;
+  return !app.ownerActor && !app.ownerUserId && !app.ownerUserName && publishedApps.some((localApp) => localApp.id === app.id || localApp.slug === app.slug);
+}
+
+async function checkEdgeSlugAvailability(input = {}) {
+  const slug = slugify(normalizeOptionalString(input.slug ?? input.urlSlug ?? input.url_slug));
+  if (!slug) {
+    return { slug: "", status: "empty", available: false, canReplace: false, message: "Enter a URL slug." };
+  }
+  await listPublishedApps().catch(() => []);
+  const existing = findPublishedApp(slug) || findPublishedApp(`app-${slug}`);
+  if (!existing) {
+    return { slug, status: "available", available: true, canReplace: false, message: `${slug}.apidev.telnyx.com is available.` };
+  }
+  const ownedByCurrentUser = appOwnedByCurrentActor(existing);
+  if (ownedByCurrentUser) {
+    return {
+      slug,
+      status: "owned",
+      available: true,
+      canReplace: true,
+      app: existing,
+      message: `${slug}.apidev.telnyx.com is already yours. You can replace it.`,
+    };
+  }
+  return {
+    slug,
+    status: "taken",
+    available: false,
+    canReplace: false,
+    app: existing,
+    message: `${slug}.apidev.telnyx.com is already used by another owner. Choose another URL.`,
+  };
+}
+
 function isAllowedLinkAppUrl(value) {
   const url = parseUrl(value);
   if (!url || url.protocol !== "https:") return false;
   return linkAppAllowedHostSuffixes.some((suffix) => url.hostname === suffix.slice(1) || url.hostname.endsWith(suffix));
+}
+
+async function runAllowedLocalAppCommand(commandText, cwd, env, label) {
+  const [command, ...args] = splitAllowedLocalAppCommand(commandText, label);
+  const result = await execFileAsync(command, args, {
+    cwd,
+    env,
+    timeout: 180000,
+    maxBuffer: 1024 * 1024 * 8,
+  });
+  return redactCommandOutput([`$ ${commandText}`, result.stdout, result.stderr].filter(Boolean).join("\n"));
+}
+
+function splitAllowedLocalAppCommand(commandText, label) {
+  const normalized = normalizeOptionalString(commandText);
+  if (!normalized) return [];
+  if (/[;&|`$<>]/.test(normalized)) throw new Error(`${label} cannot use shell operators.`);
+  const parts = normalized.split(/\s+/).filter(Boolean);
+  const [command, first, second] = parts;
+  const allowed =
+    (command === "npm" && (first === "ci" || first === "install" || (first === "run" && second === "build"))) ||
+    (command === "pnpm" && (first === "install" || (first === "run" && second === "build"))) ||
+    (command === "yarn" && (first === "install" || first === "build")) ||
+    (command === "bun" && (first === "install" || (first === "run" && second === "build"))) ||
+    (command === "node" && first?.startsWith("scripts/"));
+  if (!allowed) throw new Error(`${label} must use npm, pnpm, yarn, bun, or node scripts/* build commands.`);
+  return parts;
+}
+
+function safeRelativePath(value, label) {
+  const normalized = normalizeOptionalString(value) || ".";
+  if (path.isAbsolute(normalized) || normalized.split(/[\\/]/).includes("..")) {
+    throw new Error(`${label} must be a relative path inside the app directory.`);
+  }
+  return normalized;
+}
+
+function extractFirstHttpsUrl(value) {
+  return normalizeOptionalString(value).match(/https:\/\/[^\s"'<>]+/)?.[0]?.replace(/[),.;]+$/, "") || "";
+}
+
+function redactCommandOutput(value) {
+  const apiKey = credentialValue("TELNYX_API_KEY");
+  let output = String(value || "");
+  if (apiKey) output = output.split(apiKey).join("[redacted]");
+  return output
+    .replace(/authorization:\s*bearer\s+[^\s]+/gi, "authorization: bearer [redacted]")
+    .replace(/TELNYX_API_KEY=([^\s]+)/g, "TELNYX_API_KEY=[redacted]")
+    .slice(0, 12000);
 }
 
 function isSafeSourceRepoUrl(value) {
@@ -2913,7 +8428,7 @@ function normalizeRiskLevel(value) {
 
 function normalizePublisherStatus(value) {
   const status = String(value || "submitted").toLowerCase();
-  return ["draft", "submitted", "building", "preview", "approved", "deployed", "rejected", "deprecated"].includes(status)
+  return ["draft", "submitted", "building", "preview", "approved", "deployed", "rejected", "failed", "deprecated"].includes(status)
     ? status
     : "submitted";
 }
@@ -2986,6 +8501,7 @@ async function signInAgentControlPlane() {
         await saveSecureCredential("TELNYX_AUTH_REV2", tar2);
         if (token.id) await saveSecureCredential("TELNYX_AUTH_USER_ID", token.id);
         if (token.name) await saveSecureCredential("TELNYX_AUTH_USER_NAME", token.name);
+        await getEdgeComputeStatus({ seedAuth: true }).catch(() => undefined);
         await finishWithStatus();
       })
       .catch((error) => {
@@ -3186,7 +8702,8 @@ async function getAgentControlPlaneAuthStatus() {
   const onBehalfOfConfigured = Boolean(onBehalfOf);
   const signedIn = Boolean(rev2Configured || authCookies.length > 0);
   const authMode = rev2Configured ? "rev2" : "okta";
-  const ready = Boolean(signedIn || rev2Configured);
+  const validation = signedIn ? await validateAgentControlPlaneSession(baseUrl) : { ready: false };
+  const ready = Boolean(validation.ready);
   const avatarUrl = await slackProfileImageUrl(userName || actor || userId || "");
 
   return {
@@ -3207,11 +8724,11 @@ async function getAgentControlPlaneAuthStatus() {
       ? onBehalfOfConfigured
         ? "Agent Control Plane is ready with an explicit squad context."
         : "Agent Control Plane is ready. Link will use the Okta session unless ACP requires a squad context."
-      : "Sign in with Telnyx Okta to bring your agents, tasks, calls, calendar, docs, and internal tools into one secure workspace.",
+      : validation.message || "Sign in with Telnyx Okta to bring your agents, tasks, calls, calendar, docs, and internal tools into one secure workspace.",
   };
 }
 
-async function signOutAgentControlPlane() {
+async function clearAgentControlPlaneSession() {
   const cookies = await agentControlPlaneCookies();
   const baseUrl = agentControlPlaneUrl();
   await Promise.all(
@@ -3228,10 +8745,46 @@ async function signOutAgentControlPlane() {
   delete storedCredentials.TELNYX_AUTH_USER_ID;
   delete storedCredentials.TELNYX_AUTH_USER_NAME;
   await saveStoredCredentials();
+}
+
+async function signOutAgentControlPlane() {
+  await clearAgentControlPlaneSession();
   return getAgentControlPlaneAuthStatus();
 }
 
-async function openAgentControlPlaneSetup() {
+async function validateAgentControlPlaneSession(baseUrl) {
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/api/agents?page=1&page_size=1`, {
+      headers: await agentControlPlaneHeaders(),
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    return {
+      ready: false,
+      message: `Agent Control Plane is not reachable at ${baseUrl}. Connect to the Telnyx VPN, then sign in again if needed.`,
+    };
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    await clearAgentControlPlaneSession();
+    return {
+      ready: false,
+      message: "Your Telnyx Okta session expired. Sign in again to use Link.",
+    };
+  }
+
+  if (!response.ok) {
+    return {
+      ready: false,
+      message: `Agent Control Plane rejected the session check with ${response.status}. Sign in again or retry after ACP recovers.`,
+    };
+  }
+
+  return { ready: true };
+}
+
+async function openAgentControlPlaneSetup(_input) {
   const status = await getAgentControlPlaneAuthStatus();
   if (!status.ready) throw new Error("Sign in with Okta before adding an Agent Control Plane agent.");
 
@@ -3300,12 +8853,22 @@ async function listHostedAgents() {
     throw new Error("Sign in with Okta before listing hosted agents.");
   }
 
-  const response = await fetch(`${status.baseUrl}/api/agents?page=1&page_size=50`, {
-    headers: await agentControlPlaneHeaders(),
-  });
+  let response;
+  try {
+    response = await fetch(`${status.baseUrl}/api/agents?page=1&page_size=50`, {
+      headers: await agentControlPlaneHeaders(),
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (error) {
+    throw new Error(agentControlPlaneConnectionErrorMessage(status.baseUrl, error));
+  }
 
   if (!response.ok) {
     const detail = await response.text();
+    if (response.status === 401 || response.status === 403) {
+      await clearAgentControlPlaneSession();
+      throw new Error("Your Telnyx Okta session expired. Sign in again to list hosted agents.");
+    }
     throw new Error(`Agent Control Plane returned ${response.status}: ${detail.slice(0, 500)}`);
   }
 
@@ -3319,6 +8882,16 @@ async function listHostedAgents() {
     type: agent.agent_type,
     capabilities: agent.capabilities ?? [],
   }));
+}
+
+function agentControlPlaneConnectionErrorMessage(baseUrl, error) {
+  const detail = error instanceof Error ? error.message : String(error || "");
+  const timeout = /timeout|aborted|AbortError/i.test(detail);
+  return [
+    `Agent Control Plane is not reachable at ${baseUrl}.`,
+    timeout ? "The request timed out." : "The network request failed.",
+    "Connect to the Telnyx VPN, verify the Agent Control Plane service URL in Settings, then retry. You can still use Add Agent to open the guided setup flow.",
+  ].join(" ");
 }
 
 async function getHostedAgent(agentId) {
@@ -3401,6 +8974,2311 @@ async function saveCredential(input = {}) {
   return listCredentials();
 }
 
+async function connectGitHubWithDeviceFlow() {
+  const clientId = githubAppClientId();
+  if (!clientId) {
+    return connectGitHubWithDeveloperTokenFallback();
+  }
+
+  const device = await requestGitHubDeviceCode(clientId);
+  const decision = await dialog.showMessageBox({
+    type: "info",
+    title: "Connect GitHub",
+    message: `Enter this GitHub code: ${device.user_code}`,
+    detail: `Link will open ${device.verification_uri}. Approve the Telnyx Link GitHub App, then return to Link.`,
+    buttons: ["Open GitHub", "Cancel"],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (decision.response !== 0) throw new Error("GitHub pairing was cancelled.");
+  await shell.openExternal(device.verification_uri);
+  const token = await pollGitHubDeviceToken(clientId, device);
+  await saveSecureCredential(githubUserAccessTokenField, token.access_token);
+
+  const user = await githubRequest("https://api.github.com/user", token.access_token);
+  const login = String(user?.login || "");
+  if (login) await saveSecureCredential(githubUserLoginField, login);
+
+  const verificationRepo = githubAppDeviceVerificationRepo();
+  await readGitHubRepoTextWithToken("README.md", token.access_token, verificationRepo);
+  auditLogger.record({
+    actorId: login || "desktop_user",
+    surface: "desktop",
+    eventType: "credential.connected",
+    action: "github_device_flow",
+    target: verificationRepo,
+    metadata: {
+      login,
+      repo: verificationRepo,
+      tokenType: token.token_type || "bearer",
+    },
+  });
+  return {
+    status: "connected",
+    login,
+    userCode: device.user_code,
+    verificationUri: device.verification_uri,
+    credentials: await listCredentials(),
+  };
+}
+
+async function connectGitHubWithDeveloperTokenFallback() {
+  const token = await githubDeveloperFallbackToken();
+  if (!token) {
+    throw new Error("GitHub is not configured for this Link build. Add LINK_GITHUB_APP_CLIENT_ID for device pairing, save a GitHub App Client ID in Settings, set GH_TOKEN/GITHUB_TOKEN, or run `gh auth login`.");
+  }
+
+  const verificationRepo = githubAppDeviceVerificationRepo();
+  const user = await githubRequest("https://api.github.com/user", token);
+  const login = String(user?.login || "");
+  await readGitHubRepoTextWithToken("README.md", token, verificationRepo);
+  await saveSecureCredential(githubUserAccessTokenField, token);
+  if (login) await saveSecureCredential(githubUserLoginField, login);
+  auditLogger.record({
+    actorId: login || "desktop_user",
+    surface: "desktop",
+    eventType: "credential.connected",
+    action: "github_developer_token_fallback",
+    target: verificationRepo,
+    metadata: {
+      login,
+      repo: verificationRepo,
+    },
+  });
+  return {
+    status: "connected",
+    login,
+    userCode: "",
+    verificationUri: "",
+    credentials: await listCredentials(),
+  };
+}
+
+async function connectGuruWithOAuth() {
+  const clientId = guruOAuthClientId();
+  const clientSecret = guruOAuthClientSecret();
+  if (!clientId || !clientSecret) {
+    throw new Error("Guru OAuth is not configured. Add GURU_OAUTH_CLIENT_ID and GURU_OAUTH_CLIENT_SECRET in Link settings or managed environment config.");
+  }
+
+  const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  const state = crypto.randomBytes(32).toString("base64url");
+  const redirectUri = guruOAuthRedirectUri();
+  const callbackServer = await createGuruOAuthCallbackServer(state, redirectUri);
+  const loginUrl = guruOAuthAuthorizationUrl(callbackServer.callbackUrl, state);
+  const authWindow = new BrowserWindow({
+    width: 980,
+    height: 760,
+    title: "Guru - Connect",
+    parent,
+    modal: false,
+    backgroundColor: "#ffffff",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
+      webviewTag: false,
+    },
+  });
+
+  let resolved = false;
+  const authWebContentsId = authWindow.webContents.id;
+  authWebContentsIds.add(authWebContentsId);
+  const closeCallbackServer = () => callbackServer.server.close(() => undefined);
+
+  return new Promise((resolve, reject) => {
+    const finish = async (token) => {
+      if (resolved) return;
+      await saveGuruOAuthToken(token);
+      auditLogger.record({
+        actorId: String(token.user_id || "desktop_user"),
+        surface: "desktop",
+        eventType: "credential.connected",
+        action: "guru_oauth",
+        target: "guru",
+        metadata: {
+          tokenType: token.token_type || "bearer",
+          scope: guruOAuthScope(),
+        },
+      });
+      const result = {
+        status: "connected",
+        userId: String(token.user_id || ""),
+        credentials: await listCredentials(),
+        connectors: await listConnectors(),
+      };
+      resolved = true;
+      closeCallbackServer();
+      if (!authWindow.isDestroyed()) authWindow.close();
+      resolve({
+        ...result,
+      });
+    };
+
+    callbackServer.callbackPromise
+      .then(async ({ code, error, errorDescription }) => {
+        if (error) throw new Error(`Guru rejected the connection: ${errorDescription || error}`);
+        if (!code) throw new Error("Guru OAuth finished without an authorization code.");
+        await finish(await exchangeGuruOAuthCode(code, callbackServer.callbackUrl));
+      })
+      .catch((error) => {
+        if (!resolved) {
+          resolved = true;
+          closeCallbackServer();
+          if (!authWindow.isDestroyed()) authWindow.close();
+          reject(error);
+        }
+      });
+
+    authWindow.on("closed", () => {
+      authWebContentsIds.delete(authWebContentsId);
+      if (!resolved) {
+        resolved = true;
+        closeCallbackServer();
+        reject(new Error("Guru connection was cancelled."));
+      }
+    });
+
+    authWindow.webContents.setWindowOpenHandler(({ url }) => {
+      if (isAllowedGuruAuthWindowNavigation(url, callbackServer.callbackUrl)) {
+        void authWindow.loadURL(url);
+      } else if (isExternalBrowserUrl(url)) {
+        void shell.openExternal(url);
+      }
+      return { action: "deny" };
+    });
+
+    authWindow.webContents.on("will-navigate", (event, url) => {
+      if (isAllowedGuruAuthWindowNavigation(url, callbackServer.callbackUrl)) return;
+      event.preventDefault();
+      if (isExternalBrowserUrl(url)) void shell.openExternal(url);
+    });
+
+    authWindow.loadURL(loginUrl).catch((error) => {
+      if (!resolved) {
+        resolved = true;
+        closeCallbackServer();
+        if (!authWindow.isDestroyed()) authWindow.close();
+        reject(error);
+      }
+    });
+  });
+}
+
+function guruOAuthClientId() {
+  return String(credentialValue(guruOAuthClientIdField) || "").trim();
+}
+
+function guruOAuthClientSecret() {
+  return String(credentialValue(guruOAuthClientSecretField) || "").trim();
+}
+
+function guruOAuthScope() {
+  return String(credentialValue(guruOAuthScopeField) || process.env.GURU_OAUTH_SCOPE || defaultGuruOAuthScope).trim();
+}
+
+function guruOAuthRedirectUri() {
+  return String(credentialValue(guruOAuthRedirectUriField) || process.env.GURU_OAUTH_REDIRECT_URI || defaultGuruOAuthRedirectUri).trim();
+}
+
+function guruOAuthAuthorizeUrl() {
+  return String(process.env.GURU_OAUTH_AUTHORIZE_URL || defaultGuruOAuthAuthorizeUrl).trim();
+}
+
+function guruOAuthTokenUrl() {
+  return String(process.env.GURU_OAUTH_TOKEN_URL || defaultGuruOAuthTokenUrl).trim();
+}
+
+function guruOAuthAuthorizationUrl(callbackUrl, state) {
+  const url = new URL(guruOAuthAuthorizeUrl());
+  url.searchParams.set("client_id", guruOAuthClientId());
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("redirect_uri", callbackUrl);
+  url.searchParams.set("state", state);
+  url.searchParams.set("scope", guruOAuthScope());
+  return url.toString();
+}
+
+function createGuruOAuthCallbackServer(expectedState, redirectUri) {
+  const callback = parseUrl(redirectUri);
+  if (!callback || callback.protocol !== "http:" || !["localhost", "127.0.0.1"].includes(callback.hostname)) {
+    throw new Error("GURU_OAUTH_REDIRECT_URI must be an http://localhost or http://127.0.0.1 callback URL registered on the Guru OAuth client.");
+  }
+  if (!callback.port) throw new Error("GURU_OAUTH_REDIRECT_URI must include a fixed local port registered on the Guru OAuth client.");
+
+  let resolveCallback;
+  let rejectCallback;
+  const callbackPromise = new Promise((resolve, reject) => {
+    resolveCallback = resolve;
+    rejectCallback = reject;
+  });
+
+  const server = http.createServer((request, response) => {
+    try {
+      const url = new URL(request.url || "/", callback.origin);
+      if (url.pathname !== callback.pathname) {
+        response.writeHead(404, { "Content-Type": "text/plain" });
+        response.end("Not found");
+        return;
+      }
+
+      const returnedState = url.searchParams.get("state");
+      if (!returnedState || returnedState !== expectedState) {
+        response.writeHead(400, { "Content-Type": "text/html" });
+        response.end(authCallbackHtml("Connection failed", "Invalid state returned by Guru."));
+        rejectCallback(new Error("Invalid state returned by Guru."));
+        return;
+      }
+
+      response.writeHead(200, { "Content-Type": "text/html" });
+      response.end(authCallbackHtml("Guru connected", "You can close this window and return to Telnyx Link."));
+      resolveCallback({
+        code: url.searchParams.get("code") || "",
+        error: url.searchParams.get("error") || "",
+        errorDescription: url.searchParams.get("error_description") || "",
+      });
+    } catch (error) {
+      response.writeHead(500, { "Content-Type": "text/html" });
+      response.end(authCallbackHtml("Connection failed", "Telnyx Link could not complete the Guru callback."));
+      rejectCallback(error);
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    server.once("error", (error) => {
+      reject(new Error(`Could not start the Guru OAuth callback server at ${redirectUri}: ${error.message}`));
+    });
+    server.listen(Number(callback.port), callback.hostname, () => {
+      resolve({
+        server,
+        callbackUrl: callback.toString(),
+        callbackPromise,
+      });
+    });
+  });
+}
+
+async function exchangeGuruOAuthCode(code, redirectUri) {
+  return fetchGuruOAuthToken({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: redirectUri,
+    scope: guruOAuthScope(),
+  });
+}
+
+async function refreshGuruOAuthToken(refreshToken) {
+  return fetchGuruOAuthToken({
+    grant_type: "refresh_token",
+    refresh_token: refreshToken,
+  });
+}
+
+async function fetchGuruOAuthToken(params) {
+  const url = new URL(guruOAuthTokenUrl());
+  url.searchParams.set("client_id", guruOAuthClientId());
+  url.searchParams.set("client_secret", guruOAuthClientSecret());
+  for (const [key, value] of Object.entries(params)) {
+    if (value) url.searchParams.set(key, String(value));
+  }
+  const response = await fetch(url.toString(), {
+    method: "POST",
+    headers: { Accept: "application/json" },
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Guru OAuth token exchange returned ${response.status}: ${text.slice(0, 500)}`);
+  }
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error("Guru OAuth token response was not valid JSON.");
+  }
+  if (!payload.access_token) throw new Error("Guru OAuth token response did not include an access token.");
+  return payload;
+}
+
+async function saveGuruOAuthToken(token) {
+  await saveSecureCredential(guruOAuthAccessTokenField, token.access_token);
+  if (token.refresh_token) await saveSecureCredential(guruOAuthRefreshTokenField, token.refresh_token);
+  if (token.user_id) await saveSecureCredential(guruOAuthUserIdField, String(token.user_id));
+  if (token.expires_in) {
+    await saveSecureCredential(guruOAuthTokenExpiresAtField, new Date(Date.now() + Number(token.expires_in) * 1000).toISOString());
+  }
+}
+
+function isAllowedGuruAuthWindowNavigation(value, callbackUrl) {
+  if (value === "about:blank") return true;
+  const target = parseUrl(value);
+  if (!target) return false;
+  const callback = parseUrl(callbackUrl);
+  if (callback && target.origin === callback.origin && target.pathname === callback.pathname) return true;
+  if (isTrustedOktaAuthOrigin(value)) return true;
+  if (target.protocol !== "https:") return false;
+  const hostname = target.hostname.toLowerCase();
+  return hostname === "github.com" || hostname.endsWith(".github.com") || hostname === "getguru.com" || hostname.endsWith(".getguru.com");
+}
+
+async function githubDeveloperFallbackToken() {
+  const savedOrEnvToken = credentialValue(githubUserAccessTokenField) || credentialValue("GH_TOKEN") || credentialValue("GITHUB_TOKEN");
+  if (savedOrEnvToken) return savedOrEnvToken;
+  try {
+    const { stdout } = await execFileAsync("gh", ["auth", "token"], {
+      timeout: 10_000,
+      maxBuffer: 128 * 1024,
+    });
+    return String(stdout || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function requestGitHubDeviceCode(clientId) {
+  const response = await fetch("https://github.com/login/device/code", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams({ client_id: clientId }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload.device_code || !payload.user_code || !payload.verification_uri) {
+    throw new Error(`GitHub device authorization failed: ${JSON.stringify(payload).slice(0, 300)}`);
+  }
+  return payload;
+}
+
+async function pollGitHubDeviceToken(clientId, device) {
+  const startedAt = Date.now();
+  const expiresInMs = Number(device.expires_in || 900) * 1000;
+  let intervalMs = Math.max(Number(device.interval || 5), 5) * 1000;
+  while (Date.now() - startedAt < expiresInMs) {
+    await sleep(intervalMs);
+    const response = await fetch("https://github.com/login/oauth/access_token", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        device_code: device.device_code,
+        grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (payload.access_token) return payload;
+    if (payload.error === "authorization_pending") continue;
+    if (payload.error === "slow_down") {
+      intervalMs += 5000;
+      continue;
+    }
+    if (payload.error === "expired_token") break;
+    throw new Error(`GitHub device authorization failed: ${payload.error_description || payload.error || JSON.stringify(payload).slice(0, 300)}`);
+  }
+  throw new Error("GitHub device authorization expired before the account was paired.");
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function connectGoogleWorkspaceWithSkill() {
+  const skill = resolveGoogleWorkspaceSetupUtilityMetadata();
+  const existingConnectionId = credentialValue(googleWorkspaceAgentConnectionField);
+  const account = googleWorkspaceAccountEmail();
+  const connectionId = existingConnectionId || `google-workspace-${crypto.randomUUID()}`;
+  await ensureGoogleWorkspaceGogAuthorized(account);
+  await verifyGoogleWorkspaceAccess();
+  auditLogger.record({
+    actorId: "desktop_user",
+    surface: "desktop",
+    eventType: "skill.used",
+    action: skill.name,
+    target: "google-workspace",
+    metadata: {
+      source: skill.source,
+      product: skill.product,
+      account,
+      connectionField: googleWorkspaceAgentConnectionField,
+    },
+  });
+  await saveSecureCredential(googleWorkspaceAgentConnectionField, connectionId);
+  await saveSecureCredential(googleWorkspaceVerifiedField, new Date().toISOString());
+  connectorOverrides = {
+    ...connectorOverrides,
+    "google-drive": "connected",
+    "google-calendar": "connected",
+  };
+  await saveDesktopState();
+  return {
+    status: "connected",
+    connectionId,
+    skill,
+    credentials: await listCredentials(),
+    connectors: await listConnectors(),
+  };
+}
+
+const googleInboxGogExactCommandAllowlist = Object.freeze([
+  "gmail.search",
+  "gmail.get",
+  "gmail.thread.get",
+  "gmail.url",
+  "gmail.drafts.list",
+  "gmail.drafts.get",
+  "gmail.drafts.create",
+  "gmail.drafts.update",
+]);
+
+async function connectGoogleInboxWithGog() {
+  const existingConnectionId = credentialValue(googleInboxAgentConnectionField);
+  const account = googleWorkspaceAccountEmail();
+  const connectionId = existingConnectionId || `google-inbox-${crypto.randomUUID()}`;
+  await ensureGoogleInboxGogAuthorized(account);
+  await verifyGoogleInboxAccess();
+  auditLogger.record({
+    actorId: "desktop_user",
+    surface: "desktop",
+    eventType: "google_inbox.connected",
+    action: "connect_google_inbox_gog",
+    target: "google-inbox",
+    metadata: {
+      account,
+      connectionField: googleInboxAgentConnectionField,
+      safety: "gmail-no-send",
+    },
+  });
+  await saveSecureCredential(googleInboxAgentConnectionField, connectionId);
+  await saveSecureCredential(googleInboxVerifiedField, new Date().toISOString());
+  connectorOverrides = {
+    ...connectorOverrides,
+    "google-inbox": "connected",
+  };
+  await saveDesktopState();
+  return {
+    status: "connected",
+    connectionId,
+    credentials: await listCredentials(),
+    connectors: await listConnectors(),
+  };
+}
+
+async function ensureGoogleInboxGogAuthorized(account) {
+  const gog = await resolveGogCommand();
+  await ensureGoogleWorkspaceGogFileKeyring(account, gog);
+  await runGoogleInboxAuth(account, gog);
+  await rememberGoogleWorkspaceGogEnvironment(account);
+}
+
+async function runGoogleInboxAuth(account, gog) {
+  await execFileAsync(gog, [
+    "auth",
+    "add",
+    account,
+    "--services",
+    "gmail",
+    "--gmail-scope",
+    "full",
+    "--force-consent",
+    "--gmail-no-send",
+  ], {
+    timeout: 10 * 60_000,
+    maxBuffer: 8 * 1024 * 1024,
+    env: googleWorkspaceSetupEnv(account, gog),
+  });
+}
+
+async function verifyGoogleInboxAccess() {
+  await listGoogleInboxThreads({ query: "in:inbox", maxResults: 1 });
+}
+
+async function listGoogleInboxThreads(input = {}) {
+  const query = normalizeGoogleInboxQuery(input.query);
+  const maxResults = normalizeGoogleInboxMaxResults(input.maxResults ?? input.max ?? 20);
+  const payload = await runSafeGoogleInboxGogJson(
+    ["gmail", "search", query, "--max", String(maxResults)],
+    "Google Inbox",
+    { read: true },
+  );
+  return normalizeGoogleInboxThreadSummaries(payload).slice(0, maxResults);
+}
+
+async function getGoogleInboxThread(input = {}) {
+  const threadId = normalizeRequiredGoogleInboxString(input.threadId ?? input.id, "Choose an inbox thread first.");
+  const payload = await runSafeGoogleInboxGogJson(
+    ["gmail", "thread", "get", threadId, "--full"],
+    "Google Inbox thread",
+    { read: true },
+  );
+  return normalizeGoogleInboxThread(payload, threadId);
+}
+
+async function createGoogleInboxDraft(input = {}) {
+  const draft = normalizeGoogleInboxDraftInput(input);
+  const args = ["gmail", "drafts", "create", "--subject", draft.subject, "--body", draft.body];
+  appendGoogleInboxDraftArgs(args, draft);
+  const payload = await runSafeGoogleInboxGogJson(args, "Google Inbox draft", { read: false });
+  return normalizeGoogleInboxDraft(payload, draft);
+}
+
+async function updateGoogleInboxDraft(input = {}) {
+  const draftId = normalizeRequiredGoogleInboxString(input.draftId ?? input.id, "Choose a Gmail draft first.");
+  const draft = normalizeGoogleInboxDraftInput(input);
+  const args = ["gmail", "drafts", "update", draftId, "--subject", draft.subject, "--body", draft.body];
+  appendGoogleInboxDraftArgs(args, draft);
+  const payload = await runSafeGoogleInboxGogJson(args, "Google Inbox draft", { read: false });
+  return normalizeGoogleInboxDraft(payload, { ...draft, draftId });
+}
+
+function appendGoogleInboxDraftArgs(args, draft) {
+  if (draft.to) args.push("--to", draft.to);
+  if (draft.cc) args.push("--cc", draft.cc);
+  if (draft.bcc) args.push("--bcc", draft.bcc);
+  if (draft.threadId) args.push("--thread-id", draft.threadId);
+  if (draft.replyToMessageId) args.push("--reply-to-message-id", draft.replyToMessageId);
+  if (draft.from) args.push("--from", draft.from);
+}
+
+async function runSafeGoogleInboxGogJson(commandArgs, label, { read = true } = {}) {
+  assertSafeGoogleInboxGogArgs(commandArgs);
+  const account = googleWorkspaceAccountEmail();
+  return runGogJson([
+    "--gmail-no-send",
+    `--enable-commands-exact=${googleInboxGogExactCommandAllowlist.join(",")}`,
+    "--json",
+    ...(read ? ["--wrap-untrusted"] : []),
+    ...commandArgs.map(String),
+  ], label, account);
+}
+
+function assertSafeGoogleInboxGogArgs(commandArgs) {
+  const commandPath = googleInboxGogCommandPath(commandArgs);
+  if (!googleInboxGogExactCommandAllowlist.includes(commandPath)) {
+    throw new Error(`Blocked unsafe Gmail command: ${commandPath || commandArgs.join(" ")}`);
+  }
+  const hasAttachmentFlag = commandArgs.some((arg) => String(arg) === "--attach" || String(arg).startsWith("--attach="));
+  const hasBodyFileFlag = commandArgs.some((arg) => String(arg) === "--body-file" || String(arg).startsWith("--body-file="));
+  if (hasAttachmentFlag || hasBodyFileFlag) {
+    throw new Error("Gmail Inbox v1 blocks attachment and body-file draft operations.");
+  }
+}
+
+function googleInboxGogCommandPath(commandArgs = []) {
+  const args = commandArgs.map((arg) => String(arg).trim()).filter(Boolean);
+  if (args[0] !== "gmail") return "";
+  if (args[1] === "search") return "gmail.search";
+  if (args[1] === "get") return "gmail.get";
+  if (args[1] === "url") return "gmail.url";
+  if (args[1] === "thread" && args[2] === "get") return "gmail.thread.get";
+  if (args[1] === "drafts" && ["list", "get", "create", "update"].includes(args[2])) {
+    return `gmail.drafts.${args[2]}`;
+  }
+  return "";
+}
+
+function normalizeGoogleInboxQuery(query) {
+  const account = googleWorkspaceAccountEmail();
+  const text = String(query || "").trim();
+  const parts = [];
+  const source = text || "";
+  if (!/\bin:/i.test(source)) parts.push("in:inbox");
+  if (!/\bis:(?:read|unread)\b/i.test(source) && !/\blabel:unread\b/i.test(source)) parts.push("is:unread");
+  if (!/\b(?:to|cc|bcc|deliveredto):/i.test(source)) parts.push(`to:${account}`);
+  if (source) parts.push(source);
+  return parts.join(" ").trim();
+}
+
+function normalizeGoogleInboxMaxResults(value) {
+  const count = Number(value);
+  if (!Number.isFinite(count)) return 20;
+  return Math.max(1, Math.min(50, Math.trunc(count)));
+}
+
+function normalizeGoogleInboxDraftInput(input = {}) {
+  const subject = normalizeRequiredGoogleInboxString(input.subject, "Draft subject is required.");
+  const body = normalizeRequiredGoogleInboxString(input.body, "Draft body is required.");
+  const threadId = normalizeOptionalString(input.threadId);
+  const replyToMessageId = normalizeOptionalString(input.replyToMessageId ?? input.messageId);
+  const to = normalizeEmailList(input.to);
+  if (!to && !threadId && !replyToMessageId) {
+    throw new Error("Choose a thread or add a recipient before saving a Gmail draft.");
+  }
+  return {
+    draftId: normalizeOptionalString(input.draftId ?? input.id),
+    threadId,
+    replyToMessageId,
+    to,
+    cc: normalizeEmailList(input.cc),
+    bcc: normalizeEmailList(input.bcc),
+    subject,
+    body,
+    from: normalizeOptionalString(input.from),
+  };
+}
+
+function normalizeRequiredGoogleInboxString(value, message) {
+  const text = normalizeOptionalString(value);
+  if (!text) throw new Error(message);
+  return text;
+}
+
+function normalizeEmailList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean).join(",");
+  return normalizeOptionalString(value);
+}
+
+function normalizeGoogleInboxThreadSummaries(payload) {
+  const records = normalizeArrayPayload(payload);
+  return records.map((record, index) => normalizeGoogleInboxThreadSummary(record, index)).filter(Boolean);
+}
+
+function normalizeGoogleInboxThreadSummary(record, index = 0) {
+  const threadId = normalizeOptionalString(record?.threadId ?? record?.thread_id ?? record?.thread?.id ?? record?.id);
+  if (!threadId) return null;
+  const messageId = normalizeOptionalString(record?.messageId ?? record?.message_id ?? record?.latestMessageId ?? record?.messages?.[0]?.id ?? record?.id);
+  const subject = googleInboxHeader(record, "subject") || normalizeOptionalString(record?.subject ?? record?.title) || "(No subject)";
+  const from = googleInboxHeader(record, "from") || normalizeOptionalString(record?.from ?? record?.sender ?? record?.author) || "Unknown sender";
+  const to = googleInboxHeader(record, "to") || normalizeOptionalString(record?.to ?? record?.recipient) || "";
+  const date = googleInboxHeader(record, "date") || normalizeOptionalString(record?.date ?? record?.time ?? record?.lastMessageAt ?? record?.internalDate) || "";
+  const snippet = cleanGoogleInboxText(record?.snippet ?? record?.preview ?? record?.summary ?? record?.body ?? "");
+  return {
+    id: threadId,
+    threadId,
+    messageId,
+    subject,
+    from,
+    to,
+    date: formatGoogleInboxDate(date),
+    snippet,
+    unread: Boolean(record?.unread ?? record?.isUnread ?? normalizeGoogleInboxLabels(record).some((label) => label.toUpperCase() === "UNREAD")),
+    labels: normalizeGoogleInboxLabels(record),
+    url: googleInboxThreadUrl(threadId),
+  };
+}
+
+function normalizeGoogleInboxThread(payload, requestedThreadId) {
+  const messages = normalizeGoogleInboxMessages(payload, requestedThreadId);
+  const summary = normalizeGoogleInboxThreadSummary(payload, 0);
+  const threadId = normalizeOptionalString(payload?.threadId ?? payload?.thread_id ?? payload?.id ?? requestedThreadId);
+  const subject = summary?.subject || messages.find((message) => message.subject)?.subject || "(No subject)";
+  const account = safeGoogleWorkspaceAccountEmail().toLowerCase();
+  const replyMessage = [...messages].reverse().find((message) => {
+    const fromEmail = extractEmailAddress(message.from).toLowerCase();
+    return fromEmail && fromEmail !== account;
+  }) ?? messages[messages.length - 1];
+  const participants = [...new Set(messages.flatMap((message) => [message.from, message.to]).flatMap(splitEmailList).filter(Boolean))];
+  return {
+    id: threadId,
+    threadId,
+    subject,
+    snippet: summary?.snippet || messages.map((message) => message.snippet).filter(Boolean).join(" ").slice(0, 240),
+    from: summary?.from || messages[0]?.from || "",
+    to: summary?.to || messages[0]?.to || "",
+    date: summary?.date || messages[messages.length - 1]?.date || "",
+    labels: summary?.labels || [],
+    unread: Boolean(summary?.unread),
+    participants,
+    replyTo: replyMessage ? extractEmailAddress(replyMessage.replyTo || replyMessage.from) : "",
+    replyToMessageId: replyMessage?.messageId || "",
+    messages,
+    url: googleInboxThreadUrl(threadId),
+  };
+}
+
+function normalizeGoogleInboxMessages(payload, fallbackThreadId) {
+  const records = Array.isArray(payload?.messages)
+    ? payload.messages
+    : Array.isArray(payload?.thread?.messages)
+    ? payload.thread.messages
+    : normalizeArrayPayload(payload).filter((item) => item?.payload || item?.headers || item?.body || item?.snippet);
+  return records.map((message, index) => normalizeGoogleInboxMessage(message, fallbackThreadId, index)).filter(Boolean);
+}
+
+function normalizeGoogleInboxMessage(message, fallbackThreadId, index = 0) {
+  const messageId = normalizeOptionalString(message?.messageId ?? message?.message_id ?? message?.id);
+  const threadId = normalizeOptionalString(message?.threadId ?? message?.thread_id ?? fallbackThreadId);
+  if (!messageId && !threadId) return null;
+  const subject = googleInboxHeader(message, "subject") || normalizeOptionalString(message?.subject) || "";
+  const from = googleInboxHeader(message, "from") || normalizeOptionalString(message?.from ?? message?.sender) || "Unknown sender";
+  const to = googleInboxHeader(message, "to") || normalizeOptionalString(message?.to ?? message?.recipient) || "";
+  const cc = googleInboxHeader(message, "cc") || normalizeOptionalString(message?.cc) || "";
+  const replyTo = googleInboxHeader(message, "reply-to") || normalizeOptionalString(message?.replyTo ?? message?.reply_to) || "";
+  const date = googleInboxHeader(message, "date") || normalizeOptionalString(message?.date ?? message?.time ?? message?.internalDate) || "";
+  const body = cleanGoogleInboxText(extractGoogleInboxMessageBody(message));
+  const snippet = cleanGoogleInboxText(message?.snippet ?? message?.preview ?? body).slice(0, 260);
+  return {
+    id: messageId || `${threadId}-${index}`,
+    messageId,
+    threadId,
+    subject,
+    from,
+    to,
+    cc,
+    replyTo,
+    date: formatGoogleInboxDate(date),
+    snippet,
+    body,
+  };
+}
+
+function normalizeGoogleInboxDraft(payload, input = {}) {
+  const draft = payload?.draft || payload?.data || payload?.result || payload || {};
+  const message = draft.message || {};
+  const draftId = normalizeOptionalString(draft.id ?? draft.draftId ?? input.draftId);
+  const threadId = normalizeOptionalString(message.threadId ?? draft.threadId ?? input.threadId);
+  return {
+    id: draftId || `draft-${Date.now()}`,
+    draftId: draftId || "",
+    messageId: normalizeOptionalString(message.id ?? draft.messageId),
+    threadId,
+    to: normalizeOptionalString(input.to),
+    cc: normalizeOptionalString(input.cc),
+    bcc: normalizeOptionalString(input.bcc),
+    subject: normalizeOptionalString(input.subject),
+    body: normalizeOptionalString(input.body),
+    updatedAt: new Date().toISOString(),
+    url: threadId ? googleInboxThreadUrl(threadId) : "https://mail.google.com/mail/u/0/#drafts",
+  };
+}
+
+function normalizeGoogleInboxLabels(record) {
+  const labels = record?.labels ?? record?.labelIds ?? record?.label_ids ?? record?.message?.labelIds;
+  if (!Array.isArray(labels)) return [];
+  return labels.map((label) => String(label).trim()).filter(Boolean);
+}
+
+function googleInboxHeader(record, headerName) {
+  const headers = [
+    ...(Array.isArray(record?.headers) ? record.headers : []),
+    ...(Array.isArray(record?.payload?.headers) ? record.payload.headers : []),
+  ];
+  const match = headers.find((header) => String(header?.name || "").toLowerCase() === headerName.toLowerCase());
+  return normalizeOptionalString(match?.value);
+}
+
+function extractGoogleInboxMessageBody(message) {
+  const direct = message?.bodyText ?? message?.body_text ?? message?.text ?? message?.plainText ?? message?.plain_text ?? message?.body;
+  if (typeof direct === "string") return direct;
+  const bodyData = message?.payload?.body?.data ?? message?.body?.data;
+  if (typeof bodyData === "string") return decodeGoogleInboxBodyData(bodyData);
+  const partText = extractGoogleInboxPartText(message?.payload?.parts ?? message?.parts);
+  return partText || message?.snippet || "";
+}
+
+function extractGoogleInboxPartText(parts) {
+  if (!Array.isArray(parts)) return "";
+  for (const part of parts) {
+    const mimeType = String(part?.mimeType || part?.mime_type || "");
+    if (mimeType === "text/plain" && typeof part?.body?.data === "string") {
+      return decodeGoogleInboxBodyData(part.body.data);
+    }
+    const nested = extractGoogleInboxPartText(part?.parts);
+    if (nested) return nested;
+  }
+  return "";
+}
+
+function decodeGoogleInboxBodyData(value) {
+  try {
+    return Buffer.from(String(value).replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8");
+  } catch {
+    return "";
+  }
+}
+
+function cleanGoogleInboxText(value) {
+  return String(value || "")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{4,}/g, "\n\n\n")
+    .trim();
+}
+
+function formatGoogleInboxDate(value) {
+  const text = normalizeOptionalString(value);
+  if (!text) return "";
+  const date = new Date(Number(text) || text);
+  if (Number.isNaN(date.getTime())) return text;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function googleInboxThreadUrl(threadId) {
+  const id = encodeURIComponent(String(threadId || ""));
+  return `https://mail.google.com/mail/u/0/#inbox/${id}`;
+}
+
+function safeGoogleWorkspaceAccountEmail() {
+  try {
+    return googleWorkspaceAccountEmail();
+  } catch {
+    return "";
+  }
+}
+
+function splitEmailList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function extractEmailAddress(value) {
+  const text = String(value || "").trim();
+  const bracketMatch = text.match(/<([^<>\s]+@[^<>\s]+)>/);
+  if (bracketMatch) return bracketMatch[1].trim();
+  const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return emailMatch ? emailMatch[0].trim() : text;
+}
+
+function resolveGoogleWorkspaceSetupUtilityMetadata() {
+  return {
+    name: "openclaw-itops-gog-setup",
+    description: "Set up read-only Google Workspace access through the Telnyx OpenClaw IT Ops gog setup utility.",
+    owner: "telnyx",
+    team: "IT Ops",
+    riskLevel: "low",
+    toolsRequired: ["gog", "openclaw-itops-setup-utils/gog-setup"],
+    customerSafe: false,
+    approvalRequired: false,
+    source: "telnyx",
+    product: "google-workspace",
+    language: "cli",
+    sourceOfTruth: `https://github.com/${googleWorkspaceSetupUtilsRepo}`,
+  };
+}
+
+async function ensureGoogleWorkspaceGogAuthorized(account) {
+  const gog = await resolveGogCommand();
+  await ensureGoogleWorkspaceGogFileKeyring(account, gog);
+  const setupPath = await stageGoogleWorkspaceSetupUtility();
+  try {
+    await runGoogleWorkspaceSetupUtility(setupPath, account, gog);
+  } catch (error) {
+    const detail = stripAnsi([error?.stdout, error?.stderr, error?.message].filter(Boolean).join("\n")).trim();
+    if (isRecoverableGoogleWorkspaceKeyringError(detail)) {
+      await resetGoogleWorkspaceGogFileKeyring(account);
+      await ensureGoogleWorkspaceGogFileKeyring(account, gog);
+      try {
+        await runGoogleWorkspaceSetupUtility(setupPath, account, gog);
+        await rememberGoogleWorkspaceGogEnvironment(account);
+        return;
+      } catch (retryError) {
+        const retryDetail = stripAnsi([retryError?.stdout, retryError?.stderr, retryError?.message].filter(Boolean).join("\n")).trim();
+        throw new Error(googleWorkspaceSetupFailureMessage(retryDetail, true));
+      }
+    }
+    throw new Error(googleWorkspaceSetupFailureMessage(detail));
+  }
+  await rememberGoogleWorkspaceGogEnvironment(account);
+}
+
+async function runGoogleWorkspaceSetupUtility(setupPath, account, gog) {
+  await execFileAsync(setupPath, [account], {
+    timeout: 10 * 60_000,
+    maxBuffer: 8 * 1024 * 1024,
+    env: googleWorkspaceSetupEnv(account, gog),
+  });
+}
+
+function isRecoverableGoogleWorkspaceKeyringError(detail) {
+  return /aes\.KeyUnwrap\(\): integrity check failed|read encoded file keyring item|keyring.*integrity check failed/i.test(String(detail || ""));
+}
+
+function googleWorkspaceSetupFailureMessage(detail, resetAttempted = false) {
+  const conciseDetail = summarizeGoogleWorkspaceSetupFailure(detail);
+  if (resetAttempted) {
+    return [
+      "Google Workspace setup could not unlock Link's local gog keyring. Link reset its local gog credentials and retried, but authorization still failed.",
+      process.env[gogKeyringPasswordField]
+        ? "Unset GOG_KEYRING_PASSWORD, relaunch Link, and press Connect again."
+        : "Press Connect again to restart Google authorization.",
+      conciseDetail ? `Details: ${conciseDetail}` : "",
+    ].filter(Boolean).join(" ");
+  }
+  return [
+    `Google Workspace setup via ${googleWorkspaceSetupUtilsRepo}/${googleWorkspaceSetupScriptPath} failed.`,
+    conciseDetail,
+  ].filter(Boolean).join(" ");
+}
+
+function summarizeGoogleWorkspaceSetupFailure(detail) {
+  const text = stripAnsi(detail)
+    .replace(/[╭╮╯╰─│┌┐└┘├┤┬┴┼═║]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!text) return "";
+  if (isRecoverableGoogleWorkspaceKeyringError(text)) {
+    return "The saved gog file-keyring password did not match Link's local gog credential store.";
+  }
+  const authFailure = text.match(/Authorization failed[^.]*\.?/i)?.[0];
+  if (authFailure) return authFailure.trim();
+  return text.slice(0, 500);
+}
+
+async function assertGogCliAvailable() {
+  await resolveGogCommand();
+}
+
+async function resolveGogCommand() {
+  for (const command of gogCommandCandidates()) {
+    try {
+      await execFileAsync(command, ["--help"], { timeout: 10_000, maxBuffer: 128 * 1024 });
+      return command;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+  throw new Error("Google Workspace setup requires the bundled `gog` CLI, but Link could not find it in app resources or on PATH.");
+}
+
+function gogCommandCandidates() {
+  const platformName = process.platform === "darwin" ? "macos" : process.platform === "win32" ? "windows" : process.platform;
+  const archName = process.arch === "x64" ? "amd64" : process.arch;
+  const executableSuffix = process.platform === "win32" ? ".exe" : "";
+  const bundledBinDir = app.isPackaged
+    ? path.join(process.resourcesPath, "bin")
+    : path.resolve(__dirname, "../../bin");
+  return [
+    process.env.LINK_DESKTOP_GOG_COMMAND,
+    path.join(bundledBinDir, `gog-${platformName}-${archName}${executableSuffix}`),
+    path.join(bundledBinDir, `gogcli-${platformName}-${archName}${executableSuffix}`),
+    path.join(bundledBinDir, `gog${executableSuffix}`),
+    path.join(bundledBinDir, `gogcli${executableSuffix}`),
+    `gog${executableSuffix}`,
+    `gogcli${executableSuffix}`,
+  ].filter(Boolean);
+}
+
+async function assertGitHubCliAvailable() {
+  try {
+    await execFileAsync("gh", ["auth", "status"], { timeout: 10_000, maxBuffer: 128 * 1024 });
+  } catch {
+    throw new Error("GitHub CLI is not authenticated. Configure GOOGLE_WORKSPACE_SETUP_ASSET_URL or GOOGLE_WORKSPACE_SKILL_ASSET_URL for Okta-backed setup utility fetches, or sign in to GitHub for local development.");
+  }
+}
+
+async function stageGoogleWorkspaceSetupUtility() {
+  const overridePath = process.env.GOOGLE_WORKSPACE_SETUP_SCRIPT;
+  if (overridePath) {
+    await validateGoogleWorkspaceSetupUtility(await fs.readFile(overridePath, "utf8"));
+    return overridePath;
+  }
+
+  const scriptText = normalizeGoogleWorkspaceSetupUtilityScript(await readGoogleWorkspaceSetupUtilsText(googleWorkspaceSetupScriptPath));
+  await validateGoogleWorkspaceSetupUtility(scriptText);
+  const dir = path.join(app.getPath("userData"), "google-workspace-setup-utils");
+  await fs.mkdir(dir, { recursive: true });
+  const scriptPath = path.join(dir, googleWorkspaceSetupScriptPath);
+  await fs.writeFile(scriptPath, scriptText, { mode: 0o700 });
+  await fs.chmod(scriptPath, 0o700);
+  return scriptPath;
+}
+
+function normalizeGoogleWorkspaceSetupUtilityScript(scriptText) {
+  const text = String(scriptText || "");
+  if (!text.includes("local keyring_file=\"$HOME/.config/gogcli/.keyring-password\"")) return text;
+  return text.replace(
+    "local keyring_file=\"$HOME/.config/gogcli/.keyring-password\"",
+    [
+      "if [ -n \"${GOG_KEYRING_PASSWORD:-}\" ]; then",
+      "    echo \"$GOG_KEYRING_PASSWORD\"",
+      "    return",
+      "  fi",
+      "  local keyring_file=\"${GOG_KEYRING_PASSWORD_FILE:-$HOME/.config/gogcli/.keyring-password}\"",
+    ].join("\n  "),
+  );
+}
+
+async function validateGoogleWorkspaceSetupUtility(scriptText) {
+  const text = String(scriptText || "");
+  if (!text.includes("gog auth credentials") || !text.includes("gog auth add") || !text.includes("--readonly")) {
+    throw new Error(`The ${googleWorkspaceSetupUtilsRepo}/${googleWorkspaceSetupScriptPath} setup utility did not match the expected read-only gog auth script.`);
+  }
+}
+
+async function readGoogleWorkspaceSetupUtilsText(repoPath) {
+  const failures = [];
+  try {
+    return await readOktaBackedSkillAssetText(repoPath, googleWorkspaceSetupUtilsRepo);
+  } catch (error) {
+    failures.push(errorMessage(error));
+  }
+  try {
+    return await readGitHubRepoText(repoPath, googleWorkspaceSetupUtilsRepo);
+  } catch (error) {
+    failures.push(errorMessage(error));
+  }
+  throw new Error(`Unable to load ${googleWorkspaceSetupUtilsRepo}/${repoPath}. ${failures.filter(Boolean).join(" ")}`);
+}
+
+async function readOktaBackedSkillAssetText(repoPath, repo = googleWorkspaceSetupUtilsRepo) {
+  const baseUrl = googleWorkspaceSkillAssetUrl();
+  if (!baseUrl) {
+    throw new Error("GOOGLE_WORKSPACE_SETUP_ASSET_URL or GOOGLE_WORKSPACE_SKILL_ASSET_URL is not configured.");
+  }
+  const rev2 = credentialValue("TELNYX_AUTH_REV2");
+  if (!rev2) {
+    throw new Error("Sign in with Okta before loading Google Workspace skill assets.");
+  }
+  const url = new URL(baseUrl);
+  url.searchParams.set("repo", repo);
+  url.searchParams.set("path", repoPath);
+  const headers = await agentControlPlaneHeaders();
+  headers.Accept = "application/json, text/plain";
+  const response = await fetch(url.toString(), { method: "GET", headers });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Okta-backed skill asset fetch returned ${response.status}: ${text.slice(0, 300)}`);
+  }
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("Okta-backed skill asset fetch returned an empty response.");
+  if (response.headers.get("content-type")?.includes("application/json")) {
+    const payload = JSON.parse(trimmed);
+    if (typeof payload.content === "string") return payload.content;
+    if (typeof payload.text === "string") return payload.text;
+    if (typeof payload.base64 === "string") return Buffer.from(payload.base64, "base64").toString("utf8");
+    throw new Error("Okta-backed skill asset JSON did not include content, text, or base64.");
+  }
+  return trimmed;
+}
+
+async function readGitHubRepoText(repoPath, repo = googleWorkspaceSetupUtilsRepo) {
+  const token = githubContentToken();
+  if (token) return readGitHubRepoTextWithToken(repoPath, token, repo);
+  await assertGitHubCliAvailable();
+  const { stdout } = await execFileAsync("gh", [
+    "api",
+    `repos/${repo}/contents/${repoPath}`,
+    "--jq",
+    ".content",
+  ], {
+    timeout: 30_000,
+    maxBuffer: 2 * 1024 * 1024,
+  });
+  const encoded = String(stdout || "").replace(/\s+/g, "");
+  if (!encoded) throw new Error(`GitHub returned no content for ${repo}/${repoPath}.`);
+  return Buffer.from(encoded, "base64").toString("utf8");
+}
+
+function githubContentToken() {
+  return credentialValue(githubUserAccessTokenField) || credentialValue("GH_TOKEN") || credentialValue("GITHUB_TOKEN");
+}
+
+async function readGitHubRepoTextWithToken(repoPath, token, repo = googleWorkspaceSetupUtilsRepo) {
+  const payload = await githubRequest(`https://api.github.com/repos/${repo}/contents/${repoPath}`, token);
+  const encoded = String(payload.content || "").replace(/\s+/g, "");
+  if (!encoded) throw new Error(`GitHub returned no content for ${repo}/${repoPath}.`);
+  return Buffer.from(encoded, "base64").toString("utf8");
+}
+
+async function githubRequest(url, token) {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${token}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`GitHub API returned ${response.status}: ${JSON.stringify(payload).slice(0, 300)}`);
+  }
+  return payload;
+}
+
+function googleWorkspaceSkillAssetUrl() {
+  return (process.env.GOOGLE_WORKSPACE_SETUP_ASSET_URL || process.env.GOOGLE_WORKSPACE_SKILL_ASSET_URL || "").trim();
+}
+
+function githubAppClientId() {
+  return process.env.LINK_GITHUB_APP_CLIENT_ID
+    || process.env.GITHUB_APP_CLIENT_ID
+    || linkDesktopConfigValue("githubAppClientId")
+    || linkDesktopConfigValue(githubAppClientIdField)
+    || credentialValue(githubAppClientIdField)
+    || "";
+}
+
+function linkDesktopConfigValue(name) {
+  const config = linkDesktopConfig();
+  const value = config?.[name];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function linkDesktopConfig() {
+  if (linkDesktopConfigCache !== undefined) return linkDesktopConfigCache;
+  linkDesktopConfigCache = {};
+  const inlineConfig = process.env.LINK_DESKTOP_CONFIG_JSON;
+  if (inlineConfig) {
+    try {
+      const parsed = JSON.parse(inlineConfig);
+      if (parsed && typeof parsed === "object") {
+        linkDesktopConfigCache = parsed;
+        return linkDesktopConfigCache;
+      }
+    } catch {
+      // Fall back to file-based config.
+    }
+  }
+
+  for (const configPath of linkDesktopConfigPaths()) {
+    try {
+      const parsed = JSON.parse(fsSync.readFileSync(configPath, "utf8"));
+      if (parsed && typeof parsed === "object") {
+        linkDesktopConfigCache = parsed;
+        return linkDesktopConfigCache;
+      }
+    } catch {
+      // Try the next packaged or developer config path.
+    }
+  }
+  return linkDesktopConfigCache;
+}
+
+function linkDesktopConfigPaths() {
+  return [
+    process.env.LINK_DESKTOP_CONFIG_PATH,
+    app.isPackaged ? path.join(process.resourcesPath, "link-desktop-config.json") : "",
+    path.resolve(__dirname, "../../config/link-desktop.json"),
+  ].filter(Boolean);
+}
+
+function githubAppDeviceVerificationRepo() {
+  return process.env.LINK_GITHUB_APP_VERIFY_REPO || githubAppVerificationRepo;
+}
+
+function googleWorkspaceAccountEmail() {
+  const candidates = [
+    process.env[gogAccountField],
+    credentialValue(gogAccountField),
+    credentialValue("TELNYX_AUTH_USER_NAME"),
+    credentialValue("TELNYX_AUTH_USER_ID"),
+    process.env.TELNYX_ACTOR,
+  ].filter(Boolean).map((value) => String(value).trim());
+  const email = candidates.find((value) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value));
+  if (!email) {
+    throw new Error("Sign in with Okta first so Link can infer your Telnyx Google account, or launch Link with GOG_ACCOUNT=you@telnyx.com.");
+  }
+  return email;
+}
+
+function googleWorkspaceSetupEnv(account, gogCommand) {
+  const env = googleWorkspaceGogEnv(account);
+  const gogBinDir = path.dirname(gogCommand);
+  return {
+    ...env,
+    PATH: [gogBinDir, process.env.PATH || ""].filter(Boolean).join(path.delimiter),
+  };
+}
+
+function googleWorkspaceGogEnv(account) {
+  const keyringPassword = googleWorkspaceKeyringPassword();
+  return {
+    ...process.env,
+    GOG_ACCOUNT: account,
+    GOG_HOME: googleWorkspaceGogHome(),
+    GOG_KEYRING_BACKEND: "file",
+    GOG_KEYRING_PASSWORD_FILE: googleWorkspaceGogKeyringPasswordPath(),
+    ...(keyringPassword ? { GOG_KEYRING_PASSWORD: keyringPassword } : {}),
+  };
+}
+
+async function rememberGoogleWorkspaceGogEnvironment(account) {
+  await saveSecureCredential(gogAccountField, account);
+  const keyringPassword = googleWorkspaceKeyringPassword();
+  if (keyringPassword) await saveSecureCredential(gogKeyringPasswordField, keyringPassword);
+}
+
+function googleWorkspaceKeyringPassword() {
+  return String(credentialValue(gogKeyringPasswordField) || readGogKeyringPasswordFile() || "").trim();
+}
+
+async function ensureGoogleWorkspaceGogFileKeyring(account, gogCommand) {
+  await fs.mkdir(googleWorkspaceGogHome(), { recursive: true, mode: 0o700 });
+  await saveSecureCredential(gogAccountField, account);
+  if (!googleWorkspaceKeyringPassword()) {
+    await saveSecureCredential(gogKeyringPasswordField, crypto.randomBytes(32).toString("base64url"));
+  }
+  await execFileAsync(gogCommand, ["auth", "keyring", "file"], {
+    timeout: 30_000,
+    maxBuffer: 256 * 1024,
+    env: googleWorkspaceGogEnv(account),
+  });
+}
+
+async function resetGoogleWorkspaceGogFileKeyring(account) {
+  await fs.rm(googleWorkspaceGogHome(), { recursive: true, force: true });
+  if (!process.env[gogKeyringPasswordField]) {
+    await saveSecureCredential(gogKeyringPasswordField, crypto.randomBytes(32).toString("base64url"));
+  }
+  await saveSecureCredential(gogAccountField, account);
+}
+
+function readGogKeyringPasswordFile() {
+  try {
+    return fsSync.readFileSync(gogKeyringPasswordPath(), "utf8").trim();
+  } catch {
+    return "";
+  }
+}
+
+function gogKeyringPasswordPath() {
+  return path.join(homedir(), ".config", "gogcli", ".keyring-password");
+}
+
+function googleWorkspaceGogHome() {
+  return path.join(app.getPath("userData"), "gogcli");
+}
+
+function googleWorkspaceGogKeyringPasswordPath() {
+  return path.join(googleWorkspaceGogHome(), ".keyring-password");
+}
+
+async function verifyGoogleWorkspaceAccess() {
+  const checks = await Promise.allSettled([
+    listGoogleCalendarEvents({ maxResults: 1 }),
+    listGoogleContacts({ pageSize: 1 }),
+  ]);
+  const failures = checks
+    .filter((check) => check.status === "rejected")
+    .map((check) => check.reason instanceof Error ? check.reason.message : String(check.reason));
+  if (failures.length) {
+    throw new Error(`Google Workspace is not connected yet. ${failures.join(" ")}`);
+  }
+}
+
+async function refreshGoogleOAuthAccessToken(refreshToken) {
+  return googleOAuthTokenRequest({
+    client_id: googleOAuthClientId(),
+    ...googleOAuthClientSecretParam(),
+    refresh_token: refreshToken,
+    grant_type: "refresh_token",
+  });
+}
+
+async function googleOAuthTokenRequest(params) {
+  const response = await fetch(googleOAuthTokenUrl(), {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: new URLSearchParams(params),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Google OAuth token exchange returned ${response.status}: ${text.slice(0, 500)}`);
+  }
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error("Google OAuth token response was not valid JSON.");
+  }
+  if (!payload.access_token) throw new Error("Google OAuth token response did not include an access token.");
+  return payload;
+}
+
+async function saveGoogleOAuthToken(token) {
+  await saveSecureCredential(googleWorkspaceAccessTokenField, token.access_token);
+  if (token.refresh_token) {
+    await saveSecureCredential(googleWorkspaceRefreshTokenField, token.refresh_token);
+  }
+  if (token.expires_in) {
+    await saveSecureCredential(googleWorkspaceTokenExpiresAtField, new Date(Date.now() + Number(token.expires_in) * 1000).toISOString());
+  }
+}
+
+async function listGoogleCalendarEvents(options = {}) {
+  const token = await googleCalendarAccessToken();
+  if (!token) return listGogCalendarEvents(options);
+
+  const now = new Date();
+  const timeMin = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const timeMax = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const params = new URLSearchParams({
+    singleEvents: "true",
+    orderBy: "startTime",
+    timeMin,
+    timeMax,
+    maxResults: String(options.maxResults ?? 25),
+  });
+  const payload = await googleRequest(
+    `${googleCalendarApiBaseUrl()}/calendars/primary/events?${params.toString()}`,
+    token,
+    "Google Calendar",
+  );
+  const events = Array.isArray(payload?.items) ? payload.items : [];
+  return events.map(normalizeGoogleCalendarEvent).filter(Boolean);
+}
+
+async function listMeetingBots() {
+  const [agents, assistants] = await Promise.all([
+    listAgents().catch(() => []),
+    listPhoneAssistants().catch(() => []),
+  ]);
+  return mergeMeetingBots([
+    ...assistants.map(meetingBotFromTelnyxAssistant),
+    ...agents.map(meetingBotFromAgent),
+  ]);
+}
+
+function meetingBotFromTelnyxAssistant(assistant) {
+  return {
+    id: `telnyx-assistant:${assistant.id}`,
+    name: assistant.name || assistant.id,
+    displayName: assistant.name || assistant.id,
+    description: assistant.description || "Telnyx Voice AI assistant.",
+    status: assistant.status || "active",
+    type: "telnyx_assistant",
+    source: "telnyx_assistant",
+    capabilities: ["voice", "telnyx", "assistant", "realtime"],
+    visibility: "private",
+    available: true,
+    phoneNumber: assistant.phoneNumber || "",
+    assistantId: assistant.id,
+    adapter: {
+      kind: "telnyx_assistant",
+      assistantId: assistant.id,
+      realtime: true,
+    },
+  };
+}
+
+function meetingBotFromAgent(agent) {
+  const relayWsUrl = meetingConversationRelayWsUrl();
+  const adapterUrl = credentialValue(linkMeetingAgentAdapterUrlField);
+  const asyncOnly = agent.source === "slack" && !relayWsUrl;
+  return {
+    id: agent.id,
+    name: agent.name || agent.displayName || agent.id,
+    displayName: agent.displayName || agent.name || agent.id,
+    description: agent.description || "Agent available to Link.",
+    status: agent.status || (agent.available ? "available" : "needs_access"),
+    type: agent.type || "agent",
+    source: agent.source || "agent",
+    capabilities: Array.isArray(agent.capabilities) ? agent.capabilities : [],
+    visibility: agent.visibility || "private",
+    available: agent.available !== false,
+    slackUserId: agent.slackUserId,
+    slackChannel: agent.slackChannel,
+    adapter: {
+      kind: asyncOnly ? "agent_message_async" : "conversation_relay",
+      agentId: agent.id,
+      agentSource: agent.source || "agent",
+      adapterUrl,
+      realtime: Boolean(relayWsUrl),
+      asyncOnly,
+    },
+  };
+}
+
+function mergeMeetingBots(bots) {
+  const byId = new Map();
+  for (const bot of bots) {
+    if (bot?.id && !byId.has(bot.id)) byId.set(bot.id, bot);
+  }
+  return [...byId.values()].sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+async function resolveMeetingBot(botId) {
+  const id = String(botId || "").trim();
+  if (!id) throw new Error("Choose a bot to invite to the meeting.");
+  const bots = await listMeetingBots();
+  const bot = bots.find((item) => item.id === id);
+  if (!bot) throw new Error("That bot is not available in Link.");
+  return bot;
+}
+
+async function preflightMeetingBotInvite(input = {}) {
+  const calendarId = normalizeCalendarId(input.calendarId);
+  const eventId = String(input.eventId || "").trim();
+  if (!eventId) throw new Error("Choose a Google Calendar event before inviting a bot.");
+  const bot = await resolveMeetingBot(input.botId);
+  const blockers = [];
+  let event = null;
+  let joinTarget = null;
+
+  if (!credentialValue(agentMailApiKeyField)) {
+    blockers.push("Save AGENTMAIL_API_KEY before Link can create the bot invite inbox.");
+  }
+
+  const token = await googleCalendarAccessToken();
+  if (!token) {
+    blockers.push("Google Calendar write access requires a direct OAuth token with calendar.events scope.");
+  } else {
+    try {
+      event = await getGoogleCalendarEvent(calendarId, eventId, token);
+      joinTarget = await resolveMeetingJoinTargetForEvent(event, token);
+    } catch (error) {
+      blockers.push(error instanceof Error ? error.message : "Unable to load the Google Calendar event.");
+    }
+  }
+
+  return {
+    calendarId,
+    eventId,
+    bot,
+    identity: meetingBotIdentities[bot.id] || null,
+    joinTarget,
+    blockers,
+    liveJoinBlockers: liveMeetingInviteBlockers({ bot, event, joinTarget }),
+    calendarWritable: Boolean(token),
+    liveJoinReady: Boolean(joinTarget && liveMeetingInviteBlockers({ bot, event, joinTarget }).length === 0),
+  };
+}
+
+async function ensureBotAgentMailIdentity(input = {}) {
+  const bot = await resolveMeetingBot(input.botId);
+  const existing = normalizeMeetingBotIdentity(meetingBotIdentities[bot.id]);
+  if (existing) return existing;
+
+  const identity = await createAgentMailInboxForBot(bot);
+  meetingBotIdentities = {
+    ...meetingBotIdentities,
+    [bot.id]: identity,
+  };
+  await saveDesktopState();
+  return identity;
+}
+
+async function inviteBotToCalendarEvent(input = {}) {
+  const calendarId = normalizeCalendarId(input.calendarId);
+  const eventId = String(input.eventId || "").trim();
+  const liveJoin = Boolean(input.liveJoin);
+  const sendUpdates = normalizeCalendarSendUpdates(input.sendUpdates);
+  if (!eventId) throw new Error("Choose a Google Calendar event before inviting a bot.");
+
+  const bot = await resolveMeetingBot(input.botId);
+  const identity = await ensureBotAgentMailIdentity({ botId: bot.id });
+  const { event } = await addGoogleCalendarAttendee({
+    calendarId,
+    eventId,
+    email: identity.email,
+    sendUpdates,
+  });
+  const joinTarget = await resolveMeetingJoinTargetForEvent(event, await googleCalendarAccessToken());
+  const blockers = liveJoin ? liveMeetingInviteBlockers({ bot, event, joinTarget }) : [];
+  const now = new Date().toISOString();
+  const existing = meetingBotInvites.find((invite) => invite.calendarId === calendarId && invite.eventId === eventId && invite.botId === bot.id);
+  const invite = normalizeMeetingInvite({
+    ...(existing || {}),
+    id: existing?.id || `meeting-invite-${crypto.randomUUID()}`,
+    calendarId,
+    eventId,
+    eventTitle: event.summary || event.title || "(No title)",
+    eventStart: googleEventIso(event.start),
+    eventEnd: googleEventIso(event.end),
+    botId: bot.id,
+    botName: bot.displayName || bot.name || bot.id,
+    botType: bot.type,
+    identity,
+    liveJoin,
+    sendUpdates,
+    joinTarget,
+    agentAdapter: bot.adapter,
+    status: liveJoin ? blockers.length ? "blocked" : meetingInviteShouldJoinNow(event) ? "joining" : "scheduled" : "invited",
+    blockers,
+    calendarEtag: event.etag || "",
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+  });
+
+  meetingBotInvites = [invite, ...meetingBotInvites.filter((item) => item.id !== invite.id)];
+  await saveDesktopState();
+
+  if (!liveJoin || blockers.length) return invite;
+  if (meetingInviteShouldJoinNow(event)) return joinMeetingBotInvite(invite.id);
+  scheduleMeetingInviteJoin(invite);
+  return invite;
+}
+
+async function cancelMeetingBotInvite(input = {}) {
+  const inviteId = String(input.inviteId || input.id || input || "").trim();
+  if (!inviteId) throw new Error("Choose a meeting bot invite to cancel.");
+  const invite = meetingBotInvites.find((item) => item.id === inviteId);
+  if (!invite) throw new Error("Meeting bot invite not found.");
+  clearMeetingInviteJoinTimer(inviteId);
+  const updated = normalizeMeetingInvite({
+    ...invite,
+    status: "ended",
+    blockers: [],
+    updatedAt: new Date().toISOString(),
+  });
+  meetingBotInvites = meetingBotInvites.map((item) => item.id === inviteId ? updated : item);
+  await saveDesktopState();
+  return updated;
+}
+
+function listMeetingBotInvites(input = {}) {
+  const eventId = String(input?.eventId || "").trim();
+  return eventId ? meetingBotInvites.filter((invite) => invite.eventId === eventId) : meetingBotInvites;
+}
+
+async function addGoogleCalendarAttendee({ calendarId, eventId, email, sendUpdates }) {
+  const token = await requireGoogleCalendarWriteToken();
+  const current = await getGoogleCalendarEvent(calendarId, eventId, token);
+  const merged = mergeGoogleCalendarAttendee(current.attendees, email);
+  if (!merged.added) return { event: current, added: false };
+
+  try {
+    const event = await patchGoogleCalendarAttendees({
+      calendarId,
+      eventId,
+      token,
+      attendees: merged.attendees,
+      sendUpdates,
+      etag: current.etag,
+    });
+    return { event, added: true };
+  } catch (error) {
+    if (!isGoogleCalendarConflict(error)) throw error;
+    const latest = await getGoogleCalendarEvent(calendarId, eventId, token);
+    const retryMerge = mergeGoogleCalendarAttendee(latest.attendees, email);
+    if (!retryMerge.added) return { event: latest, added: false };
+    const event = await patchGoogleCalendarAttendees({
+      calendarId,
+      eventId,
+      token,
+      attendees: retryMerge.attendees,
+      sendUpdates,
+      etag: latest.etag,
+    });
+    return { event, added: true };
+  }
+}
+
+async function getGoogleCalendarEvent(calendarId, eventId, token = null) {
+  const accessToken = token || await requireGoogleCalendarWriteToken();
+  const params = new URLSearchParams({ conferenceDataVersion: "1" });
+  const { payload } = await googleJsonRequest(
+    `${googleCalendarApiBaseUrl()}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?${params.toString()}`,
+    accessToken,
+    "Google Calendar event",
+  );
+  return payload;
+}
+
+async function patchGoogleCalendarAttendees({ calendarId, eventId, token, attendees, sendUpdates, etag }) {
+  const params = new URLSearchParams({
+    conferenceDataVersion: "1",
+    sendUpdates: normalizeCalendarSendUpdates(sendUpdates),
+  });
+  const headers = etag ? { "If-Match": etag } : {};
+  const { payload } = await googleJsonRequest(
+    `${googleCalendarApiBaseUrl()}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?${params.toString()}`,
+    token,
+    "Google Calendar attendee update",
+    {
+      method: "PATCH",
+      headers,
+      body: { attendees },
+    },
+  );
+  return payload;
+}
+
+function mergeGoogleCalendarAttendee(attendees, email) {
+  const attendeeEmail = String(email || "").trim();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(attendeeEmail)) throw new Error("AgentMail did not return a valid inbox email address.");
+  const normalizedEmail = attendeeEmail.toLowerCase();
+  const existing = Array.isArray(attendees) ? attendees.map((attendee) => ({ ...attendee })) : [];
+  if (existing.some((attendee) => String(attendee.email || "").trim().toLowerCase() === normalizedEmail)) {
+    return { attendees: existing, added: false };
+  }
+  return {
+    attendees: [...existing, { email: attendeeEmail, responseStatus: "needsAction" }],
+    added: true,
+  };
+}
+
+async function requireGoogleCalendarWriteToken() {
+  const token = await googleCalendarAccessToken();
+  if (!token) throw new Error("Google Calendar write access requires a direct OAuth token with calendar.events scope.");
+  return token;
+}
+
+function isGoogleCalendarConflict(error) {
+  return error?.status === 409 || error?.status === 412;
+}
+
+function normalizeCalendarId(calendarId) {
+  return String(calendarId || "primary").trim() || "primary";
+}
+
+function normalizeCalendarSendUpdates(value) {
+  return ["all", "externalOnly", "none"].includes(value) ? value : "all";
+}
+
+async function createAgentMailInboxForBot(bot) {
+  const apiKey = String(credentialValue(agentMailApiKeyField) || "").trim();
+  if (!apiKey) throw new Error("Save AGENTMAIL_API_KEY before Link can create the bot invite inbox.");
+  const clientId = agentMailClientId(bot.id);
+  const username = agentMailUsername(bot);
+  const domain = String(credentialValue(agentMailDomainField) || "").trim();
+  const body = {
+    client_id: clientId,
+    username,
+    display_name: `${bot.displayName || bot.name || bot.id} meeting bot`,
+    ...(domain ? { domain } : {}),
+  };
+  const response = await fetch(`${agentMailApiBaseUrl()}/inboxes`, {
+    method: "POST",
+    headers: agentMailHeaders(apiKey),
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    const existing = response.status === 409 ? await findAgentMailInboxByClientId(clientId, apiKey).catch(() => null) : null;
+    if (existing) return existing;
+    throw new Error(`AgentMail inbox creation returned ${response.status}: ${text.slice(0, 500)}`);
+  }
+  const payload = parseJsonText(text, "AgentMail inbox");
+  return normalizeAgentMailInbox(payload, bot, clientId, domain);
+}
+
+async function findAgentMailInboxByClientId(clientId, apiKey) {
+  const params = new URLSearchParams({ client_id: clientId });
+  const response = await fetch(`${agentMailApiBaseUrl()}/inboxes?${params.toString()}`, {
+    method: "GET",
+    headers: agentMailHeaders(apiKey),
+  });
+  if (!response.ok) return null;
+  const payload = parseJsonText(await response.text(), "AgentMail inbox lookup");
+  const records = Array.isArray(payload?.data) ? payload.data
+    : Array.isArray(payload?.inboxes) ? payload.inboxes
+    : Array.isArray(payload) ? payload
+    : [payload?.data || payload?.inbox || payload].filter(Boolean);
+  const inbox = records.find((record) => String(record?.client_id || record?.clientId || "") === clientId) || records[0];
+  return inbox ? normalizeAgentMailInbox(inbox, { id: clientId }, clientId) : null;
+}
+
+function normalizeAgentMailInbox(payload, bot, clientId, configuredDomain = "") {
+  const inbox = payload?.data || payload?.inbox || payload;
+  const username = inbox?.username || agentMailUsername(bot);
+  const domain = inbox?.domain || configuredDomain || "";
+  const email = inbox?.email || inbox?.email_address || inbox?.emailAddress || inbox?.address || (domain ? `${username}@${domain}` : "");
+  if (!email) throw new Error("AgentMail inbox response did not include an email address.");
+  return normalizeMeetingBotIdentity({
+    provider: "agentmail",
+    inboxId: String(inbox?.id || inbox?.inbox_id || inbox?.inboxId || username || clientId),
+    email: String(email),
+    clientId,
+  });
+}
+
+function normalizeMeetingBotIdentity(identity) {
+  if (!identity || typeof identity !== "object") return null;
+  const email = String(identity.email || "").trim();
+  if (!email) return null;
+  return {
+    provider: "agentmail",
+    inboxId: String(identity.inboxId || identity.inbox_id || identity.id || email),
+    email,
+    clientId: identity.clientId || identity.client_id || "",
+  };
+}
+
+function agentMailHeaders(apiKey) {
+  return {
+    Accept: "application/json",
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+}
+
+function agentMailApiBaseUrl() {
+  return (process.env.AGENTMAIL_API_BASE_URL || defaultAgentMailApiBaseUrl).replace(/\/$/, "");
+}
+
+function agentMailClientId(botId) {
+  return `telnyx-link-meeting-bot:${botId}`;
+}
+
+function agentMailUsername(bot) {
+  const base = slugifyId(bot.displayName || bot.name || bot.id).slice(0, 42) || "meeting-bot";
+  const hash = crypto.createHash("sha256").update(String(bot.id || base)).digest("hex").slice(0, 8);
+  return `${base}-${hash}`;
+}
+
+async function resolveMeetingJoinTargetForEvent(event, token) {
+  const calendarTarget = resolveMeetingJoinTarget(event);
+  if (calendarTarget) return calendarTarget;
+  const meetSpaceName = googleMeetSpaceName(event);
+  if (!meetSpaceName || !credentialValue(googleMeetApiBaseUrlField) || !token) return null;
+  const { payload } = await googleJsonRequest(
+    `${googleMeetApiBaseUrl()}/${meetSpaceName}`,
+    token,
+    "Google Meet space",
+  );
+  return resolveMeetingJoinTarget(payload);
+}
+
+function resolveMeetingJoinTarget(event) {
+  const entryPoints = Array.isArray(event?.conferenceData?.entryPoints) ? event.conferenceData.entryPoints : [];
+  const sip = entryPoints.find((entry) => entry?.entryPointType === "sip" && entry.uri);
+  if (sip) {
+    return {
+      type: "sip",
+      uri: String(sip.uri),
+      dialTarget: String(sip.uri),
+      label: sip.label || "Google Meet SIP",
+      accessCode: sip.accessCode || sip.meetingCode || "",
+      dtmf: "",
+    };
+  }
+
+  const phone = entryPoints.find((entry) => entry?.entryPointType === "phone" && (entry.uri || entry.label || entry.phoneNumber));
+  if (!phone) return null;
+  const accessCode = String(phone.pin || phone.accessCode || phone.meetingCode || "").trim();
+  const uri = String(phone.uri || phone.phoneNumber || phone.label || "").trim();
+  return {
+    type: "phone",
+    uri,
+    dialTarget: normalizeMeetingPhoneDialTarget(uri),
+    label: phone.label || phone.regionCode || "Google Meet phone",
+    accessCode,
+    dtmf: meetingPhoneDtmf(uri, accessCode),
+  };
+}
+
+function googleMeetSpaceName(event) {
+  const name = event?.conferenceData?.conferenceId || event?.meetingSpace?.name || event?.space?.name || "";
+  if (String(name).startsWith("spaces/")) return name;
+  const meetUrl = googleMeetUrl(event);
+  const code = parseUrl(meetUrl)?.pathname.split("/").filter(Boolean).at(-1) || "";
+  return code ? `spaces/${code}` : "";
+}
+
+function googleMeetApiBaseUrl() {
+  return String(credentialValue(googleMeetApiBaseUrlField) || process.env.GOOGLE_MEET_API_BASE_URL || "https://meet.googleapis.com/v2").replace(/\/$/, "");
+}
+
+function normalizeMeetingPhoneDialTarget(uri) {
+  const raw = String(uri || "").replace(/^tel:/i, "").split(/[;,]/)[0].trim();
+  return raw.replace(/[^\d+]/g, "");
+}
+
+function meetingPhoneDtmf(uri, accessCode) {
+  const uriDigits = String(uri || "").split(/[;,]/).slice(1).join(",").replace(/[^\d#*,wW,]/g, "");
+  if (uriDigits) return uriDigits;
+  const digits = String(accessCode || "").replace(/[^\d]/g, "");
+  return digits ? `ww${digits}#` : "";
+}
+
+function liveMeetingInviteBlockers({ bot, event, joinTarget }) {
+  const blockers = [];
+  if (event && googleEventEndMs(event) && googleEventEndMs(event) < Date.now()) {
+    blockers.push("This event has already ended.");
+  }
+  if (!joinTarget) {
+    blockers.push("Google Meet does not expose a SIP or phone entry point for this event.");
+  }
+  blockers.push(...missingTelnyxMeetBridgeConfig(bot));
+  return blockers;
+}
+
+function missingTelnyxMeetBridgeConfig(bot) {
+  const missing = [];
+  if (!credentialValue("TELNYX_API_KEY")) missing.push("Save TELNYX_API_KEY.");
+  if (!credentialValue(telnyxVoiceConnectionIdField)) missing.push(`Save ${telnyxVoiceConnectionIdField}.`);
+  if (!credentialValue(telnyxMeetCallerIdField)) missing.push(`Save ${telnyxMeetCallerIdField}.`);
+  if (!credentialValue(telnyxMeetWebhookUrlField)) missing.push(`Save ${telnyxMeetWebhookUrlField}.`);
+  const isTelnyxAssistant = bot?.adapter?.kind === "telnyx_assistant" || bot?.type === "telnyx_assistant";
+  if (!isTelnyxAssistant && !validWssUrl(meetingConversationRelayWsUrl())) {
+    missing.push(`Save ${telnyxMeetConversationRelayWsUrlField} as a public wss:// URL for generic agents.`);
+  }
+  return missing;
+}
+
+function validWssUrl(value) {
+  const url = parseUrl(value);
+  return Boolean(url && url.protocol === "wss:");
+}
+
+function meetingInviteShouldJoinNow(event) {
+  const startMs = googleEventStartMs(event);
+  const endMs = googleEventEndMs(event);
+  const now = Date.now();
+  return Boolean(startMs && startMs <= now + 60_000 && (!endMs || endMs >= now - 60_000));
+}
+
+function googleEventIso(value) {
+  const date = parseGoogleDate(value);
+  return date ? date.toISOString() : "";
+}
+
+function googleEventStartMs(event) {
+  const date = parseGoogleDate(event?.start || event?.eventStart || event?.startTime || event?.from);
+  const ms = date?.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function googleEventEndMs(event) {
+  const date = parseGoogleDate(event?.end || event?.eventEnd || event?.endTime || event?.to);
+  const ms = date?.getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function schedulePersistedMeetingInvites() {
+  for (const invite of meetingBotInvites) scheduleMeetingInviteJoin(invite);
+}
+
+function scheduleMeetingInviteJoin(invite) {
+  clearMeetingInviteJoinTimer(invite.id);
+  if (!invite?.liveJoin || invite.status !== "scheduled") return;
+  const startMs = Date.parse(invite.eventStart);
+  if (!Number.isFinite(startMs)) return;
+  const delay = Math.max(0, Math.min(startMs - Date.now(), 2_147_483_647));
+  const timer = setTimeout(() => {
+    meetingInviteJoinTimers.delete(invite.id);
+    void joinMeetingBotInvite(invite.id);
+  }, delay);
+  if (typeof timer.unref === "function") timer.unref();
+  meetingInviteJoinTimers.set(invite.id, timer);
+}
+
+function clearMeetingInviteJoinTimer(inviteId) {
+  const timer = meetingInviteJoinTimers.get(inviteId);
+  if (timer) clearTimeout(timer);
+  meetingInviteJoinTimers.delete(inviteId);
+}
+
+async function joinMeetingBotInvite(inviteId) {
+  const invite = meetingBotInvites.find((item) => item.id === inviteId);
+  if (!invite) throw new Error("Meeting bot invite not found.");
+  const bot = await resolveMeetingBot(invite.botId);
+  const blockers = liveMeetingInviteBlockers({ bot, event: invite, joinTarget: invite.joinTarget });
+  if (blockers.length) {
+    return updateMeetingInvite(inviteId, { status: "blocked", blockers });
+  }
+
+  await updateMeetingInvite(inviteId, { status: "joining", blockers: [] });
+  try {
+    const dial = await dialTelnyxMeetingBridge({ ...invite, agentAdapter: bot.adapter });
+    return updateMeetingInvite(inviteId, {
+      status: "joining",
+      blockers: [],
+      telnyxCallControlId: dial.callControlId,
+      telnyxCallSessionId: dial.callSessionId,
+      telnyxDialResponse: dial.payload,
+    });
+  } catch (error) {
+    return updateMeetingInvite(inviteId, {
+      status: "failed",
+      blockers: [error instanceof Error ? error.message : "Telnyx meeting join failed."],
+    });
+  }
+}
+
+async function updateMeetingInvite(inviteId, changes) {
+  const updatedAt = new Date().toISOString();
+  let updated = null;
+  meetingBotInvites = meetingBotInvites.map((invite) => {
+    if (invite.id !== inviteId) return invite;
+    updated = normalizeMeetingInvite({ ...invite, ...changes, updatedAt });
+    return updated;
+  });
+  await saveDesktopState();
+  if (updated?.status === "scheduled") scheduleMeetingInviteJoin(updated);
+  else clearMeetingInviteJoinTimer(inviteId);
+  return updated;
+}
+
+async function dialTelnyxMeetingBridge(invite) {
+  const apiKey = requireTelnyxApiKey();
+  const joinTarget = invite.joinTarget;
+  if (!joinTarget?.dialTarget) throw new Error("Meeting join target is missing a SIP URI or phone number.");
+  const adapter = invite.agentAdapter || {};
+  const isTelnyxAssistant = adapter.kind === "telnyx_assistant";
+  const body = {
+    connection_id: String(credentialValue(telnyxVoiceConnectionIdField) || "").trim(),
+    to: joinTarget.dialTarget,
+    from: String(credentialValue(telnyxMeetCallerIdField) || "").trim(),
+    webhook_url: String(credentialValue(telnyxMeetWebhookUrlField) || "").trim(),
+    command_id: crypto.randomUUID(),
+    client_state: Buffer.from(JSON.stringify({
+      inviteId: invite.id,
+      botId: invite.botId,
+      eventId: invite.eventId,
+    })).toString("base64"),
+    ...(joinTarget.dtmf ? { send_digits_on_answer: joinTarget.dtmf } : {}),
+    ...(isTelnyxAssistant ? {
+      assistant: {
+        id: adapter.assistantId,
+      },
+    } : {
+      conversation_relay_config: {
+        url: meetingConversationRelayWsUrl(),
+        greeting: defaultMeetBotConsentGreeting,
+        custom_parameters: {
+          invite_id: invite.id,
+          bot_id: invite.botId,
+          event_id: invite.eventId,
+          calendar_id: invite.calendarId,
+          agent_adapter_kind: adapter.kind || "conversation_relay",
+          agent_adapter_url: adapter.adapterUrl || "",
+          agent_source: adapter.agentSource || invite.botType || "",
+        },
+      },
+    }),
+  };
+  const response = await fetch(`${telnyxApiBaseUrl()}/v2/calls`, {
+    method: "POST",
+    headers: telnyxHeaders(apiKey),
+    body: JSON.stringify(body),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Telnyx meeting dial returned ${response.status}: ${text.slice(0, 700)}`);
+  }
+  const payload = parseJsonText(text, "Telnyx meeting dial");
+  const call = payload?.data || payload || {};
+  return {
+    payload,
+    callControlId: call.call_control_id || call.callControlId || call.id || "",
+    callSessionId: call.call_session_id || call.callSessionId || "",
+  };
+}
+
+function meetingConversationRelayWsUrl() {
+  return String(credentialValue(telnyxMeetConversationRelayWsUrlField) || "").trim();
+}
+
+function normalizeMeetingInvite(value) {
+  if (!value || typeof value !== "object") return null;
+  const status = ["invited", "scheduled", "joining", "joined", "blocked", "ended", "failed"].includes(value.status) ? value.status : "invited";
+  return {
+    id: String(value.id || `meeting-invite-${crypto.randomUUID()}`),
+    calendarId: normalizeCalendarId(value.calendarId),
+    eventId: String(value.eventId || ""),
+    eventTitle: String(value.eventTitle || ""),
+    eventStart: String(value.eventStart || ""),
+    eventEnd: String(value.eventEnd || ""),
+    botId: String(value.botId || ""),
+    botName: String(value.botName || value.botId || "Meeting bot"),
+    botType: String(value.botType || ""),
+    identity: normalizeMeetingBotIdentity(value.identity),
+    liveJoin: Boolean(value.liveJoin),
+    sendUpdates: normalizeCalendarSendUpdates(value.sendUpdates),
+    joinTarget: value.joinTarget || null,
+    agentAdapter: value.agentAdapter || null,
+    status,
+    blockers: Array.isArray(value.blockers) ? value.blockers.map(String).filter(Boolean) : [],
+    calendarEtag: String(value.calendarEtag || ""),
+    telnyxCallControlId: String(value.telnyxCallControlId || ""),
+    telnyxCallSessionId: String(value.telnyxCallSessionId || ""),
+    telnyxDialResponse: value.telnyxDialResponse || null,
+    createdAt: String(value.createdAt || new Date().toISOString()),
+    updatedAt: String(value.updatedAt || new Date().toISOString()),
+  };
+}
+
+function parseJsonText(text, label) {
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`${label} response was not valid JSON.`);
+  }
+}
+
+async function listGoogleContacts(options = {}) {
+  const token = await googleContactsAccessToken();
+  if (!token) return listGogContacts(options);
+
+  const params = new URLSearchParams({
+    personFields: "names,emailAddresses,phoneNumbers,organizations,photos",
+    pageSize: String(options.pageSize ?? 50),
+  });
+  const payload = await googleRequest(
+    `${googlePeopleApiBaseUrl()}/people/me/connections?${params.toString()}`,
+    token,
+    "Google Contacts",
+  );
+  const connections = Array.isArray(payload?.connections) ? payload.connections : [];
+  return connections.map(normalizeGoogleContact).filter(Boolean);
+}
+
+async function listGogCalendarEvents(options = {}) {
+  const account = googleWorkspaceAccountEmail();
+  const now = new Date();
+  const from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const to = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const payload = await runGogJson([
+    "calendar",
+    "events",
+    "primary",
+    "--from",
+    from,
+    "--to",
+    to,
+    "--json",
+  ], "Google Calendar", account);
+  const records = Array.isArray(payload) ? payload : payload.items ?? payload.events ?? payload.data ?? [];
+  return records.slice(0, options.maxResults ?? 25).map(normalizeGogCalendarEvent).filter(Boolean);
+}
+
+async function listGogContacts(options = {}) {
+  const account = googleWorkspaceAccountEmail();
+  const payload = await runGogJson([
+    "contacts",
+    "list",
+    "--max",
+    String(options.pageSize ?? 50),
+    "--json",
+  ], "Google Contacts", account);
+  const records = Array.isArray(payload) ? payload : payload.connections ?? payload.contacts ?? payload.people ?? payload.data ?? [];
+  return records.map(normalizeGogContact).filter(Boolean);
+}
+
+async function runGogJson(args, label, account = googleWorkspaceAccountEmail()) {
+  const gog = await resolveGogCommand();
+  await ensureGoogleWorkspaceGogFileKeyring(account, gog);
+  try {
+    const { stdout } = await execFileAsync(gog, args, {
+      timeout: 60_000,
+      maxBuffer: 5 * 1024 * 1024,
+      env: googleWorkspaceGogEnv(account),
+    });
+    const text = String(stdout || "").trim();
+    if (!text) return [];
+    return JSON.parse(text);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(`${label} gog output was not valid JSON.`);
+    }
+    const detail = error?.stderr || error?.stdout || error?.message || "gog command failed.";
+    throw new Error(`${label} is not available through gog yet: ${String(detail).slice(0, 500)}`);
+  }
+}
+
+async function googleRequest(url, token, label) {
+  return (await googleJsonRequest(url, token, label)).payload;
+}
+
+async function googleJsonRequest(url, token, label, options = {}) {
+  const response = await fetch(url, {
+    method: options.method || "GET",
+    headers: {
+      Accept: "application/json",
+      ...(options.body === undefined ? {} : { "Content-Type": "application/json" }),
+      Authorization: `Bearer ${token}`,
+      ...(options.headers || {}),
+    },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+  const text = await response.text();
+  if (!response.ok) {
+    const error = new Error(`${label} returned ${response.status}: ${text.slice(0, 500)}`);
+    error.status = response.status;
+    error.body = text;
+    throw error;
+  }
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`${label} response was not valid JSON.`);
+  }
+  return { payload, etag: response.headers.get("etag") || payload?.etag || "" };
+}
+
+async function googleCalendarAccessToken() {
+  return credentialValue(googleCalendarAccessTokenField)
+    || await googleWorkspaceOAuthAccessToken()
+    || credentialValue(googleDriveAccessTokenField)
+    || "";
+}
+
+async function googleContactsAccessToken() {
+  return credentialValue(googleContactsAccessTokenField)
+    || credentialValue(googleCalendarAccessTokenField)
+    || await googleWorkspaceOAuthAccessToken()
+    || credentialValue(googleDriveAccessTokenField)
+    || "";
+}
+
+async function googleWorkspaceOAuthAccessToken() {
+  const token = credentialValue(googleWorkspaceAccessTokenField);
+  const refreshToken = credentialValue(googleWorkspaceRefreshTokenField);
+  const expiresAt = credentialValue(googleWorkspaceTokenExpiresAtField);
+  const expiresAtMs = Date.parse(expiresAt);
+  if (token && (!refreshToken || Number.isNaN(expiresAtMs) || expiresAtMs > Date.now() + 60_000)) {
+    return token;
+  }
+  if (!refreshToken) return token;
+  const refreshed = await refreshGoogleOAuthAccessToken(refreshToken);
+  await saveGoogleOAuthToken({ ...refreshed, refresh_token: refreshed.refresh_token || refreshToken });
+  return refreshed.access_token;
+}
+
+function googleOAuthClientId() {
+  return String(credentialValue(googleOAuthClientIdField) || "").trim();
+}
+
+function googleOAuthClientSecret() {
+  return String(credentialValue(googleOAuthClientSecretField) || "").trim();
+}
+
+function googleOAuthClientSecretParam() {
+  const secret = googleOAuthClientSecret();
+  return secret ? { client_secret: secret } : {};
+}
+
+function googleCalendarApiBaseUrl() {
+  return (process.env.GOOGLE_CALENDAR_API_BASE_URL || defaultGoogleCalendarApiBaseUrl).replace(/\/$/, "");
+}
+
+function googlePeopleApiBaseUrl() {
+  return (process.env.GOOGLE_PEOPLE_API_BASE_URL || defaultGooglePeopleApiBaseUrl).replace(/\/$/, "");
+}
+
+function googleOAuthTokenUrl() {
+  return process.env.GOOGLE_OAUTH_TOKEN_URL || defaultGoogleOAuthTokenUrl;
+}
+
+function normalizeGoogleCalendarEvent(event) {
+  const start = parseGoogleDate(event?.start);
+  const end = parseGoogleDate(event?.end);
+  const title = event?.summary || "(No title)";
+  const attendees = Array.isArray(event?.attendees)
+    ? event.attendees.map((attendee) => attendee.displayName || attendee.email).filter(Boolean).slice(0, 4).join(", ")
+    : "";
+  return {
+    id: String(event?.id || event?.iCalUID || crypto.randomUUID()),
+    title,
+    time: formatGoogleEventTime(start, end),
+    start: start ? start.toISOString() : "",
+    end: end ? end.toISOString() : "",
+    attendees: attendees || event?.organizer?.displayName || event?.organizer?.email || "No attendees",
+    phone: extractPhoneNumber([event?.description, event?.location, title].filter(Boolean).join(" ")),
+    meetUrl: googleMeetUrl(event),
+    notes: cleanGoogleText(event?.description || ""),
+    transcript: "",
+    status: googleEventStatus(start, end),
+  };
+}
+
+function normalizeGogCalendarEvent(event) {
+  const start = parseGoogleDate(event?.start ?? event?.startTime ?? event?.start_time ?? event?.from);
+  const end = parseGoogleDate(event?.end ?? event?.endTime ?? event?.end_time ?? event?.to);
+  const title = event?.summary || event?.title || event?.name || "(No title)";
+  const attendees = Array.isArray(event?.attendees)
+    ? event.attendees.map((attendee) => attendee.displayName || attendee.email || attendee.name).filter(Boolean).slice(0, 4).join(", ")
+    : event?.attendees || event?.organizer || "";
+  return {
+    id: String(event?.id || event?.eventId || event?.iCalUID || crypto.randomUUID()),
+    title,
+    time: formatGoogleEventTime(start, end),
+    start: start ? start.toISOString() : "",
+    end: end ? end.toISOString() : "",
+    attendees: attendees || "No attendees",
+    phone: extractPhoneNumber([event?.description, event?.notes, event?.location, title].filter(Boolean).join(" ")),
+    meetUrl: googleMeetUrl(event),
+    notes: cleanGoogleText(event?.description || event?.notes || ""),
+    transcript: "",
+    status: googleEventStatus(start, end),
+  };
+}
+
+function normalizeGoogleContact(person) {
+  const name = person?.names?.[0]?.displayName || person?.emailAddresses?.[0]?.value || "Unnamed contact";
+  const phone = person?.phoneNumbers?.[0]?.canonicalForm || person?.phoneNumbers?.[0]?.value || "";
+  const email = person?.emailAddresses?.[0]?.value || "";
+  const org = person?.organizations?.[0];
+  const role = [org?.title, org?.name].filter(Boolean).join(" - ") || "Google contact";
+  return {
+    id: String(person?.resourceName || `google-contact-${slugifyId(name)}`),
+    name,
+    role,
+    phone,
+    source: "google",
+    detail: [email, role].filter(Boolean).join(" - ") || "Google Workspace contact",
+    connected: true,
+  };
+}
+
+function normalizeGogContact(person) {
+  const name = person?.names?.[0]?.displayName
+    || person?.displayName
+    || person?.name
+    || person?.fullName
+    || person?.email
+    || person?.emailAddresses?.[0]?.value
+    || "Unnamed contact";
+  const email = person?.emailAddresses?.[0]?.value || person?.email || person?.emailAddress || "";
+  const phone = person?.phoneNumbers?.[0]?.canonicalForm || person?.phoneNumbers?.[0]?.value || person?.phone || person?.phoneNumber || "";
+  const org = person?.organizations?.[0];
+  const role = [person?.title || org?.title, person?.company || org?.name].filter(Boolean).join(" - ") || "Google contact";
+  return {
+    id: String(person?.resourceName || person?.id || `google-contact-${slugifyId(name)}`),
+    name,
+    role,
+    phone,
+    source: "google",
+    detail: [email, role].filter(Boolean).join(" - ") || "Google Workspace contact",
+    connected: true,
+  };
+}
+
+function parseGoogleDate(value = {}) {
+  if (typeof value === "string") {
+    const stringDate = new Date(value);
+    return Number.isNaN(stringDate.getTime()) ? null : stringDate;
+  }
+  const raw = value.dateTime || value.date || value.value;
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatGoogleEventTime(start, end) {
+  if (!start) return "Time not set";
+  const date = new Intl.DateTimeFormat(undefined, { weekday: "short", month: "short", day: "numeric" }).format(start);
+  const startTime = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(start);
+  const endTime = end ? new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(end) : "";
+  return endTime ? `${date}, ${startTime} - ${endTime}` : `${date}, ${startTime}`;
+}
+
+function googleEventStatus(start, end) {
+  const now = Date.now();
+  const startTime = start?.getTime() ?? now;
+  const endTime = end?.getTime() ?? startTime;
+  if (startTime <= now && endTime >= now) return "live";
+  return endTime < now ? "past" : "upcoming";
+}
+
+function googleMeetUrl(event) {
+  const entryPoint = Array.isArray(event?.conferenceData?.entryPoints)
+    ? event.conferenceData.entryPoints.find((entry) => entry.entryPointType === "video" && entry.uri)
+    : null;
+  return entryPoint?.uri || event?.hangoutLink || "";
+}
+
+function extractPhoneNumber(text) {
+  const match = String(text || "").match(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/);
+  return match ? match[0].trim() : "";
+}
+
+function cleanGoogleText(text) {
+  return String(text || "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 600);
+}
+
 async function saveSecureCredential(name, value) {
   if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure credential storage is not available on this Mac session.");
 
@@ -3468,33 +11346,51 @@ function credentialConfigured(name) {
 async function loadDesktopState() {
   try {
     const saved = JSON.parse(await fs.readFile(statePath(), "utf8"));
-    const useSavedState = saved.version === stateVersion || saved.version === 4;
+    const useSavedState = saved.version === stateVersion || saved.version === 8 || saved.version === 7 || saved.version === 6 || saved.version === 5 || saved.version === 4;
     activeWork = useSavedState && Array.isArray(saved.activeWork) ? saved.activeWork : [];
     automations = useSavedState && Array.isArray(saved.automations) ? saved.automations : [];
     connectorOverrides = saved.connectorOverrides && typeof saved.connectorOverrides === "object" ? saved.connectorOverrides : {};
+    meetingBotIdentities = useSavedState && saved.meetingBotIdentities && typeof saved.meetingBotIdentities === "object" ? saved.meetingBotIdentities : {};
+    meetingBotInvites = useSavedState && Array.isArray(saved.meetingBotInvites) ? saved.meetingBotInvites.map(normalizeMeetingInvite).filter(Boolean) : [];
     changeRequests = useSavedState && Array.isArray(saved.changeRequests) ? saved.changeRequests : [];
     chatSessions = useSavedState && Array.isArray(saved.chatSessions) ? saved.chatSessions : [];
     memoryBanks = useSavedState && Array.isArray(saved.memoryBanks) ? saved.memoryBanks : [];
     dojoState = useSavedState && saved.dojoState && typeof saved.dojoState === "object" ? saved.dojoState : emptyDojoState();
     workboardCards = useSavedState && Array.isArray(saved.workboardCards) ? saved.workboardCards : [];
+    workboardTaskSessions = useSavedState && Array.isArray(saved.workboardTaskSessions) ? saved.workboardTaskSessions : [];
     publishedApps = useSavedState && Array.isArray(saved.publishedApps) ? saved.publishedApps : [];
+    skillRegistryStats = useSavedState && saved.skillRegistryStats && typeof saved.skillRegistryStats === "object" ? normalizeStoredSkillRegistryStats(saved.skillRegistryStats) : {};
+    pendingSkillRegistryEvents = useSavedState && Array.isArray(saved.pendingSkillRegistryEvents) ? saved.pendingSkillRegistryEvents.map(normalizePendingSkillRegistryEvent).filter(Boolean) : [];
+    toolCatalogItems = useSavedState && Array.isArray(saved.toolCatalogItems) ? saved.toolCatalogItems.map(normalizeToolCatalogItem).filter(Boolean) : [];
+    pendingToolCatalogPublishes = useSavedState && Array.isArray(saved.pendingToolCatalogPublishes) ? saved.pendingToolCatalogPublishes.map(normalizePendingToolManifest).filter(Boolean) : [];
     workspaces = useSavedState && Array.isArray(saved.workspaces) ? saved.workspaces : [];
     onboardingState = useSavedState && saved.onboardingState && typeof saved.onboardingState === "object" ? normalizeOnboardingState(saved.onboardingState) : emptyOnboardingState();
     widgetLayout = useSavedState && saved.widgetLayout && typeof saved.widgetLayout === "object" ? normalizeWidgetLayout(saved.widgetLayout) : emptyWidgetLayout();
+    dialerState = useSavedState && saved.dialerState && typeof saved.dialerState === "object" ? normalizeDialerState(saved.dialerState) : emptyDialerState();
+    speakSettings = useSavedState && saved.speakSettings && typeof saved.speakSettings === "object" ? normalizeSpeakSettings(saved.speakSettings) : emptySpeakSettings();
     if (saved.version !== stateVersion) await saveDesktopState();
   } catch {
     activeWork = [];
     automations = [];
     connectorOverrides = {};
+    meetingBotIdentities = {};
+    meetingBotInvites = [];
     changeRequests = [];
     chatSessions = [];
     memoryBanks = [];
     dojoState = emptyDojoState();
     workboardCards = [];
+    workboardTaskSessions = [];
     publishedApps = [];
+    skillRegistryStats = {};
+    pendingSkillRegistryEvents = [];
+    toolCatalogItems = [];
+    pendingToolCatalogPublishes = [];
     workspaces = [];
     onboardingState = emptyOnboardingState();
     widgetLayout = emptyWidgetLayout();
+    dialerState = emptyDialerState();
+    speakSettings = emptySpeakSettings();
     await saveDesktopState();
   }
 }
@@ -3506,15 +11402,24 @@ async function saveDesktopState() {
     activeWork,
     automations,
     connectorOverrides,
+    meetingBotIdentities,
+    meetingBotInvites,
     workspaces,
     chatSessions,
     changeRequests,
     memoryBanks,
     dojoState,
     workboardCards,
+    workboardTaskSessions,
     publishedApps,
+    skillRegistryStats,
+    pendingSkillRegistryEvents,
+    toolCatalogItems,
+    pendingToolCatalogPublishes,
     onboardingState,
     widgetLayout,
+    dialerState,
+    speakSettings,
   };
   await fs.mkdir(path.dirname(statePath()), { recursive: true });
   await fs.writeFile(statePath(), JSON.stringify(payload, null, 2));
@@ -3548,7 +11453,7 @@ function emptyDojoState() {
   return {
     profile: {
       id: "dojo-profile-link",
-      name: "Experto",
+      name: "Wiki",
       rank: "Ready",
       masteredSkills: 0,
       nextRankAt: 0,

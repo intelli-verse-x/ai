@@ -8,7 +8,7 @@ Link is designed for everyday internal work: asking questions, finding the right
 
 - Chat with personal and directory agents.
 - Search company knowledge in Company Library.
-- Use Telnyx Skills and squad kits in Experto Crede.
+- Use Telnyx Skills and squad kits in Triforce.
 - Work from a Widgets dashboard with reports and saved views.
 - Track tasks in Task Board.
 - Use Memory Bank for long-term agent memory and recall.
@@ -61,7 +61,7 @@ Track active work in a kanban-style board.
 
 Browse and prompt Hindsight-backed memory banks, including documents, memories, entities, and bank settings.
 
-### Experto Crede
+### Triforce
 
 Train and equip your agents with Telnyx Skills, squad kits, and internal app capabilities.
 
@@ -96,4 +96,11 @@ For Link runtime changes:
 cd tools/link
 npm run typecheck
 npm test
+```
+
+For the private Link Skill Registry service:
+
+```sh
+cd tools/link-skill-registry
+npm run build
 ```

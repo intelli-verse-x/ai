@@ -1,11 +1,18 @@
+import { createDefaultDialerConfig, dialerTemplates, normalizeDialerConfig, type DialerConfig, type DialerState } from "./phone/dialer-config.js";
+
 export type ViewId =
   | "workspaces"
   | "onboarding"
   | "widgets"
   | "explorer"
   | "chats"
+  | "gateway"
+  | "inbox"
+  | "apps"
+  | "skills"
   | "agents"
   | "workboard"
+  | "drive"
   | "phone"
   | "calendar"
   | "memory"
@@ -15,19 +22,191 @@ export type ViewId =
 export type Decision = "approve" | "dismiss";
 export type ConnectionStatus = "connected" | "needs_access" | "requested" | "signed_in";
 export type ConnectionMode = "env" | "saved" | "okta" | "live";
+export type ToolArtifactType = "skill" | "mcp_tool" | "link_app";
+export type ToolCatalogVisibility = "private" | "squad" | "internal";
+export type ToolCatalogStatus = "draft" | "reviewing" | "published" | "deprecated";
+export type RiskLevel = "low" | "medium" | "high";
+export type MessageGatewayTransport = "auto" | "slack" | "google_chat" | "a2a";
+export type MessageGatewayStatus = "accepted" | "partial" | "delivered" | "failed" | "rejected";
+export type MessageGatewayDeliveryStatus = "queued" | "delivered" | "retryable_failure" | "failed" | "rejected";
+
+export interface MessageGatewayReadinessCheck {
+  name: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface MessageGatewayReadiness {
+  serviceUrl: string;
+  reachable: boolean;
+  ready: boolean;
+  authConfigured: boolean;
+  mode: string;
+  checks: MessageGatewayReadinessCheck[];
+  message: string;
+  updatedAt: string;
+}
+
+export interface MessageGatewayDelivery {
+  id: string;
+  recipient: string;
+  recipientType: "person" | "agent";
+  transport: Exclude<MessageGatewayTransport, "auto">;
+  status: MessageGatewayDeliveryStatus;
+  routeReason: string;
+  providerRecipientId?: string;
+  providerMessageId?: string;
+  providerThreadId?: string;
+  providerUrl?: string;
+  taskId?: string;
+  contextId?: string;
+  retryCount: number;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface MessageGatewayMessage {
+  id: string;
+  from: { id: string; displayName?: string; email?: string };
+  to: string[];
+  body?: string;
+  bodyRedactedAt?: string;
+  subject?: string;
+  metadata: Record<string, unknown>;
+  idempotencyKey: string;
+  transportHint: MessageGatewayTransport;
+  status: MessageGatewayStatus;
+  deliveries: MessageGatewayDelivery[];
+  retryCount: number;
+  lastError?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MessageGatewayEvent {
+  id: string;
+  messageId: string;
+  deliveryId?: string;
+  type: string;
+  transport?: Exclude<MessageGatewayTransport, "auto">;
+  providerEventId?: string;
+  detail: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface MessageGatewayListResult {
+  mode: "live" | "local_fallback" | "preview";
+  serviceUrl: string;
+  warning?: string;
+  messages: MessageGatewayMessage[];
+}
+
+export interface MessageGatewaySendResult {
+  mode: "live" | "local_fallback" | "preview";
+  serviceUrl: string;
+  warning?: string;
+  message: MessageGatewayMessage;
+}
+
+export interface MessageGatewayEventsResult {
+  mode: "live" | "local_fallback" | "preview";
+  serviceUrl: string;
+  warning?: string;
+  events: MessageGatewayEvent[];
+}
 
 export interface SkillMetadata {
+  skillId?: string;
   name: string;
   description: string;
   owner: string;
   team: string;
-  riskLevel: "low" | "medium" | "high";
+  riskLevel: RiskLevel;
   toolsRequired: string[];
   customerSafe: boolean;
   approvalRequired: boolean;
-  source?: "link" | "telnyx";
+  source?: "link" | "telnyx" | "tool-studio";
   product?: string;
   language?: string;
+  artifactType?: ToolArtifactType;
+  audience?: string;
+  sourceOfTruth?: string;
+  repeatedChecks?: string;
+  humanCheckpoints?: string;
+  testFixture?: string;
+  reviewers?: string[];
+  version?: string;
+  visibility?: ToolCatalogVisibility;
+  status?: ToolCatalogStatus;
+  starCount?: number;
+  installCount?: number;
+  downloadCount?: number;
+  runCount?: number;
+  viewCount?: number;
+  starredByActor?: boolean;
+  installedByActor?: boolean;
+  updatedAt?: string;
+  registryUpdatedAt?: string;
+}
+
+export interface SkillRegistryStats {
+  skillId: string;
+  skillName?: string;
+  source?: string;
+  starCount: number;
+  installCount: number;
+  downloadCount: number;
+  runCount: number;
+  viewCount: number;
+  starredByActor: boolean;
+  installedByActor: boolean;
+  updatedAt: string;
+}
+
+export interface SkillMarkdownResult {
+  name: string;
+  markdown: string;
+  sourcePath: string;
+  sourceUrl: string;
+}
+
+export interface ToolStudioManifestInput {
+  toolId?: string;
+  name: string;
+  description: string;
+  owner: string;
+  team: string;
+  audience: string;
+  artifactType: ToolArtifactType;
+  inputs: string;
+  outputs: string;
+  toolsRequired: string[];
+  riskLevel: RiskLevel;
+  customerSafe: boolean;
+  approvalRequired: boolean;
+  sourceOfTruth: string;
+  repeatedChecks: string;
+  humanCheckpoints: string;
+  testFixture: string;
+  reviewers: string[];
+  version: string;
+  visibility: ToolCatalogVisibility;
+  skillMarkdown: string;
+  checklist: string[];
+}
+
+export interface ToolCatalogItem extends ToolStudioManifestInput {
+  toolId: string;
+  source: "tool-studio" | "link" | "telnyx" | string;
+  status: ToolCatalogStatus;
+  stats: SkillRegistryStats;
+  createdAt: string;
+  updatedAt: string;
+  deprecatedAt?: string;
+  versions: { version: string; submittedAt: string; submittedBy?: string; source?: string }[];
 }
 
 export interface ToolMetadata {
@@ -97,13 +276,36 @@ export interface WorkspaceSummary {
 export interface ExplorerResult {
   id: string;
   title: string;
-  source: "guru" | "google_drive" | "link_file" | "skill" | "agent" | "memory" | "telnyx_support" | "telnyx_developers";
-  type: "doc" | "file" | "skill" | "agent" | "memory";
+  source: "guru" | "pylon" | "google_drive" | "link_file" | "skill" | "agent" | "memory" | "telnyx_support" | "telnyx_developers";
+  type: "doc" | "file" | "skill" | "agent" | "memory" | "ticket";
   permission: "allowed" | "needs_access";
   freshness: string;
   excerpt: string;
   workspaceId?: string;
   url?: string;
+}
+
+export interface PylonCreateIssueInput {
+  title: string;
+  bodyHtml?: string;
+  body_html?: string;
+  body?: string;
+  description?: string;
+  accountId?: string;
+  assigneeId?: string;
+  contactId?: string;
+  requesterEmail?: string;
+  requesterName?: string;
+  requesterId?: string;
+  teamId?: string;
+  priority?: string;
+  tags?: string[];
+}
+
+export interface PylonCreateIssueResult {
+  status: "created";
+  issue?: unknown;
+  result?: unknown;
 }
 
 export interface ChatMessage {
@@ -134,6 +336,43 @@ export interface VoiceTranscriptionResult {
   text: string;
 }
 
+export interface TerminalStatus {
+  id?: string;
+  title?: string;
+  running: boolean;
+  pid?: number;
+  shell: string;
+  cwd: string;
+  buffer: string;
+  lastExit: { code: number | null; signal: string | null; at: string; message?: string } | null;
+  startedAt: string | null;
+  updatedAt: string;
+}
+
+export interface TerminalOutputEvent {
+  terminalId?: string;
+  text: string;
+  status: TerminalStatus;
+}
+
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  path: string;
+  type: "text" | "image" | "file";
+  mimeType: string;
+  size: number;
+  content?: string;
+  dataUrl?: string;
+  truncated?: boolean;
+  skippedReason?: string;
+}
+
+export interface ChatAttachmentSelection {
+  canceled: boolean;
+  attachments: ChatAttachment[];
+}
+
 export interface ChatSession {
   id: string;
   title: string;
@@ -142,6 +381,17 @@ export interface ChatSession {
   status: "active" | "idle";
   updatedAt: string;
   messages: ChatMessage[];
+  task?: {
+    provider: WorkboardProvider;
+    boardId: string;
+    cardId: string;
+    status: WorkboardStatus | "idle" | "running" | "blocked";
+  };
+  a2a?: {
+    targetAgentId: string;
+    contextId?: string;
+    taskId?: string;
+  };
 }
 
 export interface LinkChangeRequest {
@@ -186,6 +436,18 @@ export interface CredentialGroupStatus {
   label: string;
   help: string;
   fields: CredentialFieldStatus[];
+}
+
+export interface EdgeComputeStatus {
+  ready: boolean;
+  command: string;
+  endpoint: string;
+  configPath: string;
+  configured: boolean;
+  authenticated: boolean;
+  authSeeded: boolean;
+  message: string;
+  detail: string;
 }
 
 export interface ConnectionSummary extends ConnectorStatus {
@@ -266,18 +528,14 @@ export interface PhoneAssistantOption {
   phoneNumber?: string;
 }
 
-export type WorkboardProvider = "auto" | "hermes" | "openclaw" | "local";
+export type ChatAgentSource = AgentSummary["source"] | "link" | "voice-assistant";
+
+export type WorkboardProvider = "auto" | "hermes" | "openclaw" | "google_tasks" | "local";
 export type WorkboardStatus =
-  | "triage"
-  | "backlog"
   | "todo"
-  | "scheduled"
-  | "ready"
-  | "running"
-  | "review"
-  | "blocked"
-  | "done"
-  | "archived";
+  | "in_progress"
+  | "needs_review"
+  | "done";
 
 export interface WorkboardProviderStatus {
   id: WorkboardProvider;
@@ -302,6 +560,9 @@ export interface WorkboardCard {
   priority: "low" | "normal" | "high" | "urgent" | number;
   labels: string[];
   assignee?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneeType?: "hermes" | "openclaw" | string;
   provider: WorkboardProvider;
   boardId: string;
   tenant?: string;
@@ -319,6 +580,27 @@ export interface WorkboardCard {
   raw?: unknown;
 }
 
+export type WorkboardTaskSessionStatus = "idle" | "running" | "needs_review" | "done" | "blocked";
+
+export interface WorkboardTaskSession {
+  key: string;
+  provider: WorkboardProvider;
+  boardId: string;
+  cardId: string;
+  sessionId: string;
+  agentId?: string;
+  agentName?: string;
+  agentSource?: ChatAgentSource;
+  agentType?: string;
+  status: WorkboardTaskSessionStatus;
+  createdAt: string;
+  updatedAt: string;
+  dispatchedAt?: string;
+  lastDispatchPrompt?: string;
+  remoteTaskId?: string;
+  remoteContextId?: string;
+}
+
 export interface WorkboardSnapshot {
   provider: WorkboardProvider;
   boardId: string;
@@ -334,24 +616,69 @@ export interface WorkboardSnapshot {
 export interface WorkboardCreateInput {
   provider: WorkboardProvider;
   boardId?: string;
+  preferredAgentType?: "hermes" | "openclaw";
   title: string;
   body?: string;
   assignee?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneeType?: "hermes" | "openclaw" | string;
   priority?: WorkboardCard["priority"];
   labels?: string[];
   status?: WorkboardStatus;
   tenant?: string;
   workspace?: string;
   sourceUrl?: string;
+  autoDispatch?: boolean;
 }
 
 export interface WorkboardUpdateInput {
   provider: WorkboardProvider;
   boardId?: string;
+  preferredAgentType?: "hermes" | "openclaw";
   cardId: string;
+  title?: string;
+  body?: string;
   status?: WorkboardStatus;
   assignee?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneeType?: "hermes" | "openclaw" | string;
+  priority?: WorkboardCard["priority"];
+  labels?: string[];
   comment?: string;
+  autoDispatch?: boolean;
+}
+
+export interface WorkboardTaskSessionInput {
+  provider: WorkboardProvider;
+  boardId?: string;
+  preferredAgentType?: "hermes" | "openclaw";
+  cardId: string;
+  workspaceId?: string;
+  agentId?: string;
+  agentName?: string;
+  agentSource?: ChatAgentSource;
+  agentType?: string;
+  approvalMode?: string;
+  modelMode?: string;
+  contextScope?: string;
+}
+
+export interface WorkboardTaskSessionResult {
+  card?: WorkboardCard;
+  session: ChatSession;
+  taskSession: WorkboardTaskSession;
+  snapshot: WorkboardSnapshot;
+}
+
+export interface WorkboardTaskDispatchInput extends WorkboardTaskSessionInput {
+  message?: string;
+  force?: boolean;
+}
+
+export interface WorkboardTaskDispatchResult extends WorkboardTaskSessionResult {
+  dispatched: boolean;
 }
 
 export interface MemoryBank {
@@ -372,6 +699,14 @@ export interface MemoryRecallResult {
   evidence: string[];
   score: number;
   source: "hindsight";
+}
+
+export interface MemoryRetainResult {
+  id: string;
+  bankId: string;
+  status: string;
+  source: "hindsight" | "preview";
+  summary: string;
 }
 
 export interface DojoProfile {
@@ -417,6 +752,7 @@ export interface OnboardingState {
 export type WidgetChartType = "kpi" | "line" | "bar" | "area";
 export type WidgetCategory = "Revenue" | "Operations" | "Product";
 export type WidgetValueFormat = "currency" | "number" | "percent";
+export type WidgetRenderMode = "chart" | "tableau";
 
 export interface WidgetChartSpec {
   type: WidgetChartType;
@@ -427,6 +763,15 @@ export interface WidgetChartSpec {
   metricFormat?: WidgetValueFormat;
 }
 
+export interface WidgetTableauEmbedSpec {
+  url?: string;
+  viewId?: string;
+  sheetName?: string;
+  toolbar?: "top" | "bottom" | "hidden";
+  hideTabs?: boolean;
+  device?: "default" | "desktop" | "tablet" | "phone";
+}
+
 export interface WidgetCatalogItem {
   id: string;
   title: string;
@@ -435,6 +780,8 @@ export interface WidgetCatalogItem {
   description: string;
   cadence: string;
   refreshTtlSeconds: number;
+  renderMode?: WidgetRenderMode;
+  tableau?: WidgetTableauEmbedSpec;
   chart: WidgetChartSpec;
 }
 
@@ -454,6 +801,66 @@ export interface WidgetDataResult {
   trend: string;
 }
 
+export interface WebRtcStatus {
+  telnyxApiReady: boolean;
+  webRtcConnectionReady?: boolean;
+  webRtcCredentialReady: boolean;
+  canAutoProvision?: boolean;
+  ready: boolean;
+  message: string;
+  updatedAt: string;
+}
+
+export interface SpeakSettings {
+  whisperEnabled: boolean;
+  shortcutMode: "hold-fn" | "cmd-shift-l";
+  shortcutLabel: string;
+  sttEngine: "Telnyx" | "Deepgram" | "Azure" | "Google";
+  sttModel: string;
+  sttLanguage: string;
+  silenceThreshold: number;
+  llmCleanupEnabled: boolean;
+  ttsProvider: string;
+  ttsVoice: string;
+  updatedAt: string;
+}
+
+export interface WhisperStatus {
+  available: boolean;
+  sourceAvailable: boolean;
+  built: boolean;
+  running: boolean;
+  pid?: number;
+  apiKeyReady: boolean;
+  shortcutLabel: string;
+  helperPath: string;
+  appBundlePath: string;
+  lastExit?: { code?: number | null; signal?: string | null; at: string } | null;
+  lastLogLines: string[];
+  message: string;
+  updatedAt: string;
+  buildOutput?: string;
+}
+
+export interface TelnyxTtsVoice {
+  voiceId: string;
+  name: string;
+  provider: string;
+  language: string;
+  gender: string;
+}
+
+export interface TelnyxTtsSample {
+  voiceId: string;
+  audioBase64: string;
+  mimeType: string;
+}
+
+export interface WebRtcTokenResult {
+  token: string;
+  issuedAt: string;
+}
+
 export type LinkPublishedAppStatus =
   | "draft"
   | "submitted"
@@ -462,6 +869,7 @@ export type LinkPublishedAppStatus =
   | "approved"
   | "deployed"
   | "rejected"
+  | "failed"
   | "deprecated";
 
 export type LinkPublishedAppType = "web" | "mcp_app";
@@ -496,6 +904,7 @@ export interface LinkPublishedApp {
   sourceRepo?: string;
   sourceRef?: string;
   sourceSubdir?: string;
+  installCommand?: string;
   buildCommand?: string;
   startCommand?: string;
   outputDir?: string;
@@ -504,7 +913,11 @@ export interface LinkPublishedApp {
   deployedUrl?: string;
   reviewers: string[];
   envSchema: string[];
+  ownerActor?: string;
+  ownerUserId?: string;
+  ownerUserName?: string;
   latestVersion?: LinkPublishedAppVersion;
+  versions?: LinkPublishedAppVersion[];
   reviewNotes?: string;
   createdAt: string;
   updatedAt: string;
@@ -520,6 +933,7 @@ export interface LinkAppPublishInput {
   sourceRepo: string;
   sourceRef?: string;
   sourceSubdir?: string;
+  installCommand?: string;
   buildCommand?: string;
   startCommand?: string;
   outputDir?: string;
@@ -536,6 +950,75 @@ export interface LinkAppPublishResult {
   version?: LinkPublishedAppVersion;
 }
 
+export interface LinkLocalAppInspection {
+  canceled: boolean;
+  directory?: string;
+  manifestPath?: string;
+  packageName?: string;
+  publishInput?: LinkAppPublishInput;
+  git?: {
+    root?: string;
+    remote?: string;
+    head?: string;
+    dirty?: boolean;
+    sourceSubdir?: string;
+    remoteRefStatus?: "unchecked" | "available" | "missing" | "error";
+    remoteRefDetail?: string;
+  };
+  warnings?: string[];
+}
+
+export type LinkLocalEdgeImportScope = "personal" | "company";
+
+export interface LinkLocalEdgeImportResult extends LinkLocalAppInspection {
+  imported?: boolean;
+  sourcePath?: string;
+  importScope?: LinkLocalEdgeImportScope;
+  targetDirectory?: string;
+  createdManifest?: boolean;
+  replaced?: boolean;
+}
+
+export interface LinkLocalEdgeDeployResult {
+  canceled: boolean;
+  url?: string;
+  app?: LinkPublishedApp;
+  version?: LinkPublishedAppVersion;
+  directory?: string;
+  manifestPath?: string;
+  logs?: string;
+  warnings?: string[];
+  edge?: {
+    command: string;
+    endpoint: string;
+    configPath: string;
+  };
+}
+
+export interface LinkLocalEdgeDraftApp {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  directory: string;
+  manifestPath?: string;
+  sourceSubdir?: string;
+  outputDir?: string;
+  buildCommand?: string;
+  installCommand?: string;
+  updatedAt: string;
+  status: "draft";
+}
+
+export interface EdgeSlugAvailability {
+  slug: string;
+  status: "empty" | "checking" | "available" | "owned" | "taken" | "error";
+  available: boolean;
+  canReplace: boolean;
+  message: string;
+  app?: LinkPublishedApp;
+}
+
 export interface LinkAppDuplicateResult {
   mode: "live" | "local_fallback";
   action: "source_ref" | "fork" | "bundle" | "unavailable";
@@ -543,14 +1026,332 @@ export interface LinkAppDuplicateResult {
   sourceSubdir?: string;
   sourceRef?: string;
   command?: string;
+  commands?: string[];
+  path?: string;
   url?: string;
   message: string;
+}
+
+export interface LinkAppPublisherReadinessCheck {
+  name: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface LinkAppPublisherReadiness {
+  serviceUrl: string;
+  reachable: boolean;
+  ready: boolean;
+  authConfigured: boolean;
+  mode: string;
+  checks: LinkAppPublisherReadinessCheck[];
+  message: string;
+  updatedAt: string;
+}
+
+export interface GoogleWorkspaceSkillConnectionResult {
+  status: "connected";
+  connectionId: string;
+  skill: SkillMetadata;
+  credentials: CredentialGroupStatus[];
+  connectors: ConnectorStatus[];
+}
+
+export interface GitHubDeviceConnectionResult {
+  status: "connected";
+  login?: string;
+  userCode?: string;
+  verificationUri?: string;
+  credentials: CredentialGroupStatus[];
+}
+
+export interface GuruOAuthConnectionResult {
+  status: "connected";
+  userId?: string;
+  credentials: CredentialGroupStatus[];
+  connectors: ConnectorStatus[];
+}
+
+export interface PylonOAuthConnectionResult {
+  status: "connected";
+  userId?: string;
+  userCode?: string;
+  verificationUri?: string;
+  credentials: CredentialGroupStatus[];
+  connectors: ConnectorStatus[];
+}
+
+export interface GoogleCalendarEvent {
+  id: string;
+  title: string;
+  time: string;
+  start?: string;
+  end?: string;
+  attendees: string;
+  phone?: string;
+  meetUrl?: string;
+  notes?: string;
+  transcript?: string;
+  status: "past" | "upcoming" | "live";
+}
+
+export type MeetingInviteStatus = "invited" | "scheduled" | "joining" | "joined" | "blocked" | "ended" | "failed";
+
+export interface MeetingBotIdentity {
+  provider: "agentmail";
+  inboxId: string;
+  email: string;
+  clientId?: string;
+}
+
+export interface MeetingJoinTarget {
+  type: "sip" | "phone";
+  uri: string;
+  dialTarget: string;
+  label?: string;
+  accessCode?: string;
+  dtmf?: string;
+}
+
+export interface MeetingAgentAdapter {
+  kind: "telnyx_assistant" | "conversation_relay" | "agent_message_async";
+  assistantId?: string;
+  agentId?: string;
+  agentSource?: string;
+  adapterUrl?: string;
+  realtime?: boolean;
+  asyncOnly?: boolean;
+}
+
+export interface MeetingBotOption {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  status: string;
+  type: string;
+  source: string;
+  capabilities: string[];
+  visibility: string;
+  available?: boolean;
+  phoneNumber?: string;
+  assistantId?: string;
+  slackUserId?: string;
+  slackChannel?: string;
+  adapter: MeetingAgentAdapter;
+}
+
+export interface MeetingInvite {
+  id: string;
+  calendarId: string;
+  eventId: string;
+  eventTitle: string;
+  eventStart: string;
+  eventEnd: string;
+  botId: string;
+  botName: string;
+  botType: string;
+  identity: MeetingBotIdentity | null;
+  liveJoin: boolean;
+  sendUpdates: "all" | "externalOnly" | "none";
+  joinTarget: MeetingJoinTarget | null;
+  agentAdapter: MeetingAgentAdapter | null;
+  status: MeetingInviteStatus;
+  blockers: string[];
+  calendarEtag?: string;
+  telnyxCallControlId?: string;
+  telnyxCallSessionId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MeetingBotInvitePreflight {
+  calendarId: string;
+  eventId: string;
+  bot: MeetingBotOption;
+  identity: MeetingBotIdentity | null;
+  joinTarget: MeetingJoinTarget | null;
+  blockers: string[];
+  liveJoinBlockers: string[];
+  calendarWritable: boolean;
+  liveJoinReady: boolean;
+}
+
+export interface GoogleContact {
+  id: string;
+  name: string;
+  role: string;
+  phone: string;
+  source: "google";
+  detail: string;
+  connected: true;
+}
+
+export interface GoogleInboxThreadSummary {
+  id: string;
+  threadId: string;
+  messageId?: string;
+  subject: string;
+  from: string;
+  to?: string;
+  date: string;
+  snippet: string;
+  unread: boolean;
+  labels: string[];
+  url: string;
+}
+
+export interface GoogleInboxMessage {
+  id: string;
+  messageId?: string;
+  threadId: string;
+  subject: string;
+  from: string;
+  to: string;
+  cc?: string;
+  replyTo?: string;
+  date: string;
+  snippet: string;
+  body: string;
+}
+
+export interface GoogleInboxThread extends GoogleInboxThreadSummary {
+  participants: string[];
+  replyTo: string;
+  replyToMessageId?: string;
+  messages: GoogleInboxMessage[];
+}
+
+export interface GoogleInboxDraftInput {
+  draftId?: string;
+  threadId?: string;
+  replyToMessageId?: string;
+  to?: string | string[];
+  cc?: string | string[];
+  bcc?: string | string[];
+  from?: string;
+  subject: string;
+  body: string;
+}
+
+export interface GoogleInboxDraft {
+  id: string;
+  draftId: string;
+  messageId?: string;
+  threadId?: string;
+  to: string;
+  cc?: string;
+  bcc?: string;
+  subject: string;
+  body: string;
+  updatedAt: string;
+  url: string;
+}
+
+export interface GoogleInboxConnectionResult {
+  status: "connected";
+  connectionId: string;
+  credentials: CredentialGroupStatus[];
+  connectors: ConnectorStatus[];
+}
+
+export interface KnowledgeAgentCitation {
+  title?: string;
+  url?: string;
+  source?: string;
+}
+
+export interface KnowledgeAgentAskRequest {
+  question: string;
+}
+
+export interface KnowledgeAgentAskResponse {
+  answer: string;
+  citations: KnowledgeAgentCitation[];
+  latencyMs?: number;
+}
+
+const knowledgeAgentAskUrl = "https://api.telnyx.com/v2/knowledge_agent/ask";
+
+function normalizeKnowledgeAgentCitation(value: unknown): KnowledgeAgentCitation | null {
+  if (typeof value === "string") return { title: value };
+  if (!value || typeof value !== "object") return null;
+  const item = value as Record<string, unknown>;
+  const title = [item.title, item.name, item.label].find((candidate) => typeof candidate === "string" && candidate.trim());
+  const url = [item.url, item.href, item.link].find((candidate) => typeof candidate === "string" && candidate.trim());
+  const source = [item.source, item.type].find((candidate) => typeof candidate === "string" && candidate.trim());
+  return {
+    ...(typeof title === "string" ? { title: title.trim() } : {}),
+    ...(typeof url === "string" ? { url: url.trim() } : {}),
+    ...(typeof source === "string" ? { source: source.trim() } : {}),
+  };
+}
+
+function normalizeKnowledgeAgentCitations(value: unknown): KnowledgeAgentCitation[] {
+  return Array.isArray(value)
+    ? value.map(normalizeKnowledgeAgentCitation).filter((item): item is KnowledgeAgentCitation => Boolean(item))
+    : [];
+}
+
+async function askPublicKnowledgeAgent({ question }: KnowledgeAgentAskRequest): Promise<KnowledgeAgentAskResponse> {
+  const trimmed = question.trim();
+  if (!trimmed) throw new Error("Ask a general Telnyx documentation question first.");
+
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 120000);
+
+  try {
+    const response = await fetch(knowledgeAgentAskUrl, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ question: trimmed }),
+      signal: controller.signal,
+    });
+
+    if (response.status === 429) {
+      throw new Error("Telnyx Knowledge Agent is rate limited at 10 requests per minute. Wait and try again.");
+    }
+    if (!response.ok) {
+      throw new Error(`Telnyx Knowledge Agent request failed (${response.status}). Try again later.`);
+    }
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      throw new Error("Telnyx Knowledge Agent returned malformed JSON.");
+    }
+
+    const answer = typeof (payload as { answer?: unknown })?.answer === "string" ? (payload as { answer: string }).answer.trim() : "";
+    if (!answer) throw new Error("Telnyx Knowledge Agent returned an empty answer.");
+
+    return {
+      answer,
+      citations: normalizeKnowledgeAgentCitations((payload as { citations?: unknown })?.citations),
+      latencyMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Telnyx Knowledge Agent request timed out after 120 seconds. Try a shorter question or retry.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 export interface LinkDesktopApi {
   chat(prompt: string): Promise<{ response?: string; routedTo?: string; finalOutput?: unknown }>;
   runSkill(skillName: string): Promise<unknown>;
   listSkills(): Promise<SkillMetadata[]>;
+  getSkillMarkdown(skillName: string): Promise<SkillMarkdownResult>;
+  recordSkillRegistryEvent(input: { skillId?: string; skillName: string; source?: string; eventType: "star" | "unstar" | "install" | "run" | "view" }): Promise<SkillRegistryStats>;
+  listToolCatalog(): Promise<ToolCatalogItem[]>;
+  publishToolManifest(input: ToolStudioManifestInput): Promise<ToolCatalogItem>;
   listTools(): Promise<ToolMetadata[]>;
   createSharedChannelDraft(input: {
     title?: string;
@@ -564,32 +1365,93 @@ export interface LinkDesktopApi {
   listConnectors(): Promise<ConnectorStatus[]>;
   listCredentials(): Promise<CredentialGroupStatus[]>;
   saveCredential(input: { name: string; value: string }): Promise<CredentialGroupStatus[]>;
+  connectGitHubWithDeviceFlow(): Promise<GitHubDeviceConnectionResult>;
+  connectGoogleWorkspaceWithSkill(): Promise<GoogleWorkspaceSkillConnectionResult>;
+  connectGuruWithOAuth(): Promise<GuruOAuthConnectionResult>;
+  connectPylonWithOAuth(): Promise<PylonOAuthConnectionResult>;
+  createPylonIssue(input: PylonCreateIssueInput): Promise<PylonCreateIssueResult>;
+  listGoogleCalendarEvents(): Promise<GoogleCalendarEvent[]>;
+  listMeetingBots(): Promise<MeetingBotOption[]>;
+  preflightMeetingBotInvite(input: { calendarId?: string; eventId: string; botId: string }): Promise<MeetingBotInvitePreflight>;
+  ensureBotAgentMailIdentity(input: { botId: string }): Promise<MeetingBotIdentity>;
+  inviteBotToCalendarEvent(input: {
+    calendarId?: string;
+    eventId: string;
+    botId: string;
+    liveJoin: boolean;
+    sendUpdates: "all" | "externalOnly" | "none";
+  }): Promise<MeetingInvite>;
+  cancelMeetingBotInvite(input: { inviteId: string }): Promise<MeetingInvite>;
+  listMeetingBotInvites(input?: { eventId?: string }): Promise<MeetingInvite[]>;
+  listGoogleContacts(): Promise<GoogleContact[]>;
+  connectGoogleInboxWithGog(): Promise<GoogleInboxConnectionResult>;
+  listGoogleInboxThreads(input?: { query?: string; maxResults?: number }): Promise<GoogleInboxThreadSummary[]>;
+  getGoogleInboxThread(input: { threadId: string }): Promise<GoogleInboxThread>;
+  createGoogleInboxDraft(input: GoogleInboxDraftInput): Promise<GoogleInboxDraft>;
+  updateGoogleInboxDraft(input: GoogleInboxDraftInput & { draftId: string }): Promise<GoogleInboxDraft>;
+  connectGoogleTasksWithGog(): Promise<GoogleInboxConnectionResult>;
   updateConnectorStatus(id: string, status: ConnectorStatus["status"]): Promise<ConnectorStatus[]>;
   listWidgetCatalog(): Promise<WidgetCatalogItem[]>;
   listWidgetLayout(): Promise<WidgetLayoutState>;
   saveWidgetLayout(input: { widgetIds: string[] }): Promise<WidgetLayoutState>;
   refreshWidgetData(input: { widgetId: string }): Promise<WidgetDataResult>;
+  listDialerConfigs(): Promise<DialerState>;
+  saveDialerConfig(input: Partial<DialerConfig>): Promise<DialerState>;
+  activateDialerConfig(id: string): Promise<DialerState>;
+  getActiveDialerConfig(): Promise<DialerConfig>;
+  getWebRtcToken(input?: { callerNumber?: string }): Promise<WebRtcTokenResult>;
+  getWebRtcStatus(): Promise<WebRtcStatus>;
+  getSpeakSettings(): Promise<SpeakSettings>;
+  saveSpeakSettings(input: Partial<SpeakSettings>): Promise<SpeakSettings>;
+  getWhisperStatus(): Promise<WhisperStatus>;
+  buildWhisper(): Promise<WhisperStatus>;
+  startWhisper(): Promise<WhisperStatus>;
+  stopWhisper(): Promise<WhisperStatus>;
+  listTtsVoices(input?: { provider?: string }): Promise<TelnyxTtsVoice[]>;
+  generateTtsSample(input: { voiceId: string; text: string; language?: string; provider?: string }): Promise<TelnyxTtsSample>;
+  getTerminalStatus(input?: { terminalId?: string }): Promise<TerminalStatus>;
+  startTerminal(input?: { terminalId?: string; title?: string }): Promise<TerminalStatus>;
+  writeTerminal(input: { terminalId?: string; text: string }): Promise<TerminalStatus>;
+  stopTerminal(input?: { terminalId?: string }): Promise<TerminalStatus>;
+  onTerminalOutput(listener: (event: TerminalOutputEvent) => void): () => void;
   listOnboarding(): Promise<OnboardingState>;
   updateOnboarding(input: Partial<Pick<OnboardingState, "dismissed" | "completed" | "completedStepIds">>): Promise<OnboardingState>;
   signInAgentControlPlane(): Promise<AgentControlPlaneAuthStatus>;
   signOutAgentControlPlane(): Promise<AgentControlPlaneAuthStatus>;
   getAgentControlPlaneAuthStatus(): Promise<AgentControlPlaneAuthStatus>;
-  openAgentControlPlaneSetup(): Promise<{ url: string }>;
+  openAgentControlPlaneSetup(input?: unknown): Promise<{ url: string }>;
   listHostedAgents(): Promise<HostedAgentSummary[]>;
   listWorkspaces(): Promise<WorkspaceSummary[]>;
   searchExplorer(input: { query: string; workspaceId?: string }): Promise<ExplorerResult[]>;
+  askKnowledgeAgent(input: KnowledgeAgentAskRequest): Promise<KnowledgeAgentAskResponse>;
   listChatSessions(): Promise<ChatSession[]>;
+  createChatSession(input?: {
+    workspaceId?: string;
+    agentId?: string;
+    agentName?: string;
+    agentType?: string;
+    agentSource?: ChatAgentSource;
+    approvalMode?: string;
+    modelMode?: string;
+    contextScope?: string;
+    title?: string;
+  }): Promise<ChatSession>;
   renameChatSession(input: { sessionId: string; title: string }): Promise<ChatSession>;
   sendChatMessage(input: {
     sessionId?: string;
     workspaceId?: string;
     content: string;
+    title?: string;
+    systemInstruction?: string;
     agentId?: string;
     agentName?: string;
+    agentSource?: ChatAgentSource;
+    agentType?: string;
     approvalMode?: string;
     modelMode?: string;
     contextScope?: string;
   }): Promise<ChatSession>;
+  selectChatAttachments(): Promise<ChatAttachmentSelection>;
   transcribeAudio(input: VoiceTranscriptionInput): Promise<VoiceTranscriptionResult>;
   createChangeRequest(input: {
     title: string;
@@ -604,16 +1466,34 @@ export interface LinkDesktopApi {
   listChangeRequests(): Promise<LinkChangeRequest[]>;
   listAgents(): Promise<AgentSummary[]>;
   sendAgentMessage(input: { agentId: string; content: string }): Promise<AgentInteractionResult>;
-  listWorkboard(input?: { provider?: WorkboardProvider; boardId?: string }): Promise<WorkboardSnapshot>;
+  listWorkboard(input?: { provider?: WorkboardProvider; boardId?: string; preferredAgentType?: "hermes" | "openclaw" }): Promise<WorkboardSnapshot>;
   createWorkboardCard(input: WorkboardCreateInput): Promise<WorkboardSnapshot>;
   updateWorkboardCard(input: WorkboardUpdateInput): Promise<WorkboardSnapshot>;
-  dispatchWorkboard(input: { provider: WorkboardProvider; boardId?: string }): Promise<WorkboardSnapshot>;
+  dispatchWorkboard(input: { provider: WorkboardProvider; boardId?: string; preferredAgentType?: "hermes" | "openclaw" }): Promise<WorkboardSnapshot>;
+  ensureWorkboardTaskSession(input: WorkboardTaskSessionInput): Promise<WorkboardTaskSessionResult>;
+  dispatchWorkboardTask(input: WorkboardTaskDispatchInput): Promise<WorkboardTaskDispatchResult>;
   listAccountPhoneNumbers(): Promise<PhoneNumberOption[]>;
   listPhoneAssistants(): Promise<PhoneAssistantOption[]>;
+  startAiAssistantOnCall(input: { callControlId: string; assistantId: string }): Promise<unknown>;
   listMemoryBanks(): Promise<MemoryBank[]>;
   recallMemory(input: { query: string; bankId?: string }): Promise<MemoryRecallResult[]>;
+  retainMemory(input: { content: string; context?: string; bankId?: string; source?: string }): Promise<MemoryRetainResult>;
   listDojoState(): Promise<DojoState>;
+  getPublisherReadiness(): Promise<LinkAppPublisherReadiness>;
+  getMessageGatewayReadiness(): Promise<MessageGatewayReadiness>;
+  listGatewayMessages(input?: { status?: MessageGatewayStatus | ""; recipient?: string }): Promise<MessageGatewayListResult>;
+  sendGatewayMessage(input: {
+    to: string | string[];
+    subject?: string;
+    body: string;
+    transport?: MessageGatewayTransport;
+    idempotencyKey?: string;
+    idempotency_key?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<MessageGatewaySendResult>;
+  listGatewayMessageEvents(input: { messageId: string }): Promise<MessageGatewayEventsResult>;
   listPublishedApps(): Promise<LinkPublishedApp[]>;
+  selectLocalPublishApp(): Promise<LinkLocalAppInspection>;
   createPublishIntent(input: LinkAppPublishInput): Promise<LinkAppPublishResult>;
   createPublishedAppVersion(input: {
     appId: string;
@@ -623,8 +1503,18 @@ export interface LinkDesktopApi {
     notes?: string;
   }): Promise<LinkAppPublishResult>;
   reviewPublishedApp(input: { appId: string; decision: "approve" | "reject"; notes?: string }): Promise<LinkAppPublishResult>;
+  rollbackPublishedApp(input: { appId: string; versionId?: string; notes?: string }): Promise<LinkAppPublishResult>;
+  transferPublishedApp(input: { appId: string; ownerSquad: string; reviewers?: string[]; notes?: string }): Promise<LinkAppPublishResult>;
+  deprecatePublishedApp(input: { appId: string; notes?: string }): Promise<LinkAppPublishResult>;
   duplicatePublishedApp(id: string): Promise<LinkAppDuplicateResult>;
   openPublishedApp(id: string): Promise<{ opened: boolean; url: string }>;
+	  getEdgeComputeStatus(): Promise<EdgeComputeStatus>;
+	  checkEdgeSlugAvailability(input?: { slug?: string }): Promise<EdgeSlugAvailability>;
+	  listLocalEdgeDraftApps(): Promise<LinkLocalEdgeDraftApp[]>;
+	  importLocalEdgeApp(input?: { scope?: LinkLocalEdgeImportScope; slug?: string; replaceExisting?: boolean }): Promise<LinkLocalEdgeImportResult>;
+	  deleteLocalEdgeDraftApp(input: { directory: string }): Promise<{ deleted: boolean; directory: string }>;
+	  previewLocalEdgeApp(input?: { directory?: string; slug?: string }): Promise<LinkLocalEdgeDeployResult>;
+  deployLocalEdgeApp(input?: { directory?: string; slug?: string; replaceExisting?: boolean }): Promise<LinkLocalEdgeDeployResult>;
   auditEvents(): Promise<unknown[]>;
 }
 
@@ -639,125 +1529,175 @@ const previewSkills: SkillMetadata[] = [];
 const previewTools: ToolMetadata[] = [];
 let previewWork: ActiveWorkItem[] = [];
 let previewWorkboardCards: WorkboardCard[] = [];
+let previewWorkboardTaskSessions: WorkboardTaskSession[] = [];
+const workboardColumns: WorkboardStatus[] = ["needs_review", "todo", "in_progress", "done"];
+const taskBoardOperatingGuide =
+  "Task board stages: Needs Review means an agent has a final response ready for human review; To Do means accepted but not started; In Progress means actively being worked; Done means the human reviewer accepted or closed the task. Agents move finished work to Needs Review, not Done.";
 const previewAutomations: AutomationItem[] = [];
 let previewChangeRequests: LinkChangeRequest[] = [];
-const previewConnectors: ConnectorStatus[] = [];
-let previewPublishedApps: LinkPublishedApp[] = [
+let previewConnectors: ConnectorStatus[] = [];
+let previewGatewayMessages: MessageGatewayMessage[] = [];
+let previewGoogleConnected = false;
+let previewPublishedApps: LinkPublishedApp[] = [];
+let previewToolCatalog: ToolCatalogItem[] = [];
+let previewMemoryEntries: MemoryRecallResult[] = [];
+let previewMeetingInvites: MeetingInvite[] = [];
+const previewMeetingBots: MeetingBotOption[] = [
   {
-    id: "app-carrier-readiness",
-    name: "Carrier Readiness Hub",
-    slug: "carrier-readiness-hub",
-    description: "Check carrier launch gates, retrieve internal runbooks, and coordinate squad review before customer updates.",
-    ownerSquad: "messaging-ops.squad",
-    audience: "Messaging, NOC",
-    appType: "web",
-    access: "vpn",
-    riskLevel: "medium",
-    status: "deployed",
-    sourceRepo: "https://github.com/team-telnyx/mcp-apps",
-    sourceRef: "main",
-    sourceSubdir: "apps/carrier-readiness",
-    vpnUrl: "https://carrier-readiness.apps.telnyx.io",
-    previewUrl: "https://carrier-readiness-preview.apps.telnyx.io",
-    reviewers: ["messaging-ops.squad"],
-    envSchema: ["TELNYX_AUTH_CONTEXT"],
-    latestVersion: {
-      id: "version-carrier-readiness-1",
-      appId: "app-carrier-readiness",
-      version: "2026.06.01",
-      sourceRepo: "https://github.com/team-telnyx/mcp-apps",
-      sourceRef: "main",
-      sourceSubdir: "apps/carrier-readiness",
-      status: "deployed",
-      submittedAt: now,
-      deployedAt: now,
+    id: "preview-meeting-bot",
+    name: "link-preview-agent",
+    displayName: "Link Preview Agent",
+    description: "Preview meeting bot. Electron loads live agents and Telnyx Assistants.",
+    status: "available",
+    type: "preview",
+    source: "preview",
+    capabilities: ["calendar", "meeting"],
+    visibility: "private",
+    available: true,
+    adapter: {
+      kind: "conversation_relay",
+      agentId: "preview-meeting-bot",
+      agentSource: "preview",
+      realtime: false,
+      asyncOnly: true,
     },
-    createdAt: now,
-    updatedAt: now,
-  },
-  {
-    id: "app-release-desk",
-    name: "Release Desk",
-    slug: "release-desk",
-    description: "Publish release notes, inspect pending approvals, and hand off app-specific review steps to the owning squad.",
-    ownerSquad: "product-platform.squad",
-    audience: "Product, Engineering",
-    appType: "mcp_app",
-    access: "vpn",
-    riskLevel: "medium",
-    status: "preview",
-    sourceRepo: "https://github.com/team-telnyx/mcp-apps",
-    sourceRef: "main",
-    sourceSubdir: "apps/release-desk",
-    previewUrl: "https://release-desk-preview.apps.telnyx.io",
-    reviewers: ["product-platform.squad"],
-    envSchema: ["TELNYX_AUTH_CONTEXT", "GITHUB_APP_INSTALLATION"],
-    latestVersion: {
-      id: "version-release-desk-1",
-      appId: "app-release-desk",
-      version: "2026.06.03-preview",
-      sourceRepo: "https://github.com/team-telnyx/mcp-apps",
-      sourceRef: "main",
-      sourceSubdir: "apps/release-desk",
-      status: "preview",
-      submittedAt: now,
-      previewUrl: "https://release-desk-preview.apps.telnyx.io",
-    },
-    createdAt: now,
-    updatedAt: now,
   },
 ];
+let previewSpeakSettings: SpeakSettings = {
+  whisperEnabled: true,
+  shortcutMode: "hold-fn",
+  shortcutLabel: "Hold fn",
+  sttEngine: "Telnyx",
+  sttModel: "openai/whisper-large-v3-turbo",
+  sttLanguage: "en-US",
+  silenceThreshold: 0.05,
+  llmCleanupEnabled: true,
+  ttsProvider: "telnyx",
+  ttsVoice: "Telnyx.NaturalHD.astra",
+  updatedAt: now,
+};
+const previewTerminalStatuses = new Map<string, TerminalStatus>();
+
+function previewTerminalStatus(input?: { terminalId?: string; title?: string }): TerminalStatus {
+  const terminalId = input?.terminalId || "terminal-1";
+  const existing = previewTerminalStatuses.get(terminalId);
+  if (existing) return existing;
+  const status: TerminalStatus = {
+    id: terminalId,
+    title: input?.title || `Terminal ${previewTerminalStatuses.size + 1}`,
+    running: false,
+    shell: "preview-shell",
+    cwd: "Telnyx Link",
+    buffer: "Terminal preview. Open the Electron app to run commands on your local device.\n",
+    lastExit: null,
+    startedAt: null,
+    updatedAt: now,
+  };
+  previewTerminalStatuses.set(terminalId, status);
+  return status;
+}
 
 let previewCredentials: CredentialGroupStatus[] = [
   credentials("agent-control-plane", "Agent Control Plane", "Okta sign-in creates the Agent Control Plane session Link uses for internal agents and tools. TELNYX_AUTH_REV2 is stored securely after sign-in.", ["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"]),
   credentials("mcp-proxy", "Telnyx MCP Proxy", "Connect Link to team-telnyx/mcp-proxy so agents discover approved MCP servers and tools through one Telnyx registry.", ["MCP_PROXY_URL"]),
   credentials("link-app-publisher", "Link App Publisher", "Optional VPN-only publisher service override. Link defaults to the internal managed publisher endpoint and authenticates with Okta Rev2 or TELNYX_API_KEY.", ["LINK_APP_PUBLISHER_URL"]),
-  credentials("tableau-widgets", "Tableau Widgets", "URL for the strict-access Tableau widget service. Tableau connected-app secrets stay server-side.", ["TABLEAU_WIDGETS_SERVICE_URL"]),
-  credentials("litellm", "Telnyx LiteLLM", "Get your LiteLLM Key by asking the AI-swe-Agent bot for one in Slack. Link uses Agent Control Plane routes automatically for hosted Hermes and OpenClaw agents.", ["LITELLM_API_KEY"]),
-  credentials("hindsight", "Hindsight", "Per-user, bank-scoped key from the Hindsight bank API Keys tab. Hindsight infers the bank from this key.", ["HINDSIGHT_API_KEY"]),
+  credentials("link-message-gateway", "Link Message Gateway", "Optional VPN-only message gateway override. Link defaults to the internal managed gateway and authenticates with Okta Rev2 or TELNYX_API_KEY.", ["LINK_MESSAGE_GATEWAY_URL"]),
+  credentials("tableau-widgets", "Tableau Widgets", "URLs for standard embedded Tableau reports plus the optional strict-access Tableau widget service.", ["TABLEAU_WIDGETS_SERVICE_URL", "TABLEAU_REVENUE_OVERVIEW_URL", "TABLEAU_SALES_PIPELINE_URL", "TABLEAU_SUPPORT_HEALTH_URL", "TABLEAU_MESSAGING_QUALITY_URL", "TABLEAU_PRODUCT_ADOPTION_URL", "TABLEAU_CUSTOMER_USAGE_URL"]),
+  credentials("litellm", "Telnyx Inference", "Get your LiteLLM Key by asking the AI-swe-Agent bot for one in Slack. Link uses Agent Control Plane routes automatically for hosted Hermes and OpenClaw agents.", ["LITELLM_API_KEY"]),
+  credentials("hindsight", "Hindsight", "Per-user Hindsight API key plus the memory bank id used when saving archive entries.", ["HINDSIGHT_API_KEY", "HINDSIGHT_BANK_ID"]),
   credentials("linear", "Linear", "Linear API key for issue and project lookup.", ["LINEAR_API_KEY"]),
-  credentials("telnyx", "Telnyx", "Telnyx API key for account, phone, messaging, and network operations.", ["TELNYX_API_KEY"]),
-  credentials("github", "GitHub", "Fine-grained GitHub token for approved draft PR creation.", ["GH_TOKEN"]),
+  credentials("telnyx", "Telnyx API Key", "Telnyx API key for account, phone, messaging, and WebRTC token generation.", ["TELNYX_API_KEY", "TELNYX_WEBRTC_CONNECTION_ID", "TELNYX_WEBRTC_CREDENTIAL_ID"]),
+  credentials("telnyx-meet-bridge", "Telnyx Meet Bridge", "Runtime settings for Google Meet live joins through Telnyx SIP/phone dial and Conversation Relay.", ["TELNYX_VOICE_CONNECTION_ID", "TELNYX_MEET_CALLER_ID", "TELNYX_MEET_WEBHOOK_URL", "TELNYX_MEET_CONVERSATION_RELAY_WS_URL", "LINK_MEETING_AGENT_ADAPTER_URL"]),
+  credentials("agentmail", "AgentMail", "AgentMail API key plus optional domain for deterministic bot inbox identities.", ["AGENTMAIL_API_KEY", "AGENTMAIL_DOMAIN"]),
+  credentials("github", "GitHub", "Pair GitHub with a read-only Telnyx Link GitHub App so Link can access approved Telnyx repositories without asking users to create personal access tokens.", ["GITHUB_USER_ACCESS_TOKEN", "GITHUB_APP_CLIENT_ID", "GH_TOKEN"]),
+  credentials("guru", "Guru", "Connect Guru through OAuth so Link can search Guru MCP cards after the user approves access through Guru SSO. Admins can provide the OAuth client settings through env or managed app config.", ["GURU_OAUTH_CLIENT_ID", "GURU_OAUTH_CLIENT_SECRET", "GURU_OAUTH_SCOPE", "GURU_OAUTH_REDIRECT_URI", "GURU_OAUTH_ACCESS_TOKEN", "GURU_OAUTH_REFRESH_TOKEN", "GURU_OAUTH_TOKEN_EXPIRES_AT", "GURU_OAUTH_USER_ID"]),
+  credentials("pylon", "Pylon", "Connect the team-telnyx/pylon-mcp-server compatible endpoint through Pylon OAuth so Link can search tickets and create issues through user-scoped Pylon MCP access. Link blocks update_issue and update_account in v1.", ["PYLON_MCP_URL", "PYLON_MCP_CLIENT_ID", "PYLON_MCP_ACCESS_TOKEN", "PYLON_MCP_REFRESH_TOKEN", "PYLON_MCP_TOKEN_EXPIRES_AT"]),
   credentials("slack", "Slack", "Slack user token discovers and DMs bot users; bot token can post where the app has access.", ["SLACK_USER_TOKEN", "SLACK_BOT_TOKEN"]),
-  credentials("google-workspace", "Google Workspace", "Connect Google Workspace so Link can load Calendar events, Drive docs, Meet artifacts, notes, and transcripts for your agents.", ["GOOGLE_WORKSPACE_ACCESS_TOKEN"]),
+  credentials("google-workspace", "Google Workspace", "Connect Google Workspace through openclaw-itops-setup-utils/gog-setup so Link can load Calendar events, Drive docs, Meet artifacts, notes, transcripts, and contacts for your agents.", ["GOOGLE_WORKSPACE_AGENT_CONNECTION_ID", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
+  credentials("google-inbox", "Google Inbox", "Connect Gmail through gog so Link can read inbox threads and save Gmail drafts without exposing send.", ["GOOGLE_INBOX_AGENT_CONNECTION_ID", "GOOGLE_INBOX_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
+  credentials("google-tasks", "Google Tasks", "Connect Google Tasks through gog so Taskbox can sync, create, update, and complete Google tasks without delete or clear commands.", ["GOOGLE_TASKS_AGENT_CONNECTION_ID", "GOOGLE_TASKS_VERIFIED_AT", "GOG_ACCOUNT", "GOG_KEYRING_PASSWORD"]),
 ];
 
 const previewWidgetCatalog: WidgetCatalogItem[] = [
   {
-    id: "preview-revenue-pipeline",
-    title: "Revenue pipeline",
+    id: "standard-revenue-overview",
+    title: "Revenue overview",
     source: "Tableau",
     category: "Revenue",
-    description: "Preview-only sample of a Tableau-backed revenue widget.",
+    description: "Standard executive revenue, pipeline, and bookings report.",
     cadence: "Refreshes hourly",
     refreshTtlSeconds: 300,
+    renderMode: "tableau",
+    tableau: { url: standardTableauReportUrl("TABLEAU_REVENUE_OVERVIEW_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
     chart: { type: "bar", xField: "stage", yField: "amount", metricField: "amount", metricFormat: "currency" },
   },
   {
-    id: "preview-support-volume",
-    title: "Support volume",
+    id: "standard-sales-pipeline",
+    title: "Sales pipeline coverage",
+    source: "Tableau",
+    category: "Revenue",
+    description: "Standard pipeline coverage, stage health, and commit visibility.",
+    cadence: "Refreshes hourly",
+    refreshTtlSeconds: 300,
+    renderMode: "tableau",
+    tableau: { url: standardTableauReportUrl("TABLEAU_SALES_PIPELINE_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
+    chart: { type: "area", xField: "week", yField: "coverage", metricField: "coverage", metricFormat: "number" },
+  },
+  {
+    id: "standard-support-health",
+    title: "Support operations health",
     source: "Tableau",
     category: "Operations",
-    description: "Preview-only sample of a Tableau-backed support widget.",
+    description: "Standard ticket volume, backlog, and response health report.",
     cadence: "Refreshes daily",
     refreshTtlSeconds: 900,
+    renderMode: "tableau",
+    tableau: { url: standardTableauReportUrl("TABLEAU_SUPPORT_HEALTH_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
     chart: { type: "line", xField: "day", yField: "tickets", metricField: "tickets", metricFormat: "number" },
   },
   {
-    id: "preview-product-adoption",
+    id: "standard-messaging-quality",
+    title: "Messaging delivery quality",
+    source: "Tableau",
+    category: "Operations",
+    description: "Standard delivery quality, route health, and failure trends report.",
+    cadence: "Refreshes hourly",
+    refreshTtlSeconds: 600,
+    renderMode: "tableau",
+    tableau: { url: standardTableauReportUrl("TABLEAU_MESSAGING_QUALITY_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
+    chart: { type: "line", xField: "day", yField: "delivery_rate", metricField: "delivery_rate", metricFormat: "percent" },
+  },
+  {
+    id: "standard-product-adoption",
     title: "Product adoption",
     source: "Tableau",
     category: "Product",
-    description: "Preview-only sample of a Tableau-backed product widget.",
+    description: "Standard product adoption, activation, and active account report.",
     cadence: "Refreshes daily",
     refreshTtlSeconds: 900,
+    renderMode: "tableau",
+    tableau: { url: standardTableauReportUrl("TABLEAU_PRODUCT_ADOPTION_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
     chart: { type: "area", xField: "week", yField: "active_accounts", metricField: "active_accounts", metricFormat: "number" },
+  },
+  {
+    id: "standard-customer-usage",
+    title: "Customer usage trends",
+    source: "Tableau",
+    category: "Product",
+    description: "Standard usage, growth, and customer activity report.",
+    cadence: "Refreshes daily",
+    refreshTtlSeconds: 900,
+    renderMode: "tableau",
+    tableau: { url: standardTableauReportUrl("TABLEAU_CUSTOMER_USAGE_URL"), toolbar: "hidden", hideTabs: true, device: "desktop" },
+    chart: { type: "bar", xField: "product", yField: "usage", metricField: "usage", metricFormat: "number" },
   },
 ];
 let previewWidgetLayout: WidgetLayoutState = {
   widgetIds: previewWidgetCatalog.slice(0, 2).map((widget) => widget.id),
   updatedAt: now,
 };
+let previewDialerConfigs: DialerConfig[] = dialerTemplates.map((template) => normalizeDialerConfig(template, template.id === "standard"));
+let previewActiveDialerConfig = createDefaultDialerConfig();
 
 let previewOnboarding: OnboardingState = {
   dismissed: false,
@@ -771,7 +1711,7 @@ let previewChatSessions: ChatSession[] = [];
 const emptyDojoState: DojoState = {
   profile: {
     id: "dojo-profile-link",
-    name: "Experto",
+    name: "Wiki",
     rank: "Ready",
     masteredSkills: 0,
     nextRankAt: 0,
@@ -781,7 +1721,7 @@ const emptyDojoState: DojoState = {
   sessions: [],
 };
 
-export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
+const previewLinkApi: LinkDesktopApi = {
   async chat(prompt) {
     void prompt;
     return {
@@ -799,7 +1739,79 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
     };
   },
   async listSkills() {
-    return previewSkills;
+    return [
+      ...previewSkills,
+      ...previewToolCatalog
+        .filter((tool) => tool.artifactType === "skill" && tool.status !== "deprecated")
+        .map(toolCatalogItemToSkill),
+    ];
+  },
+  async getSkillMarkdown(skillName) {
+    const catalogItem = previewToolCatalog.find((tool) => tool.name === skillName && tool.skillMarkdown);
+    if (catalogItem?.skillMarkdown) {
+      return {
+        name: skillName,
+        markdown: catalogItem.skillMarkdown,
+        sourcePath: `tool-studio/${catalogItem.toolId}/SKILL.md`,
+        sourceUrl: "https://github.com/team-telnyx/link",
+      };
+    }
+    return {
+      name: skillName,
+      markdown: `---\nname: ${skillName}\ndescription: Preview skill markdown is available in Link Desktop.\n---\n\n## When to use it\n\nOpen Link Desktop to load this skill from GitHub.`,
+      sourcePath: "preview/SKILL.md",
+      sourceUrl: "https://github.com/team-telnyx/link",
+    };
+  },
+  async recordSkillRegistryEvent(input) {
+    return {
+      skillId: input.skillId ?? `preview:${input.skillName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      skillName: input.skillName,
+      source: input.source,
+      starCount: input.eventType === "star" ? 1 : 0,
+      installCount: input.eventType === "install" ? 1 : 0,
+      downloadCount: input.eventType === "install" ? 1 : 0,
+      runCount: input.eventType === "run" ? 1 : 0,
+      viewCount: input.eventType === "view" ? 1 : 0,
+      starredByActor: input.eventType === "star",
+      installedByActor: input.eventType === "install",
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async listToolCatalog() {
+    return previewToolCatalog;
+  },
+  async publishToolManifest(input) {
+    const now = new Date().toISOString();
+    const toolId = input.toolId || `tool-studio:${slugify(input.name)}`;
+    const existing = previewToolCatalog.find((tool) => tool.toolId === toolId);
+    const tool: ToolCatalogItem = {
+      ...input,
+      toolId,
+      source: "tool-studio",
+      status: "published",
+      stats: existing?.stats ?? {
+        skillId: toolId,
+        skillName: input.name,
+        source: "tool-studio",
+        starCount: 0,
+        installCount: 0,
+        downloadCount: 0,
+        runCount: 0,
+        viewCount: 0,
+        starredByActor: false,
+        installedByActor: false,
+        updatedAt: now,
+      },
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      versions: [
+        ...(existing?.versions ?? []),
+        { version: input.version || "1.0.0", submittedAt: now, source: "browser-preview" },
+      ],
+    };
+    previewToolCatalog = [tool, ...previewToolCatalog.filter((item) => item.toolId !== toolId)];
+    return tool;
   },
   async listTools() {
     return previewTools;
@@ -828,9 +1840,22 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
     return previewAutomations;
   },
   async listConnectors() {
+    if (previewGoogleWorkspaceEnabled()) {
+      return previewGoogleConnectors(previewConnectors);
+    }
     return previewConnectors;
   },
   async listCredentials() {
+    if (previewPhoneE2EEnabled()) {
+      return previewCredentials.map((group) =>
+        group.id === "telnyx"
+          ? {
+              ...group,
+              fields: group.fields.map((field) => ({ ...field, configured: true, source: "saved" as const, updatedAt: new Date().toISOString() })),
+            }
+          : group,
+      );
+    }
     return previewCredentials;
   },
   async saveCredential({ name }) {
@@ -842,7 +1867,327 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
     }));
     return previewCredentials;
   },
-  async updateConnectorStatus(id, status) {
+  async connectGitHubWithDeviceFlow() {
+    previewCredentials = previewCredentials.map((group) => ({
+      ...group,
+      fields: group.fields.map((field) =>
+        field.name === "GITHUB_USER_ACCESS_TOKEN" ? { ...field, configured: true, source: "saved", updatedAt: new Date().toISOString() } : field,
+      ),
+    }));
+    return {
+      status: "connected",
+      login: "preview-github-user",
+      userCode: "PREV-IEW1",
+      verificationUri: "https://github.com/login/device",
+      credentials: previewCredentials,
+    };
+  },
+  async connectGoogleWorkspaceWithSkill() {
+    previewGoogleConnected = true;
+    previewCredentials = previewCredentials.map((group) => ({
+      ...group,
+      fields: group.fields.map((field) =>
+        field.name === "GOOGLE_WORKSPACE_AGENT_CONNECTION_ID" ? { ...field, configured: true, source: "saved", updatedAt: new Date().toISOString() } : field,
+      ),
+    }));
+    previewConnectors = previewConnectors.map((connectorItem) =>
+      connectorItem.id === "google-drive" || connectorItem.id === "google-calendar"
+        ? { ...connectorItem, status: "connected", mode: "saved" }
+        : connectorItem,
+    );
+    return {
+      status: "connected",
+      connectionId: "preview-google-agent",
+      skill: previewSkills.find((skill) => skill.name === "openclaw-itops-gog-setup") ?? {
+        name: "openclaw-itops-gog-setup",
+        description: "Set up read-only Google Workspace access through the Telnyx OpenClaw IT Ops gog setup utility.",
+        owner: "telnyx",
+        team: "IT Ops",
+        riskLevel: "low",
+        toolsRequired: ["gog", "openclaw-itops-setup-utils/gog-setup"],
+        customerSafe: false,
+        approvalRequired: false,
+        source: "telnyx",
+        product: "google-workspace",
+        language: "cli",
+        sourceOfTruth: "https://github.com/team-telnyx/openclaw-itops-setup-utils",
+      },
+      credentials: previewCredentials,
+      connectors: previewConnectors,
+    };
+  },
+  async connectGuruWithOAuth() {
+    previewCredentials = previewCredentials.map((group) => ({
+      ...group,
+      fields: group.fields.map((field) =>
+        ["GURU_OAUTH_ACCESS_TOKEN", "GURU_OAUTH_REFRESH_TOKEN", "GURU_OAUTH_USER_ID", "GURU_OAUTH_TOKEN_EXPIRES_AT"].includes(field.name)
+          ? { ...field, configured: true, source: "saved", updatedAt: new Date().toISOString() }
+          : field,
+      ),
+    }));
+    previewConnectors = previewConnectors.map((connectorItem) =>
+      connectorItem.id === "guru" ? { ...connectorItem, status: "connected", mode: "saved" } : connectorItem,
+    );
+    return {
+      status: "connected",
+      userId: "preview-guru-user",
+      credentials: previewCredentials,
+      connectors: previewConnectors,
+    };
+  },
+  async connectPylonWithOAuth() {
+    previewCredentials = previewCredentials.map((group) => ({
+      ...group,
+      fields: group.fields.map((field) =>
+        ["PYLON_MCP_CLIENT_ID", "PYLON_MCP_ACCESS_TOKEN", "PYLON_MCP_REFRESH_TOKEN", "PYLON_MCP_TOKEN_EXPIRES_AT"].includes(field.name)
+          ? { ...field, configured: true, source: "saved", updatedAt: new Date().toISOString() }
+          : field,
+      ),
+    }));
+    previewConnectors = previewConnectors.map((connectorItem) =>
+      connectorItem.id === "pylon" ? { ...connectorItem, status: "connected", mode: "saved" } : connectorItem,
+    );
+    return {
+      status: "connected",
+      userId: "preview-pylon-user",
+      userCode: "PYLON-1234",
+      verificationUri: "https://o.auth.usepylon.com",
+      credentials: previewCredentials,
+      connectors: previewConnectors,
+    };
+  },
+  async createPylonIssue(input) {
+    return {
+      status: "created",
+      issue: {
+        id: `preview-pylon-${Date.now()}`,
+        title: input.title,
+        body_html: input.body_html ?? input.bodyHtml ?? input.body ?? input.description ?? "",
+        link: "https://app.usepylon.com/issues/views/all-issues?conversationID=preview",
+      },
+      result: { mode: "preview" },
+    };
+  },
+  async listGoogleCalendarEvents() {
+    if (!previewGoogleConnected && !previewGoogleWorkspaceEnabled()) return [];
+    return [
+      {
+        id: "preview-google-calendar-event",
+        title: "Google Workspace sync check",
+        time: "Today, 10:00 AM - 10:30 AM",
+        start: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        end: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+        attendees: "Link Desktop",
+        phone: "",
+        meetUrl: "",
+        notes: "Preview-only event. The Electron app loads this from Google Calendar.",
+        transcript: "",
+        status: "upcoming",
+      },
+    ];
+  },
+  async listMeetingBots() {
+    return previewMeetingBots;
+  },
+  async preflightMeetingBotInvite(input) {
+    const bot = previewMeetingBots.find((item) => item.id === input.botId) ?? previewMeetingBots[0]!;
+    return {
+      calendarId: input.calendarId || "primary",
+      eventId: input.eventId,
+      bot,
+      identity: null,
+      joinTarget: null,
+      blockers: previewGoogleConnected || previewGoogleWorkspaceEnabled() ? ["Preview mode does not mutate Google Calendar."] : ["Connect Google Workspace first."],
+      liveJoinBlockers: ["Preview mode does not dial Telnyx."],
+      calendarWritable: previewGoogleConnected,
+      liveJoinReady: false,
+    };
+  },
+  async ensureBotAgentMailIdentity(input) {
+    return {
+      provider: "agentmail",
+      inboxId: `preview-${input.botId}`,
+      email: `${input.botId.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}@preview.agentmail.to`,
+      clientId: `telnyx-link-meeting-bot:${input.botId}`,
+    };
+  },
+  async inviteBotToCalendarEvent(input) {
+    const bot = previewMeetingBots.find((item) => item.id === input.botId) ?? previewMeetingBots[0]!;
+    const identity: MeetingBotIdentity = {
+      provider: "agentmail",
+      inboxId: `preview-${bot.id}`,
+      email: `${bot.id.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}@preview.agentmail.to`,
+      clientId: `telnyx-link-meeting-bot:${bot.id}`,
+    };
+    const invite: MeetingInvite = {
+      id: `preview-meeting-invite-${Date.now()}`,
+      calendarId: input.calendarId || "primary",
+      eventId: input.eventId,
+      eventTitle: "Preview Google Workspace sync check",
+      eventStart: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      eventEnd: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+      botId: bot.id,
+      botName: bot.displayName,
+      botType: bot.type,
+      identity,
+      liveJoin: input.liveJoin,
+      sendUpdates: input.sendUpdates,
+      joinTarget: null,
+      agentAdapter: bot.adapter,
+      status: input.liveJoin ? "blocked" : "invited",
+      blockers: input.liveJoin ? ["Preview mode does not dial Telnyx."] : [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    previewMeetingInvites = [invite, ...previewMeetingInvites.filter((item) => item.id !== invite.id)];
+    return invite;
+  },
+  async cancelMeetingBotInvite(input) {
+    const invite = previewMeetingInvites.find((item) => item.id === input.inviteId);
+    if (!invite) throw new Error("Preview invite not found.");
+    const updated = { ...invite, status: "ended" as const, updatedAt: new Date().toISOString() };
+    previewMeetingInvites = previewMeetingInvites.map((item) => item.id === updated.id ? updated : item);
+    return updated;
+  },
+  async listMeetingBotInvites(input) {
+    return input?.eventId ? previewMeetingInvites.filter((invite) => invite.eventId === input.eventId) : previewMeetingInvites;
+  },
+  async listGoogleContacts() {
+    if (!previewGoogleConnected && !previewGoogleWorkspaceEnabled()) return [];
+    return [
+      {
+        id: "preview-google-contact",
+        name: "Google Workspace Contact",
+        role: "Google contact",
+        phone: "",
+        source: "google",
+        detail: "Preview-only contact. The Electron app loads this from Google People API.",
+        connected: true,
+      },
+    ];
+  },
+  async connectGoogleInboxWithGog() {
+    previewGoogleConnected = true;
+    previewCredentials = previewCredentials.map((group) => ({
+      ...group,
+      fields: group.fields.map((field) =>
+        ["GOOGLE_INBOX_AGENT_CONNECTION_ID", "GOOGLE_INBOX_VERIFIED_AT"].includes(field.name)
+          ? { ...field, configured: true, source: "saved", updatedAt: new Date().toISOString() }
+          : field,
+      ),
+    }));
+    previewConnectors = previewConnectors.map((connectorItem) =>
+      connectorItem.id === "google-inbox" ? { ...connectorItem, status: "connected", mode: "saved" } : connectorItem,
+    );
+    return {
+      status: "connected",
+      connectionId: "preview-google-inbox",
+      credentials: previewCredentials,
+      connectors: previewConnectors,
+    };
+  },
+  async listGoogleInboxThreads() {
+    if (!previewGoogleConnected) return [];
+    return [
+      {
+        id: "preview-thread",
+        threadId: "preview-thread",
+        messageId: "preview-message-1",
+        subject: "Customer follow-up draft",
+        from: "Casey Customer <casey@example.com>",
+        to: "link.preview@telnyx.com",
+        date: "Today, 9:14 AM",
+        snippet: "Can you send over the SIP trunking notes from our call?",
+        unread: true,
+        labels: ["INBOX", "UNREAD"],
+        url: "https://mail.google.com/mail/u/0/#inbox/preview-thread",
+      },
+    ];
+  },
+  async getGoogleInboxThread({ threadId }) {
+    return {
+      id: threadId,
+      threadId,
+      messageId: "preview-message-1",
+      subject: "Customer follow-up draft",
+      from: "Casey Customer <casey@example.com>",
+      to: "link.preview@telnyx.com",
+      date: "Today, 9:14 AM",
+      snippet: "Can you send over the SIP trunking notes from our call?",
+      unread: true,
+      labels: ["INBOX", "UNREAD"],
+      participants: ["Casey Customer <casey@example.com>", "link.preview@telnyx.com"],
+      replyTo: "casey@example.com",
+      replyToMessageId: "preview-message-1",
+      url: "https://mail.google.com/mail/u/0/#inbox/preview-thread",
+      messages: [
+        {
+          id: "preview-message-1",
+          messageId: "preview-message-1",
+          threadId,
+          subject: "Customer follow-up draft",
+          from: "Casey Customer <casey@example.com>",
+          to: "link.preview@telnyx.com",
+          date: "Today, 9:14 AM",
+          snippet: "Can you send over the SIP trunking notes from our call?",
+          body: "Can you send over the SIP trunking notes from our call? I want to share them with our network team before Friday.",
+        },
+      ],
+    };
+  },
+  async createGoogleInboxDraft(input) {
+    return {
+      id: `preview-draft-${Date.now()}`,
+      draftId: `preview-draft-${Date.now()}`,
+      messageId: "preview-draft-message",
+      threadId: input.threadId,
+      to: Array.isArray(input.to) ? input.to.join(",") : input.to ?? "",
+      cc: Array.isArray(input.cc) ? input.cc.join(",") : input.cc,
+      bcc: Array.isArray(input.bcc) ? input.bcc.join(",") : input.bcc,
+      subject: input.subject,
+      body: input.body,
+      updatedAt: new Date().toISOString(),
+      url: input.threadId ? `https://mail.google.com/mail/u/0/#inbox/${input.threadId}` : "https://mail.google.com/mail/u/0/#drafts",
+    };
+  },
+	  async updateGoogleInboxDraft(input) {
+	    return {
+	      id: input.draftId,
+      draftId: input.draftId,
+      messageId: "preview-draft-message",
+      threadId: input.threadId,
+      to: Array.isArray(input.to) ? input.to.join(",") : input.to ?? "",
+      cc: Array.isArray(input.cc) ? input.cc.join(",") : input.cc,
+      bcc: Array.isArray(input.bcc) ? input.bcc.join(",") : input.bcc,
+      subject: input.subject,
+      body: input.body,
+      updatedAt: new Date().toISOString(),
+	      url: input.threadId ? `https://mail.google.com/mail/u/0/#inbox/${input.threadId}` : "https://mail.google.com/mail/u/0/#drafts",
+	    };
+	  },
+	  async connectGoogleTasksWithGog() {
+	    previewCredentials = previewCredentials.map((group) =>
+	      group.id === "google-tasks"
+	        ? {
+	            ...group,
+	            fields: group.fields.map((field) => field.name === "GOOGLE_TASKS_AGENT_CONNECTION_ID" || field.name === "GOOGLE_TASKS_VERIFIED_AT"
+	              ? { ...field, configured: true, source: "saved" as const, updatedAt: new Date().toISOString() }
+	              : field),
+	          }
+	        : group,
+	    );
+	    previewConnectors = [
+	      ...previewConnectors.filter((connector) => connector.id !== "google-tasks"),
+	      connector("google-tasks", "Google Tasks", "Taskbox", "Sync Google Tasks into Taskbox through gog.", ["gog Google Tasks authorization"], "connected", "saved"),
+	    ];
+	    return {
+	      status: "connected",
+	      connectionId: "preview-google-tasks",
+	      credentials: previewCredentials,
+	      connectors: previewConnectors,
+	    };
+	  },
+	  async updateConnectorStatus(id, status) {
     return previewConnectors.map((connectorItem) =>
       connectorItem.id === id ? { ...connectorItem, status, mode: status === "connected" ? connectorItem.mode : "live" } : connectorItem,
     );
@@ -863,6 +2208,187 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
   },
   async refreshWidgetData({ widgetId }) {
     return previewWidgetData(widgetId);
+  },
+  async listDialerConfigs() {
+    return {
+      configs: previewDialerConfigs.map((config) => ({ ...config, active: config.id === previewActiveDialerConfig.id })),
+      activeConfig: previewActiveDialerConfig,
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async saveDialerConfig(input) {
+    const config = normalizeDialerConfig({
+      ...input,
+      id: input.id && !["standard", "sales", "support"].includes(input.id) ? input.id : `preview-dialer-${Date.now()}`,
+      createdAt: input.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }, Boolean(input.active));
+    previewDialerConfigs = [config, ...previewDialerConfigs.filter((item) => item.id !== config.id)];
+    if (input.active) previewActiveDialerConfig = { ...config, active: true };
+    return {
+      configs: previewDialerConfigs.map((item) => ({ ...item, active: item.id === previewActiveDialerConfig.id })),
+      activeConfig: previewActiveDialerConfig,
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async activateDialerConfig(id) {
+    const next = previewDialerConfigs.find((config) => config.id === id) ?? previewDialerConfigs[0] ?? createDefaultDialerConfig();
+    previewActiveDialerConfig = { ...next, active: true };
+    return {
+      configs: previewDialerConfigs.map((config) => ({ ...config, active: config.id === previewActiveDialerConfig.id })),
+      activeConfig: previewActiveDialerConfig,
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async getActiveDialerConfig() {
+    return previewActiveDialerConfig;
+  },
+  async getWebRtcToken() {
+    if (previewPhoneE2EEnabled()) {
+      return {
+        token: "preview-e2e-webrtc-token",
+        issuedAt: new Date().toISOString(),
+      };
+    }
+    throw new Error("WebRTC token generation is only available in the Electron app.");
+  },
+  async getWebRtcStatus() {
+    if (previewPhoneE2EEnabled()) {
+      return {
+        telnyxApiReady: true,
+        webRtcConnectionReady: true,
+        webRtcCredentialReady: true,
+        canAutoProvision: false,
+        ready: true,
+        message: "Preview E2E WebRTC bridge is ready.",
+        updatedAt: new Date().toISOString(),
+      };
+    }
+    return {
+      telnyxApiReady: false,
+      webRtcConnectionReady: false,
+      webRtcCredentialReady: false,
+      canAutoProvision: false,
+      ready: false,
+      message: "Save TELNYX_API_KEY in the Electron app to enable WebRTC provisioning.",
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async getSpeakSettings() {
+    return previewSpeakSettings;
+  },
+  async saveSpeakSettings(input) {
+    previewSpeakSettings = {
+      ...previewSpeakSettings,
+      ...input,
+      shortcutLabel: input.shortcutMode === "cmd-shift-l" ? "Cmd+Shift+L" : input.shortcutMode === "hold-fn" ? "Hold fn" : previewSpeakSettings.shortcutLabel,
+      updatedAt: new Date().toISOString(),
+    };
+    return previewSpeakSettings;
+  },
+  async getWhisperStatus() {
+    return {
+      available: false,
+      sourceAvailable: false,
+      built: false,
+      running: false,
+      apiKeyReady: false,
+      shortcutLabel: previewSpeakSettings.shortcutLabel,
+      helperPath: "",
+      appBundlePath: "",
+      lastExit: null,
+      lastLogLines: [],
+      message: "Telnyx Whisper is available in the Electron app on macOS.",
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async buildWhisper() {
+    throw new Error("Telnyx Whisper build is only available in the Electron app on macOS.");
+  },
+  async startWhisper() {
+    throw new Error("Telnyx Whisper launch is only available in the Electron app on macOS.");
+  },
+  async stopWhisper() {
+    return {
+      available: false,
+      sourceAvailable: false,
+      built: false,
+      running: false,
+      apiKeyReady: false,
+      shortcutLabel: previewSpeakSettings.shortcutLabel,
+      helperPath: "",
+      appBundlePath: "",
+      lastExit: null,
+      lastLogLines: [],
+      message: "Telnyx Whisper is available in the Electron app on macOS.",
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async listTtsVoices() {
+    return [
+      {
+        voiceId: "Telnyx.NaturalHD.astra",
+        name: "Astra",
+        provider: "telnyx",
+        language: "en-US",
+        gender: "female",
+      },
+      {
+        voiceId: "aws.Polly.Neural.Joanna",
+        name: "Joanna",
+        provider: "aws",
+        language: "en-US",
+        gender: "female",
+      },
+    ];
+  },
+  async generateTtsSample(input) {
+    return {
+      voiceId: input.voiceId,
+      audioBase64: "",
+      mimeType: "audio/mpeg",
+    };
+  },
+  async getTerminalStatus(input) {
+    return previewTerminalStatus(input);
+  },
+  async startTerminal(input) {
+    const current = previewTerminalStatus(input);
+    const next = {
+      ...current,
+      running: true,
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      buffer: `${current.buffer}preview@telnyx-link % `,
+    };
+    previewTerminalStatuses.set(next.id || input?.terminalId || "terminal-1", next);
+    return next;
+  },
+  async writeTerminal(input) {
+    const command = String(input?.text || "");
+    const current = previewTerminalStatus(input);
+    const next = {
+      ...current,
+      updatedAt: new Date().toISOString(),
+      buffer: `${current.buffer}${command}Preview terminal cannot execute local commands in the browser. Open Electron to run this command.\npreview@telnyx-link % `,
+    };
+    previewTerminalStatuses.set(next.id || input?.terminalId || "terminal-1", next);
+    return next;
+  },
+  async stopTerminal(input) {
+    const current = previewTerminalStatus(input);
+    const next = {
+      ...current,
+      running: false,
+      updatedAt: new Date().toISOString(),
+      buffer: `${current.buffer}\n[terminal preview stopped]\n`,
+      lastExit: { code: 0, signal: null, at: new Date().toISOString() },
+    };
+    previewTerminalStatuses.set(next.id || input?.terminalId || "terminal-1", next);
+    return next;
+  },
+  onTerminalOutput() {
+    return () => undefined;
   },
   async listOnboarding() {
     return previewOnboarding;
@@ -885,11 +2411,11 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
   async getAgentControlPlaneAuthStatus() {
     return agentControlPlaneAuthStatus(previewAuthEnabled());
   },
-  async openAgentControlPlaneSetup() {
+  async openAgentControlPlaneSetup(_input?: unknown) {
     return { url: "http://agent-control-plane.query.prod.telnyx.io:8000/agents/new" };
   },
   async listHostedAgents() {
-    return [];
+    return previewAuthEnabled() ? previewHostedAgents() : [];
   },
   async listWorkspaces() {
     return previewWorkspaces;
@@ -897,8 +2423,28 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
   async searchExplorer({ query }) {
     return explorerResults(query);
   },
+  async askKnowledgeAgent({ question }) {
+    return askPublicKnowledgeAgent({ question });
+  },
   async listChatSessions() {
     return previewChatSessions;
+  },
+  async createChatSession({ workspaceId, agentName = "Link", agentType = "openclaw", title } = {}) {
+    const now = new Date().toISOString();
+    const session: ChatSession = {
+      id: `chat-${Date.now()}`,
+      title: title?.trim() || `New ${agentType === "hermes" ? "Hermes" : "OpenClaw"} session`,
+      workspaceId: workspaceId ?? "workspace-link",
+      model: agentType,
+      status: "active",
+      updatedAt: now,
+      messages: [
+        message("system", `You are ${agentName}. Hindsight is available to this session when configured. ${taskBoardOperatingGuide}`),
+        message("system", `Selected Link chat agent: ${agentName}. New session initialized for ${agentType} runtime. ${taskBoardOperatingGuide}`),
+      ],
+    };
+    previewChatSessions = [session, ...previewChatSessions];
+    return session;
   },
   async renameChatSession({ sessionId, title }) {
     const trimmedTitle = title.trim();
@@ -909,12 +2455,12 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
     session.updatedAt = new Date().toISOString();
     return session;
   },
-  async sendChatMessage({ sessionId, workspaceId, content }) {
+  async sendChatMessage({ sessionId, workspaceId, content, title, systemInstruction }) {
     let session = previewChatSessions.find((item) => item.id === sessionId);
     if (!session) {
       session = {
         id: `chat-${Date.now()}`,
-        title: content.slice(0, 54),
+        title: title?.trim().slice(0, 120) || content.slice(0, 54),
         workspaceId: workspaceId ?? "workspace-link",
         model: "live-runtime-unavailable",
         status: "active",
@@ -923,14 +2469,19 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
       };
       previewChatSessions = [session, ...previewChatSessions];
     }
+    const hiddenInstruction = systemInstruction?.trim();
     session.messages = [
       ...session.messages,
+      ...(hiddenInstruction ? [message("system", hiddenInstruction)] : []),
       message("user", content),
       message("assistant", "No live desktop bridge or model runtime is connected.", createChatArtifacts(content)),
     ];
     session.workspaceId = workspaceId ?? session.workspaceId;
     session.updatedAt = new Date().toISOString();
     return session;
+  },
+  async selectChatAttachments() {
+    return { canceled: false, attachments: [] };
   },
   async transcribeAudio() {
     throw new Error("Add your LiteLLM API key in Settings to use voice input.");
@@ -964,7 +2515,18 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
     return previewChangeRequests;
   },
   async listAgents() {
-    return [];
+    return previewAuthEnabled()
+      ? previewHostedAgents().map((agent) => ({
+          ...agent,
+          visibility: "public" as const,
+          source: "agent-control-plane" as const,
+          squad: agent.type,
+          audience: "internal",
+          available: true,
+          requiresAuthentication: true,
+          updatedAt: "Preview ACP agent",
+        }))
+      : [];
   },
   async sendAgentMessage() {
     throw new Error("No live agent messaging adapter is connected.");
@@ -979,8 +2541,11 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
         id: `card-${Date.now()}`,
         title: input.title,
         body: input.body,
-        status: input.status ?? "triage",
-        assignee: input.assignee,
+        status: input.autoDispatch !== false && (input.assigneeId || input.assigneeName || input.assignee) ? "in_progress" : normalizePreviewWorkboardStatus(input.status),
+        assignee: input.assigneeName ?? input.assignee,
+        assigneeId: input.assigneeId,
+        assigneeName: input.assigneeName,
+        assigneeType: input.assigneeType,
         provider,
         priority: input.priority ?? "normal",
         labels: input.labels ?? [],
@@ -998,45 +2563,249 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
       card.id === input.cardId
         ? {
             ...card,
-            status: input.status ?? card.status,
-            assignee: input.assignee ?? card.assignee,
+            title: input.title ?? card.title,
+            body: input.body ?? card.body,
+            status: input.autoDispatch !== false && (input.assigneeId || input.assigneeName || input.assignee) ? "in_progress" : normalizePreviewWorkboardStatus(input.status ?? card.status),
+            assignee: input.assigneeName ?? input.assignee ?? card.assignee,
+            assigneeId: input.assigneeId ?? card.assigneeId,
+            assigneeName: input.assigneeName ?? card.assigneeName,
+            assigneeType: input.assigneeType ?? card.assigneeType,
+            priority: input.priority ?? card.priority,
+            labels: input.labels ?? card.labels,
             comments: input.comment ? [...(card.comments ?? []), input.comment] : card.comments,
             updatedAt: new Date().toISOString(),
           }
         : card,
     );
-    return localWorkboardSnapshot(provider, input.boardId ?? "local");
-  },
-  async dispatchWorkboard({ provider = "local", boardId = "local" }) {
-    const resolvedProvider = provider === "auto" ? "local" : provider;
+	      return localWorkboardSnapshot(provider, input.boardId ?? "local");
+	    },
+	    async dispatchWorkboard({ provider = "local", boardId = "local" }) {
+	      const resolvedProvider = provider === "auto" ? "local" : provider;
     previewWorkboardCards = previewWorkboardCards.map((card) =>
-      card.status === "ready" && card.provider === resolvedProvider
+      normalizePreviewWorkboardStatus(card.status) === "todo" && card.provider === resolvedProvider && (card.assigneeId || card.assigneeName || card.assignee)
         ? {
             ...card,
-            status: "running",
+            status: "in_progress",
             updatedAt: new Date().toISOString(),
           }
         : card,
     );
     return localWorkboardSnapshot(resolvedProvider, boardId);
   },
+  async ensureWorkboardTaskSession(input) {
+    return ensurePreviewWorkboardTaskSession(input);
+  },
+  async dispatchWorkboardTask(input) {
+    return dispatchPreviewWorkboardTask(input);
+  },
   async listAccountPhoneNumbers() {
+    if (previewPhoneE2EEnabled()) {
+      return [
+        {
+          phoneNumber: "+14155550100",
+          countryCode: "US",
+          locality: "San Francisco",
+          region: "CA",
+          type: "local",
+          features: ["voice"],
+        },
+      ];
+    }
     return [];
   },
   async listPhoneAssistants() {
+    if (previewPhoneE2EEnabled()) {
+      return [{ id: "assistant-preview", name: "Preview Voice AI", status: "active" }];
+    }
     return [];
+  },
+  async startAiAssistantOnCall() {
+    return { started: true, mode: "preview" };
   },
   async listMemoryBanks() {
-    return [];
+    return [{
+      id: "preview-archive",
+      name: "Preview archive",
+      scope: "user",
+      status: "connected",
+      mission: "Browser preview archive for local UI testing.",
+      updatedAt: "Preview",
+      observationCount: previewMemoryEntries.length,
+      sourceCount: previewMemoryEntries.length,
+    }];
   },
-  async recallMemory() {
-    return [];
+  async recallMemory(input) {
+    const query = input.query.trim().toLowerCase();
+    if (!query) return [];
+    return previewMemoryEntries.filter((entry) =>
+      `${entry.summary} ${entry.evidence.join(" ")}`.toLowerCase().includes(query),
+    );
+  },
+  async retainMemory(input) {
+    const content = input.content.trim();
+    if (!content) throw new Error("Archive retain requires content.");
+    const id = `preview-memory-${Date.now()}`;
+    const entry: MemoryRecallResult = {
+      id,
+      bankId: input.bankId || "preview-archive",
+      summary: content.slice(0, 240),
+      evidence: [input.context || input.source || "Saved from Link chat"],
+      score: 1,
+      source: "hindsight",
+    };
+    previewMemoryEntries = [entry, ...previewMemoryEntries];
+    return {
+      id,
+      bankId: entry.bankId,
+      status: "retained",
+      source: "preview",
+      summary: entry.summary,
+    };
   },
   async listDojoState() {
     return emptyDojoState;
   },
+  async getPublisherReadiness() {
+    return {
+      serviceUrl: "browser-preview",
+      reachable: false,
+      ready: false,
+      authConfigured: false,
+      mode: "preview",
+      checks: [{ name: "Publisher service reachable", ok: false, detail: "Browser preview uses local sample apps." }],
+      message: "Connect VPN and open Link Desktop to publish apps.",
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async getMessageGatewayReadiness() {
+    return {
+      serviceUrl: "browser-preview",
+      reachable: true,
+      ready: false,
+      authConfigured: false,
+      mode: "preview",
+      checks: [{ name: "Message Gateway hosted service", ok: false, detail: "Browser preview records envelopes locally without provider send." }],
+      message: "Browser preview uses a record-only local ledger. Open Link Desktop to use the hosted Message Gateway.",
+      updatedAt: new Date().toISOString(),
+    };
+  },
+  async listGatewayMessages(input = {}) {
+    const status = input.status || "";
+    const recipient = String(input.recipient || "").trim().toLowerCase();
+    return {
+      mode: "preview",
+      serviceUrl: "browser-preview",
+      warning: "Browser preview uses a record-only local ledger.",
+      messages: previewGatewayMessages
+        .filter((messageItem) => !status || messageItem.status === status)
+        .filter((messageItem) => !recipient || messageItem.deliveries.some((delivery) => delivery.recipient.toLowerCase() === recipient))
+        .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+    };
+  },
+  async sendGatewayMessage(input) {
+    const now = new Date().toISOString();
+    const to = Array.isArray(input.to)
+      ? input.to.map((item) => String(item).trim()).filter(Boolean)
+      : String(input.to || "").split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
+    if (to.length === 0) throw new Error("Add at least one recipient.");
+    const body = input.body.trim();
+    if (!body) throw new Error("Add a message body.");
+    const transportHint = input.transport ?? "auto";
+    const deliveries: MessageGatewayDelivery[] = to.map((recipient, index) => {
+      const normalized = recipient.toLowerCase();
+      const isAgent = normalized.startsWith("agent:");
+      const isTelnyx = normalized.endsWith("@telnyx.com");
+      const transport = isAgent
+        ? "a2a"
+        : transportHint === "google_chat"
+          ? "google_chat"
+          : transportHint === "slack"
+            ? "slack"
+            : normalized.includes("bob") ? "google_chat" : "slack";
+      const rejected = !isAgent && !isTelnyx;
+      return {
+        id: `preview-delivery-${Date.now()}-${index}`,
+        recipient,
+        recipientType: isAgent ? "agent" : "person",
+        transport,
+        status: rejected ? "rejected" : "delivered",
+        routeReason: rejected
+          ? "Browser preview rejects non-@telnyx.com human recipients."
+          : isAgent ? "Agent recipient routed through A2A." : `${transport === "slack" ? "Slack" : "Google Chat"} route selected in preview.`,
+        providerRecipientId: recipient,
+        providerMessageId: rejected ? undefined : `preview-${transport}-${Date.now()}-${index}`,
+        providerUrl: rejected ? undefined : transport === "slack" ? "https://slack.com/app_redirect?channel=preview" : "https://chat.google.com/",
+        taskId: isAgent ? `preview-task-${Date.now()}-${index}` : undefined,
+        contextId: isAgent ? `preview-context-${Date.now()}` : undefined,
+        retryCount: 0,
+        createdAt: now,
+        updatedAt: now,
+        metadata: { mode: "preview" },
+      };
+    });
+    const message: MessageGatewayMessage = {
+      id: `preview-message-${Date.now()}`,
+      from: { id: "preview@telnyx.com", displayName: "Preview User", email: "preview@telnyx.com" },
+      to,
+      body,
+      subject: input.subject?.trim() || undefined,
+      metadata: { ...(input.metadata ?? {}), source: "browser-preview" },
+      idempotencyKey: input.idempotencyKey || input.idempotency_key || `preview-${Date.now()}`,
+      transportHint,
+      status: deliveries.every((delivery) => delivery.status === "rejected")
+        ? "rejected"
+        : deliveries.some((delivery) => delivery.status === "rejected") ? "partial" : "delivered",
+      deliveries,
+      retryCount: 0,
+      lastError: deliveries.find((delivery) => delivery.lastError)?.lastError,
+      createdAt: now,
+      updatedAt: now,
+    };
+    previewGatewayMessages = [message, ...previewGatewayMessages];
+    return {
+      mode: "preview",
+      serviceUrl: "browser-preview",
+      warning: "Browser preview recorded this envelope locally without provider send.",
+      message,
+    };
+  },
+  async listGatewayMessageEvents({ messageId }) {
+    const message = previewGatewayMessages.find((item) => item.id === messageId);
+    const events: MessageGatewayEvent[] = message
+      ? [
+          {
+            id: `preview-event-${message.id}-accepted`,
+            messageId: message.id,
+            type: "message.accepted",
+            detail: "Message envelope accepted by browser preview.",
+            createdAt: message.createdAt,
+          },
+          ...message.deliveries.map((delivery) => ({
+            id: `preview-event-${delivery.id}`,
+            messageId: message.id,
+            deliveryId: delivery.id,
+            type: delivery.status === "rejected" ? "delivery.rejected" : "delivery.delivered",
+            transport: delivery.transport,
+            detail: delivery.routeReason,
+            createdAt: delivery.updatedAt,
+          })),
+        ]
+      : [];
+    return {
+      mode: "preview",
+      serviceUrl: "browser-preview",
+      warning: "Browser preview events are synthesized from the local ledger.",
+      events,
+    };
+  },
   async listPublishedApps() {
     return previewPublishedApps;
+  },
+  async selectLocalPublishApp() {
+    return {
+      canceled: true,
+      warnings: ["Local app folder selection requires Link Desktop."],
+    };
   },
   async createPublishIntent(input) {
     const app = createPreviewPublishedApp(input);
@@ -1062,7 +2831,13 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
       status: "submitted",
       submittedAt: new Date().toISOString(),
     };
-    const next = { ...app, status: "submitted" as const, latestVersion: version, updatedAt: new Date().toISOString() };
+    const next = {
+      ...app,
+      status: "submitted" as const,
+      latestVersion: version,
+      versions: [version, ...(app.versions ?? []).filter((item) => item.id !== version.id)],
+      updatedAt: new Date().toISOString(),
+    };
     previewPublishedApps = [next, ...previewPublishedApps.filter((item) => item.id !== app.id)];
     return { mode: "local_fallback", message: "Version request saved locally in browser preview.", app: next, version };
   },
@@ -1071,38 +2846,228 @@ export const linkApi: LinkDesktopApi = window.linkDesktop ?? {
     if (!app) throw new Error("Published app not found.");
     const status: LinkPublishedAppStatus = input.decision === "approve" ? "approved" : "rejected";
     const version = app.latestVersion ? { ...app.latestVersion, status, reviewedAt: new Date().toISOString() } : undefined;
-    const next = { ...app, status, latestVersion: version, reviewNotes: input.notes, updatedAt: new Date().toISOString() };
+    const next = {
+      ...app,
+      status,
+      latestVersion: version,
+      versions: version ? [version, ...(app.versions ?? []).filter((item) => item.id !== version.id)] : app.versions,
+      reviewNotes: input.notes,
+      updatedAt: new Date().toISOString(),
+    };
     previewPublishedApps = [next, ...previewPublishedApps.filter((item) => item.id !== app.id)];
     return { mode: "local_fallback", message: `App marked ${status} locally in browser preview.`, app: next, version };
+  },
+  async rollbackPublishedApp(input) {
+    const app = previewPublishedApps.find((item) => item.id === input.appId);
+    if (!app) throw new Error("Published app not found.");
+    const targetVersion = input.versionId
+      ? app.versions?.find((version) => version.id === input.versionId)
+      : app.versions?.find((version) => version.id !== app.latestVersion?.id);
+    if (!targetVersion) throw new Error("Rollback target version was not found.");
+    const version = { ...targetVersion, status: "approved" as const, reviewedAt: new Date().toISOString() };
+    const next = {
+      ...app,
+      status: "approved" as const,
+      sourceRepo: version.sourceRepo,
+      sourceRef: version.sourceRef,
+      sourceSubdir: version.sourceSubdir,
+      latestVersion: version,
+      versions: [version, ...(app.versions ?? []).filter((item) => item.id !== version.id)],
+      reviewNotes: input.notes,
+      updatedAt: new Date().toISOString(),
+    };
+    previewPublishedApps = [next, ...previewPublishedApps.filter((item) => item.id !== app.id)];
+    return { mode: "local_fallback", message: "App rolled back locally in browser preview.", app: next, version };
+  },
+  async transferPublishedApp(input) {
+    const app = previewPublishedApps.find((item) => item.id === input.appId);
+    if (!app) throw new Error("Published app not found.");
+    const next = {
+      ...app,
+      ownerSquad: input.ownerSquad,
+      reviewers: input.reviewers && input.reviewers.length > 0 ? input.reviewers : Array.from(new Set([...(app.reviewers ?? []), input.ownerSquad])),
+      reviewNotes: input.notes,
+      updatedAt: new Date().toISOString(),
+    };
+    previewPublishedApps = [next, ...previewPublishedApps.filter((item) => item.id !== app.id)];
+    return { mode: "local_fallback", message: "Ownership updated locally in browser preview.", app: next, version: next.latestVersion };
+  },
+  async deprecatePublishedApp(input) {
+    const app = previewPublishedApps.find((item) => item.id === input.appId);
+    if (!app) throw new Error("Published app not found.");
+    const version = app.latestVersion ? { ...app.latestVersion, status: "deprecated" as const, reviewedAt: new Date().toISOString() } : undefined;
+    const next = {
+      ...app,
+      status: "deprecated" as const,
+      latestVersion: version,
+      versions: version ? [version, ...(app.versions ?? []).filter((item) => item.id !== version.id)] : app.versions,
+      reviewNotes: input.notes,
+      updatedAt: new Date().toISOString(),
+    };
+    previewPublishedApps = [next, ...previewPublishedApps.filter((item) => item.id !== app.id)];
+    return { mode: "local_fallback", message: "App deprecated locally in browser preview.", app: next, version };
   },
   async duplicatePublishedApp(id) {
     const app = previewPublishedApps.find((item) => item.id === id);
     if (!app) throw new Error("Published app not found.");
+    const commands = app.sourceRepo ? duplicateCommandsForPreviewApp(app) : [];
     return {
       mode: "local_fallback",
       action: app.sourceRepo ? "source_ref" : "unavailable",
       sourceRepo: app.sourceRepo,
       sourceRef: app.sourceRef,
       sourceSubdir: app.sourceSubdir,
-      command: app.sourceRepo ? `git clone ${app.sourceRepo}` : undefined,
+      command: commands.join(" && ") || undefined,
+      commands,
+      path: app.sourceRepo ? duplicatePathForPreviewApp(app) : undefined,
       message: app.sourceRepo ? "Use the source reference to duplicate or fork this app." : "No source reference is available.",
     };
   },
   async openPublishedApp(id) {
     const app = previewPublishedApps.find((item) => item.id === id);
     if (!app) throw new Error("Published app not found.");
+    if (app.status === "deprecated") throw new Error("This app is deprecated and cannot be opened from Link.");
+    if (!["preview", "approved", "deployed"].includes(app.status)) throw new Error("This app is not ready to open from Link.");
     const url = app.vpnUrl || app.deployedUrl || app.previewUrl;
     if (!url) throw new Error("This app does not have a private VPN URL yet.");
     return { opened: true, url };
+  },
+  async getEdgeComputeStatus() {
+    return {
+      ready: false,
+      command: "telnyx-edge",
+      endpoint: "https://apidev.telnyx.com",
+      configPath: "~/.telnyx-edge/config.toml",
+      configured: true,
+      authenticated: false,
+      authSeeded: false,
+      message: "Preview mode cannot inspect the local telnyx-edge CLI.",
+      detail: "Run the desktop app to configure Edge Compute.",
+    };
+  },
+	  async checkEdgeSlugAvailability(input = {}) {
+	    const slug = slugify(String((input as { slug?: string }).slug || ""));
+	    if (!slug) return { slug: "", status: "empty", available: false, canReplace: false, message: "Enter a URL slug." };
+	    const existing = previewPublishedApps.find((app) => app.slug === slug || app.id === `app-${slug}`);
+	    if (!existing) return { slug, status: "available", available: true, canReplace: false, message: `${slug}.apidev.telnyx.com is available.` };
+	    return { slug, status: "owned", available: true, canReplace: true, app: existing, message: `${slug}.apidev.telnyx.com is already yours. You can replace it.` };
+	  },
+	  async listLocalEdgeDraftApps() {
+	    return [
+	      {
+	        id: "draft-test-snake-link-preview",
+	        name: "Test Snake Link",
+	        slug: "test-snake-link",
+	        description: "Local Snake app draft.",
+	        directory: "apps/test-snake-link",
+	        manifestPath: "apps/test-snake-link/link-app.yml",
+	        sourceRepo: "https://github.com/team-telnyx/link",
+	        sourceRef: "main",
+	        sourceSubdir: "apps/test-snake-link",
+	        outputDir: "dist",
+	        buildCommand: "npm run build",
+	        installCommand: "npm ci",
+	        updatedAt: new Date().toISOString(),
+	        status: "draft",
+	      },
+	    ];
+	  },
+	  async importLocalEdgeApp(input = {}) {
+	    const scope = ((input as { scope?: LinkLocalEdgeImportScope }).scope === "company" ? "company" : "personal") as LinkLocalEdgeImportScope;
+	    const slug = slugify(String((input as { slug?: string }).slug || "imported-app"));
+	    return {
+	      canceled: false,
+	      imported: true,
+	      sourcePath: "browser-preview",
+	      importScope: scope,
+	      targetDirectory: `edge-apps/${scope}/${slug}`,
+	      directory: `edge-apps/${scope}/${slug}`,
+	      manifestPath: `edge-apps/${scope}/${slug}/link-app.yml`,
+	      packageName: slug,
+	      publishInput: {
+	        name: "Imported App",
+	        slug,
+	        description: "Browser-preview imported app placeholder.",
+	        ownerSquad: scope === "company" ? "company-tools.squad" : "personal.tools",
+	        audience: scope === "company" ? "Telnyx employees" : "Personal",
+	        appType: "web",
+	        sourceRepo: "https://github.com/team-telnyx/link",
+	        sourceRef: "main",
+	        sourceSubdir: `edge-apps/${scope}/${slug}`,
+	        buildCommand: "node scripts/link-build.mjs",
+	        outputDir: "dist",
+	        riskLevel: "low",
+	      },
+	      warnings: ["Browser preview cannot import local folders. Open Link Desktop to import a real app."],
+	      createdManifest: true,
+	      replaced: false,
+	    };
+	  },
+	  async deleteLocalEdgeDraftApp(input) {
+	    return { deleted: true, directory: input.directory };
+	  },
+	  async previewLocalEdgeApp(input = {}) {
+    const slug = slugify(String((input as { slug?: string }).slug || "preview-app"));
+    return {
+      canceled: false,
+      url: `http://127.0.0.1:4173/${slug}`,
+      directory: `edge-apps/${slug}`,
+      manifestPath: `edge-apps/${slug}/link-app.yml`,
+      logs: "Browser preview placeholder.",
+      warnings: [],
+      edge: {
+        command: "local-preview",
+        endpoint: "http://127.0.0.1:4173",
+        configPath: "dist",
+      },
+    };
+  },
+  async deployLocalEdgeApp(input = {}) {
+    const slug = slugify(String((input as { slug?: string }).slug || "preview-app"));
+    const app = createPreviewPublishedApp({
+      name: "Preview App",
+      slug,
+      description: "Browser-preview Edge app placeholder.",
+      ownerSquad: "link-platform.squad",
+      audience: "Link",
+      appType: "web",
+      sourceRepo: "https://github.com/team-telnyx/link",
+      sourceRef: "main",
+      sourceSubdir: `edge-apps/${slug}`,
+      buildCommand: "npm run build",
+      outputDir: "dist",
+      riskLevel: "low",
+    });
+    const url = `https://${slug}.telnyxcompute.com`;
+    const next = { ...app, status: "preview" as const, previewUrl: url, updatedAt: new Date().toISOString() };
+    previewPublishedApps = [next, ...previewPublishedApps.filter((item) => item.id !== next.id)];
+    return {
+      canceled: false,
+      url,
+      app: next,
+      version: next.latestVersion,
+      logs: "Browser preview cannot run telnyx-edge ship. Open Link Desktop to deploy a real app.",
+      warnings: ["Browser preview cannot run telnyx-edge ship."],
+      edge: {
+        command: "telnyx-edge",
+        endpoint: "https://apidev.telnyx.com",
+        configPath: "~/.telnyx-edge/config.toml",
+      },
+    };
   },
   async auditEvents() {
     return [];
   },
 };
 
+export const linkApi: LinkDesktopApi = {
+  ...previewLinkApi,
+  ...(window.linkDesktop ?? {}),
+};
+
 function previewWidgetData(widgetId: string): WidgetDataResult {
   const updatedAt = new Date().toISOString();
-  if (widgetId === "preview-support-volume") {
+  if (widgetId === "standard-support-health") {
     return {
       widgetId,
       source: "Tableau",
@@ -1120,7 +3085,7 @@ function previewWidgetData(widgetId: string): WidgetDataResult {
       trend: "-72 vs first point",
     };
   }
-  if (widgetId === "preview-product-adoption") {
+  if (widgetId === "standard-product-adoption") {
     return {
       widgetId,
       source: "Tableau",
@@ -1135,6 +3100,58 @@ function previewWidgetData(widgetId: string): WidgetDataResult {
       ],
       metric: "1,462",
       trend: "+222 vs first point",
+    };
+  }
+  if (widgetId === "standard-sales-pipeline") {
+    return {
+      widgetId,
+      source: "Tableau",
+      status: "ready",
+      updatedAt,
+      columns: ["week", "coverage"],
+      rows: [
+        { week: "W1", coverage: 2.8 },
+        { week: "W2", coverage: 3.1 },
+        { week: "W3", coverage: 3.4 },
+        { week: "W4", coverage: 3.7 },
+      ],
+      metric: "3.7x",
+      trend: "+0.9x vs first point",
+    };
+  }
+  if (widgetId === "standard-messaging-quality") {
+    return {
+      widgetId,
+      source: "Tableau",
+      status: "ready",
+      updatedAt,
+      columns: ["day", "delivery_rate"],
+      rows: [
+        { day: "Mon", delivery_rate: 0.974 },
+        { day: "Tue", delivery_rate: 0.978 },
+        { day: "Wed", delivery_rate: 0.982 },
+        { day: "Thu", delivery_rate: 0.976 },
+        { day: "Fri", delivery_rate: 0.981 },
+      ],
+      metric: "98.1%",
+      trend: "+0.7 pts vs first point",
+    };
+  }
+  if (widgetId === "standard-customer-usage") {
+    return {
+      widgetId,
+      source: "Tableau",
+      status: "ready",
+      updatedAt,
+      columns: ["product", "usage"],
+      rows: [
+        { product: "Messaging", usage: 820000 },
+        { product: "Voice", usage: 610000 },
+        { product: "Identity", usage: 280000 },
+        { product: "Network", usage: 190000 },
+      ],
+      metric: "1.9M",
+      trend: "+18% vs prior period",
     };
   }
   return {
@@ -1152,6 +3169,12 @@ function previewWidgetData(widgetId: string): WidgetDataResult {
     metric: "$8.1M",
     trend: "+$6.0M vs first point",
   };
+}
+
+function standardTableauReportUrl(fieldName: string): string {
+  const env = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env;
+  const viteFieldName = fieldName.startsWith("VITE_") ? fieldName : `VITE_${fieldName}`;
+  return env?.[fieldName]?.trim() || env?.[viteFieldName]?.trim() || "";
 }
 
 function tool(
@@ -1206,12 +3229,18 @@ function createLocalWorkboardCard(input: {
   body?: string;
   status: WorkboardStatus;
   assignee?: string;
+  assigneeId?: string;
+  assigneeName?: string;
+  assigneeType?: string;
   provider: WorkboardProvider;
   priority: WorkboardCard["priority"];
   labels?: string[];
   tenant?: string;
   workspace?: string;
   sourceUrl?: string;
+  linkedSessionId?: string;
+  linkedRunId?: string;
+  linkedTaskId?: string;
   proof?: string[];
   artifacts?: string[];
 }): WorkboardCard {
@@ -1220,15 +3249,21 @@ function createLocalWorkboardCard(input: {
     id: input.id,
     title: input.title,
     body: input.body,
-    status: input.status,
+    status: normalizePreviewWorkboardStatus(input.status),
     priority: input.priority,
     labels: input.labels ?? [],
     assignee: input.assignee,
+    assigneeId: input.assigneeId,
+    assigneeName: input.assigneeName,
+    assigneeType: input.assigneeType,
     provider: input.provider,
     boardId: "local",
     tenant: input.tenant,
     workspace: input.workspace,
     sourceUrl: input.sourceUrl,
+    linkedSessionId: input.linkedSessionId,
+    linkedRunId: input.linkedRunId,
+    linkedTaskId: input.linkedTaskId,
     proof: input.proof,
     artifacts: input.artifacts,
     comments: [],
@@ -1236,6 +3271,33 @@ function createLocalWorkboardCard(input: {
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+}
+
+function normalizePreviewWorkboardStatus(status?: string): WorkboardStatus {
+  const raw = String(status || "").trim().toLowerCase();
+  const key = raw.replace(/[-\s]+/g, "_");
+  const aliases: Record<string, WorkboardStatus> = {
+    needs_review: "needs_review",
+    review: "needs_review",
+    pending_review: "needs_review",
+    todo: "todo",
+    to_do: "todo",
+    triage: "todo",
+    backlog: "todo",
+    scheduled: "todo",
+    ready: "todo",
+    blocked: "todo",
+    in_progress: "in_progress",
+    running: "in_progress",
+    active: "in_progress",
+    started: "in_progress",
+    done: "done",
+    complete: "done",
+    completed: "done",
+    closed: "done",
+    archived: "done",
+  };
+  return aliases[raw] ?? aliases[key] ?? "todo";
 }
 
 function createPreviewPublishedApp(input: LinkAppPublishInput): LinkPublishedApp {
@@ -1266,12 +3328,14 @@ function createPreviewPublishedApp(input: LinkAppPublishInput): LinkPublishedApp
     sourceRepo: input.sourceRepo,
     sourceRef: input.sourceRef || "main",
     sourceSubdir: input.sourceSubdir || ".",
+    installCommand: input.installCommand,
     buildCommand: input.buildCommand,
     startCommand: input.startCommand,
     outputDir: input.outputDir,
     reviewers: input.reviewers ?? [],
     envSchema: input.envSchema ?? [],
     latestVersion: version,
+    versions: [version],
     createdAt: now,
     updatedAt: now,
   };
@@ -1285,24 +3349,221 @@ function slugify(value: string): string {
     .slice(0, 64) || "link-app";
 }
 
+function previewTaskSessionKey(provider: WorkboardProvider, boardId: string, cardId: string) {
+  return `${provider}:${boardId || "local"}:${cardId}`;
+}
+
+function previewTaskSessionForCard(card: WorkboardCard) {
+  return previewWorkboardTaskSessions.find((taskSession) => taskSession.key === previewTaskSessionKey(card.provider, card.boardId, card.id));
+}
+
+function decoratePreviewWorkboardCard(card: WorkboardCard): WorkboardCard {
+  const taskSession = previewTaskSessionForCard(card);
+  if (!taskSession) return card;
+  return {
+    ...card,
+    linkedSessionId: card.linkedSessionId ?? taskSession.sessionId,
+    linkedTaskId: card.linkedTaskId ?? taskSession.remoteTaskId,
+  };
+}
+
+function resolvePreviewTaskAgent(input: WorkboardTaskSessionInput, card: WorkboardCard) {
+  const agentType = input.agentType || card.assigneeType || "openclaw";
+  const agentId = input.agentId || card.assigneeId || "";
+  return {
+    agentId,
+    agentName: input.agentName || card.assigneeName || card.assignee || "Link",
+    agentType,
+    agentSource: input.agentSource || (String(agentType).toLowerCase().includes("a2a") ? "a2a-discovery" : agentId.startsWith("self:") ? "link" : "agent-control-plane"),
+  };
+}
+
+function previewTaskDispatchPrompt(card: WorkboardCard) {
+  return [
+    "Taskbox task started. Work on this exact task and keep the Taskbox status model in sync.",
+    `Task ID: ${card.id}`,
+    `Title: ${card.title}`,
+    card.body ? `Details: ${card.body}` : "",
+    card.labels.length ? `Labels: ${card.labels.join(", ")}` : "",
+    "When the final response or artifacts are ready, move the task to Needs Review rather than Done.",
+  ].filter(Boolean).join("\n");
+}
+
+async function ensurePreviewWorkboardTaskSession(input: WorkboardTaskSessionInput): Promise<WorkboardTaskSessionResult> {
+  const provider = input.provider === "auto" ? "local" : input.provider;
+  const boardId = input.boardId || "local";
+  const snapshot = localWorkboardSnapshot(provider, boardId);
+  const card = snapshot.cards.find((item) => item.id === input.cardId);
+  if (!card) throw new Error("Workboard task was not found.");
+
+  const key = previewTaskSessionKey(card.provider, card.boardId, card.id);
+  const agent = resolvePreviewTaskAgent(input, card);
+  let taskSession = previewWorkboardTaskSessions.find((item) => item.key === key);
+  let session = taskSession ? previewChatSessions.find((item) => item.id === taskSession?.sessionId) : undefined;
+  const now = new Date().toISOString();
+
+  if (!session) {
+    session = {
+      id: `chat-task-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      title: `Task: ${card.title}`.slice(0, 120),
+      workspaceId: input.workspaceId ?? card.workspace ?? "workspace-link",
+      model: agent.agentSource === "a2a-discovery" ? "a2a-discovery" : agent.agentType,
+      status: "active",
+      updatedAt: now,
+      task: {
+        provider: card.provider,
+        boardId: card.boardId,
+        cardId: card.id,
+        status: "idle",
+      },
+      messages: [
+        message("system", `Taskbox session for ${card.title}. No task work has been sent to the agent until the user starts the task.`),
+        message("system", `Selected Link chat agent: ${agent.agentName} / ${agent.agentId}. New session initialized for Taskbox.`),
+      ],
+    };
+    previewChatSessions = [session, ...previewChatSessions];
+  }
+
+  if (!taskSession) {
+    taskSession = {
+      key,
+      provider: card.provider,
+      boardId: card.boardId,
+      cardId: card.id,
+      sessionId: session.id,
+      agentId: agent.agentId,
+      agentName: agent.agentName,
+      agentSource: agent.agentSource as ChatAgentSource,
+      agentType: agent.agentType,
+      status: "idle",
+      createdAt: now,
+      updatedAt: now,
+    };
+    previewWorkboardTaskSessions = [taskSession, ...previewWorkboardTaskSessions];
+  } else {
+    taskSession.agentId = agent.agentId || taskSession.agentId;
+    taskSession.agentName = agent.agentName || taskSession.agentName;
+    taskSession.agentSource = (agent.agentSource as ChatAgentSource) || taskSession.agentSource;
+    taskSession.agentType = agent.agentType || taskSession.agentType;
+    taskSession.updatedAt = now;
+  }
+
+  previewWorkboardCards = previewWorkboardCards.map((item) =>
+    item.id === card.id ? { ...item, linkedSessionId: session.id, updatedAt: item.updatedAt } : item,
+  );
+  session.task = {
+    provider: card.provider,
+    boardId: card.boardId,
+    cardId: card.id,
+    status: taskSession.status,
+  };
+
+  const nextSnapshot = localWorkboardSnapshot(provider, boardId);
+  return {
+    card: nextSnapshot.cards.find((item) => item.id === card.id),
+    session,
+    taskSession,
+    snapshot: nextSnapshot,
+  };
+}
+
+async function dispatchPreviewWorkboardTask(input: WorkboardTaskDispatchInput): Promise<WorkboardTaskDispatchResult> {
+  const ensured = await ensurePreviewWorkboardTaskSession(input);
+  const { card, session, taskSession } = ensured;
+  if (!card) throw new Error("Workboard task was not found.");
+  if (taskSession.dispatchedAt && !input.force) return { ...ensured, dispatched: false };
+
+  const now = new Date().toISOString();
+  const prompt = input.message?.trim() || previewTaskDispatchPrompt(card);
+  session.messages = [
+    ...session.messages,
+    message("system", `Taskbox dispatch: card ${card.id} moved to In Progress from Link.`),
+    message("user", prompt),
+    message("assistant", "Preview runtime accepted the task. In the Electron app this routes to the selected ACP or A2A agent."),
+  ];
+  session.updatedAt = now;
+  session.task = {
+    provider: card.provider,
+    boardId: card.boardId,
+    cardId: card.id,
+    status: "running",
+  };
+  taskSession.status = "running";
+  taskSession.dispatchedAt = now;
+  taskSession.lastDispatchPrompt = prompt;
+  taskSession.updatedAt = now;
+  previewWorkboardCards = previewWorkboardCards.map((item) =>
+    item.id === card.id
+      ? { ...item, status: "in_progress", linkedSessionId: session.id, updatedAt: now }
+      : item,
+  );
+  const snapshot = localWorkboardSnapshot(card.provider, card.boardId);
+  return {
+    card: snapshot.cards.find((item) => item.id === card.id),
+    session,
+    taskSession,
+    snapshot,
+    dispatched: true,
+  };
+}
+
+function toolCatalogItemToSkill(tool: ToolCatalogItem): SkillMetadata {
+  return {
+    skillId: tool.toolId,
+    name: tool.name,
+    description: tool.description,
+    owner: tool.owner,
+    team: tool.team,
+    riskLevel: tool.riskLevel,
+    toolsRequired: tool.toolsRequired,
+    customerSafe: tool.customerSafe,
+    approvalRequired: tool.approvalRequired,
+    source: "tool-studio",
+    product: tool.artifactType === "skill" ? "workflow" : tool.artifactType,
+    language: tool.artifactType === "skill" ? "skill" : "tool",
+    artifactType: tool.artifactType,
+    audience: tool.audience,
+    sourceOfTruth: tool.sourceOfTruth,
+    repeatedChecks: tool.repeatedChecks,
+    humanCheckpoints: tool.humanCheckpoints,
+    testFixture: tool.testFixture,
+    reviewers: tool.reviewers,
+    version: tool.version,
+    visibility: tool.visibility,
+    status: tool.status,
+    starCount: tool.stats.starCount,
+    installCount: tool.stats.installCount,
+    downloadCount: tool.stats.downloadCount,
+    runCount: tool.stats.runCount,
+    viewCount: tool.stats.viewCount,
+    starredByActor: tool.stats.starredByActor,
+    installedByActor: tool.stats.installedByActor,
+    updatedAt: tool.updatedAt,
+    registryUpdatedAt: tool.stats.updatedAt,
+  };
+}
+
 function localWorkboardSnapshot(provider: WorkboardProvider, boardId: string): WorkboardSnapshot {
-  const cards = previewWorkboardCards.filter((card) => provider === "local" || card.provider === provider);
+  const cards = previewWorkboardCards
+    .filter((card) => provider === "local" || card.provider === provider)
+    .map((card) => decoratePreviewWorkboardCard({ ...card, status: normalizePreviewWorkboardStatus(card.status) }));
   return {
     provider,
     boardId,
     providers: [
       { id: "hermes", label: "Hermes Kanban", available: false, mode: "unavailable", message: "Hermes CLI is not connected in browser preview." },
       { id: "openclaw", label: "OpenClaw Workboard", available: false, mode: "unavailable", message: "OpenClaw Gateway is not connected in browser preview." },
+      { id: "google_tasks", label: "Google Tasks", available: false, mode: "unavailable", message: "Google Tasks through gog is only available in the Electron app." },
       { id: "local", label: "Link local board", available: true, mode: "fallback", message: "Local fallback board is active." },
     ],
-    boards: [{ id: "local", name: "Link local board", provider: "local", description: "Durable Link-owned fallback board." }],
-    columns: ["triage", "backlog", "todo", "scheduled", "ready", "running", "review", "blocked", "done"],
+    boards: [{ id: provider === "google_tasks" ? "primary" : "local", name: provider === "google_tasks" ? "Google Tasks" : "Link local board", provider, description: "Durable Link-owned fallback board." }],
+    columns: workboardColumns,
     cards,
     assignees: [...new Set(cards.map((card) => card.assignee).filter((assignee): assignee is string => Boolean(assignee)))],
     stats: [
       { label: "Cards", value: cards.length },
-      { label: "Running", value: cards.filter((card) => card.status === "running").length, tone: "success" },
-      { label: "Blocked", value: cards.filter((card) => card.status === "blocked").length, tone: "warning" },
+      { label: "In Progress", value: cards.filter((card) => card.status === "in_progress").length, tone: "success" },
+      { label: "Needs Review", value: cards.filter((card) => card.status === "needs_review").length, tone: "warning" },
     ],
     message: "Link local board is active.",
   };
@@ -1327,6 +3588,26 @@ function credentials(id: string, label: string, help: string, fields: string[]):
     help,
     fields: fields.map((name) => ({ name, configured: false, source: "missing" })),
   };
+}
+
+function duplicateCommandsForPreviewApp(app: LinkPublishedApp): string[] {
+  const targetDirectory = app.slug || app.id || "link-app";
+  const commands = [
+    `git clone ${shellQuoteForDisplay(app.sourceRepo || "")} ${shellQuoteForDisplay(targetDirectory)}`,
+    `cd ${shellQuoteForDisplay(targetDirectory)}`,
+    `git checkout ${shellQuoteForDisplay(app.sourceRef || "main")}`,
+  ];
+  if (app.sourceSubdir && app.sourceSubdir !== ".") commands.push(`cd ${shellQuoteForDisplay(app.sourceSubdir)}`);
+  return commands;
+}
+
+function duplicatePathForPreviewApp(app: LinkPublishedApp): string {
+  const targetDirectory = app.slug || app.id || "link-app";
+  return app.sourceSubdir && app.sourceSubdir !== "." ? `${targetDirectory}/${app.sourceSubdir}` : targetDirectory;
+}
+
+function shellQuoteForDisplay(value: string): string {
+  return `'${String(value).replace(/'/g, "'\\''")}'`;
 }
 
 function message(role: ChatMessage["role"], content: string, artifacts: ChatArtifact[] = []): ChatMessage {
@@ -1377,6 +3658,28 @@ function explorerResults(query: string): ExplorerResult[] {
       workspaceId: "workspace-link",
       url: "https://developers.telnyx.com/docs/overview",
     },
+    {
+      id: "explorer-guru-card-preview",
+      title: `Guru card search for ${term}`,
+      source: "guru",
+      type: "doc",
+      permission: "allowed",
+      freshness: "Guru MCP preview",
+      excerpt: "Guru-backed internal knowledge card result. Connect Guru with OAuth to search live cards through Guru MCP.",
+      workspaceId: "workspace-link",
+      url: "https://github.com/team-telnyx/telnyx-clawdbot-skills/tree/main/skills/guru",
+    },
+    {
+      id: "explorer-pylon-ticket-preview",
+      title: `Pylon ticket search for ${term}`,
+      source: "pylon",
+      type: "ticket",
+      permission: "allowed",
+      freshness: "Pylon MCP preview",
+      excerpt: "Preview Pylon issue result. Connect the Pylon MCP endpoint to search live tickets and create new issues; update tools stay blocked in Link v1.",
+      workspaceId: "workspace-link",
+      url: "https://app.usepylon.com/issues/views/all-issues?conversationID=preview",
+    },
   ];
 }
 
@@ -1396,10 +3699,78 @@ function agentControlPlaneAuthStatus(signedIn: boolean): AgentControlPlaneAuthSt
   };
 }
 
+function previewHostedAgents(): HostedAgentSummary[] {
+  return [
+    {
+      id: "preview-openclaw-agent",
+      name: "preview-openclaw",
+      displayName: "Preview OpenClaw Agent",
+      description: "Preview Agent Control Plane OpenClaw worker.",
+      status: "active",
+      type: "openclaw",
+      capabilities: ["workboard", "tasks", "openclaw", "clawtalk", "voice"],
+    },
+    {
+      id: "preview-hermes-agent",
+      name: "preview-hermes",
+      displayName: "Preview Hermes Agent",
+      description: "Preview Agent Control Plane Hermes worker.",
+      status: "active",
+      type: "hermes",
+      capabilities: ["kanban", "tasks", "hermes"],
+    },
+  ];
+}
+
 function previewAuthEnabled(): boolean {
   try {
     const params = new URLSearchParams(window.location.search);
     return params.get("previewAuth") === "ready" || window.localStorage.getItem("telnyx-link-preview-auth") === "ready";
+  } catch {
+    return false;
+  }
+}
+
+function previewGoogleWorkspaceEnabled(): boolean {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("previewGoogle") === "ready" || window.localStorage.getItem("telnyx-link-preview-google") === "ready";
+  } catch {
+    return false;
+  }
+}
+
+function previewGoogleConnectors(connectors: ConnectorStatus[]): ConnectorStatus[] {
+  const googleConnectors: ConnectorStatus[] = [
+    {
+      id: "google-calendar",
+      name: "Google Calendar",
+      category: "Calendar",
+      description: "Preview Google Calendar connector.",
+      status: "connected",
+      mode: "saved",
+      requiredAccess: ["Preview Google Calendar"],
+    },
+    {
+      id: "google-drive",
+      name: "Google Drive",
+      category: "Knowledge",
+      description: "Preview Google Drive connector.",
+      status: "connected",
+      mode: "saved",
+      requiredAccess: ["Preview Google Drive"],
+    },
+  ];
+  return [
+    ...connectors.filter((connector) => connector.id !== "google-calendar" && connector.id !== "google-drive"),
+    ...googleConnectors,
+  ];
+}
+
+function previewPhoneE2EEnabled(): boolean {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("phoneE2E") === "ready" || window.localStorage.getItem("telnyx-link-phone-e2e") === "ready";
   } catch {
     return false;
   }

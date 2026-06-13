@@ -1,0 +1,5 @@
+[edge_compute]
+func_name = "link-skill-registry"
+
+# Runtime storage should be mounted or provided by the Edge environment.
+# Set LINK_SKILL_REGISTRY_STORAGE to a persistent path before production approval.

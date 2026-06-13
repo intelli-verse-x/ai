@@ -19,6 +19,14 @@ venv/
 node_modules/
 dist/
 
+# Swift / Xcode
+.build/
+*.app
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
 # Test / coverage
 htmlcov/
 .tox/

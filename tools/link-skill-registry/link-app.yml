@@ -1,0 +1,17 @@
+name: Link Skill Registry
+slug: link-skill-registry
+description: Private internal registry for Link skill stars, installs/downloads, and run counts.
+owner_squad: link-platform.squad
+audience: Telnyx Link desktop clients
+app_type: web
+install_command: npm install
+build_command: npm run build
+start_command: npm start
+output_dir: dist
+env_schema:
+  - LINK_SKILL_REGISTRY_STORAGE
+  - LINK_SKILL_REGISTRY_REQUIRE_AUTH_CONTEXT
+access: vpn
+reviewers:
+  - link-platform.squad
+risk_level: medium

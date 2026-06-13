@@ -1,0 +1,67 @@
+name: TelnyxDictation
+
+options:
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "5"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+targets:
+
+  TelnyxDictationLib:
+    type: framework
+    platform: macOS
+    sources:
+      - path: Sources/TelnyxDictationLib
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.telnyx.dictation.lib
+        PRODUCT_MODULE_NAME: TelnyxDictationLib
+        DEFINES_MODULE: YES
+
+  TelnyxDictation:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/TelnyxDictation
+    dependencies:
+      - target: TelnyxDictationLib
+        embed: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.telnyx.dictation
+        INFOPLIST_FILE: SupportingFiles/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: NO
+
+  TelnyxDictationTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/TelnyxDictationTests
+    dependencies:
+      - target: TelnyxDictationLib
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.telnyx.dictation.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  TelnyxDictation:
+    build:
+      targets:
+        TelnyxDictation: all
+        TelnyxDictationLib: all
+        TelnyxDictationTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - TelnyxDictationTests

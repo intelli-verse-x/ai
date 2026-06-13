@@ -1,0 +1,19 @@
+.DS_Store
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+.build/
+*.app
+
+# Xcode user data
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Local orchestration artifacts
+.sisyphus/

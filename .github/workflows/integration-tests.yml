@@ -93,10 +93,40 @@ jobs:
       - name: Guide structural tests
         run: npx tsx --test tests/guides.test.ts
 
+  link-app-publisher-e2e:
+    name: Link App Publisher Desktop E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Link tool deps
+        working-directory: tools/link
+        run: npm ci
+      - name: Install Link Desktop deps
+        working-directory: apps/link-desktop
+        run: npm ci
+      - name: Link publisher typecheck
+        working-directory: tools/link
+        run: npm run typecheck
+      - name: Link Desktop typecheck
+        working-directory: apps/link-desktop
+        run: npm run typecheck
+      - name: Link publisher unit and contract tests
+        working-directory: tools/link
+        run: npm test
+      - name: Link Desktop unit and structure tests
+        working-directory: apps/link-desktop
+        run: npm test
+      - name: Link App Publisher Electron E2E
+        working-directory: apps/link-desktop
+        run: xvfb-run -a npm run test:e2e:publisher
+
   api-readonly:
     name: API Read-Only Tests
     runs-on: ubuntu-latest
-    needs: unit-tests
+    needs: [unit-tests, link-app-publisher-e2e]
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
     env:
       TELNYX_API_KEY: ${{ secrets.TELNYX_API_KEY }}
@@ -200,5 +230,3 @@ jobs:
         continue-on-error: true
         working-directory: cli
         run: RUN_WRITE_TESTS=true npx tsx tests/integration-ci-write.test.ts
-
-

@@ -1,0 +1,11 @@
+names:
+  service: telnyx-whisper
+
+project:
+  squad:
+  primary_maintainer: aaronj
+  secondary_maintainer:
+  public_api: false
+  private_api: false
+  dependencies: []
+  processes_pii: false

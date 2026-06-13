@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createLinkAppPublisherServer, listenLinkAppPublisherServer } from "../../../tools/link/src/app-publisher.js";
 
 test("desktop package exposes expected local scripts", async () => {
   const pkg = JSON.parse(await readFile("package.json", "utf8")) as {
+    productName: string;
     scripts: Record<string, string>;
     overrides: Record<string, string>;
   };
 
+  assert.equal(pkg.productName, "Link");
   assert.equal(pkg.scripts.dev, "node scripts/dev.mjs");
   assert.equal(pkg.scripts.build, "vite build");
   assert.equal(pkg.scripts["metadata:check"], "scripts/check-service-metadata.sh");
@@ -53,6 +56,14 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.match(main, /webSecurity:\s*true/);
   assert.match(main, /allowRunningInsecureContent:\s*false/);
   assert.match(main, /webviewTag:\s*false/);
+  assert.match(main, /const appDisplayName = "Link"/);
+  assert.match(main, /const appIconPath = path\.resolve\(__dirname,\s*"\.\.\/\.\.\/public\/link-icon\.png"\)/);
+  assert.match(index, /href="\/link-favicon\.png"/);
+  assert.doesNotMatch(index, /href="\/triforce-26\.png"/);
+  assert.match(main, /title:\s*appDisplayName/);
+  assert.match(main, /app\.setName\(appDisplayName\)/);
+  assert.match(main, /app\.setAboutPanelOptions\(\{ applicationName:\s*appDisplayName \}\)/);
+  assert.match(main, /app\.dock\.setIcon\(appIcon\)/);
   assert.doesNotMatch(main, /sandbox:\s*false/);
   assert.doesNotMatch(main, /nodeIntegration:\s*true/);
   assert.doesNotMatch(main, /webSecurity:\s*false/);
@@ -75,7 +86,8 @@ test("Electron windows follow the internal app security baseline", async () => {
   assert.match(main, /shell\.openExternal/);
   assert.match(index, /Content-Security-Policy/);
   assert.match(index, /object-src 'none'/);
-  assert.match(index, /frame-src 'none'/);
+  assert.match(index, /frame-src 'self' http:\/\/127\.0\.0\.1:\* http:\/\/localhost:\* https:\/\/\*\.online\.tableau\.com https:\/\/public\.tableau\.com https:\/\/\*\.tableau\.com https:\/\/\*\.tableauusercontent\.com/);
+  assert.doesNotMatch(index, /frame-src 'none'/);
   assert.match(index, /form-action 'none'/);
 });
 
@@ -87,19 +99,26 @@ test("main-process privileged entrypoints fail closed", async () => {
   assert.match(main, /trustedRendererWebContentsIds\.has\(event\.sender\.id\)/);
   assert.match(main, /Rejected IPC from an untrusted renderer/);
   assert.doesNotMatch(main, /ipcMain\.handle\("link:/);
-  assert.match(main, /const allowedCliCommands = new Set\(\["hermes", "openclaw"\]\)/);
+  assert.match(main, /const allowedCliCommands = new Set\(\["hermes", "openclaw", "telnyx-edge", "telnyx-edge-dev"\]\)/);
+  const cliAllowlistMatch = main.match(/const allowedCliCommands = new Set\(\[([^\]]+)\]\)/);
+  assert.ok(cliAllowlistMatch);
+  assert.doesNotMatch(cliAllowlistMatch[1], /"?(bash|sh|zsh|node|python|npm|npx)"?/);
   assert.match(main, /allowedCliCommands\.has\(executable\)/);
   assert.match(main, /execFileAsync\(executable, Array\.isArray\(args\) \? args\.map\(String\) : \[\]/);
   assert.match(main, /link:publisher-list-apps/);
+  assert.match(main, /link:publisher-select-local-app/);
   assert.match(main, /link:publisher-create-intent/);
   assert.match(main, /link:publisher-review-app/);
+  assert.match(main, /link:publisher-rollback-app/);
+  assert.match(main, /link:publisher-transfer-app/);
+  assert.match(main, /link:publisher-deprecate-app/);
   assert.match(main, /link:publisher-duplicate-app/);
   assert.match(main, /link:publisher-open-app/);
   assert.match(main, /linkAppAllowedHostSuffixes/);
   assert.match(main, /isAllowedLinkAppUrl/);
   assert.match(main, /Refusing to open a non-approved Link app URL/);
   assert.match(main, /\/publish-intents/);
-  assert.doesNotMatch(main, /allowedCliCommands = new Set\(\[[\s\S]*telnyx-edge/);
+  assert.match(main, /secureIpcHandle\("link:edge-compute-status", \(\) => getEdgeComputeStatus\(\{ seedAuth: true \}\)\)/);
 });
 
 test("preload exposes the Link desktop IPC contract", async () => {
@@ -108,21 +127,44 @@ test("preload exposes the Link desktop IPC contract", async () => {
   assert.match(preload, /require\("electron"\)/);
   for (const method of [
     "chat",
-    "runSkill",
-    "listSkills",
-    "listTools",
+	    "runSkill",
+	    "listSkills",
+	    "getSkillMarkdown",
+	    "listToolCatalog",
+	    "publishToolManifest",
+	    "listTools",
     "createSharedChannelDraft",
     "listActiveWork",
     "decideWork",
     "listAutomations",
     "listConnectors",
-    "listCredentials",
-    "saveCredential",
-    "updateConnectorStatus",
+	    "listCredentials",
+	    "saveCredential",
+    "connectGitHubWithDeviceFlow",
+    "connectGoogleWorkspaceWithSkill",
+	    "connectGoogleInboxWithGog",
+	    "listGoogleInboxThreads",
+	    "getGoogleInboxThread",
+	    "createGoogleInboxDraft",
+	    "updateGoogleInboxDraft",
+	    "connectGoogleTasksWithGog",
+	    "updateConnectorStatus",
+    "getEdgeComputeStatus",
     "listWidgetCatalog",
     "listWidgetLayout",
     "saveWidgetLayout",
     "refreshWidgetData",
+    "listDialerConfigs",
+    "saveDialerConfig",
+    "activateDialerConfig",
+    "getActiveDialerConfig",
+    "getWebRtcToken",
+    "getWebRtcStatus",
+    "getTerminalStatus",
+    "startTerminal",
+    "writeTerminal",
+    "stopTerminal",
+    "onTerminalOutput",
     "listOnboarding",
     "updateOnboarding",
     "signInAgentControlPlane",
@@ -131,7 +173,9 @@ test("preload exposes the Link desktop IPC contract", async () => {
     "listHostedAgents",
     "listWorkspaces",
     "searchExplorer",
+    "askKnowledgeAgent",
     "listChatSessions",
+    "createChatSession",
     "sendChatMessage",
     "renameChatSession",
     "transcribeAudio",
@@ -148,48 +192,217 @@ test("preload exposes the Link desktop IPC contract", async () => {
     "listAccountPhoneNumbers",
     "listMemoryBanks",
     "recallMemory",
+    "retainMemory",
     "listDojoState",
+    "getPublisherReadiness",
     "listPublishedApps",
+    "selectLocalPublishApp",
     "createPublishIntent",
     "createPublishedAppVersion",
     "reviewPublishedApp",
+    "rollbackPublishedApp",
+    "transferPublishedApp",
+    "deprecatePublishedApp",
     "duplicatePublishedApp",
-    "openPublishedApp",
-    "auditEvents",
+	    "openPublishedApp",
+	    "importLocalEdgeApp",
+	    "previewLocalEdgeApp",
+	    "deployLocalEdgeApp",
+	    "auditEvents",
   ]) {
     assert.match(preload, new RegExp(`${method}:`));
   }
 });
 
+test("Google Inbox IPC is read and draft only", async () => {
+  const main = await readFile("src/main/main.js", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
+
+  assert.match(main, /secureIpcHandle\("link:google-inbox-connect-gog", \(\) => connectGoogleInboxWithGog\(\)\)/);
+  assert.match(main, /secureIpcHandle\("link:google-inbox-threads", \(_event, input\) => listGoogleInboxThreads\(input\)\)/);
+  assert.match(main, /secureIpcHandle\("link:google-inbox-thread", \(_event, input\) => getGoogleInboxThread\(input\)\)/);
+  assert.match(main, /secureIpcHandle\("link:google-inbox-create-draft", \(_event, input\) => createGoogleInboxDraft\(input\)\)/);
+  assert.match(main, /secureIpcHandle\("link:google-inbox-update-draft", \(_event, input\) => updateGoogleInboxDraft\(input\)\)/);
+  assert.match(main, /"--gmail-no-send"/);
+  assert.match(main, /"--wrap-untrusted"/);
+  assert.match(main, /process\.env\.LINK_DESKTOP_GOG_COMMAND/);
+  assert.match(main, /parts\.push\("is:unread"\)/);
+  assert.match(main, /parts\.push\(`to:\$\{account\}`\)/);
+
+  const allowlistMatch = main.match(/const googleInboxGogExactCommandAllowlist = Object\.freeze\(\[([\s\S]*?)\]\);/);
+  assert.ok(allowlistMatch);
+  const allowlist = allowlistMatch[1];
+  for (const command of [
+    "gmail.search",
+    "gmail.get",
+    "gmail.thread.get",
+    "gmail.url",
+    "gmail.drafts.list",
+    "gmail.drafts.get",
+    "gmail.drafts.create",
+    "gmail.drafts.update",
+  ]) {
+    assert.match(allowlist, new RegExp(command.replaceAll(".", "\\.")));
+  }
+  assert.doesNotMatch(allowlist, /gmail\.send/);
+  assert.doesNotMatch(allowlist, /gmail\.drafts\.send/);
+  assert.doesNotMatch(allowlist, /gmail\.forward/);
+  assert.doesNotMatch(allowlist, /gmail\.autoreply/);
+  assert.doesNotMatch(allowlist, /gmail\.archive/);
+  assert.doesNotMatch(allowlist, /gmail\.trash/);
+  assert.doesNotMatch(allowlist, /gmail\.mark-read/);
+  assert.doesNotMatch(allowlist, /gmail\.labels/);
+  assert.match(preload, /connectGoogleInboxWithGog: \(\) => ipcRenderer\.invoke\("link:google-inbox-connect-gog"\)/);
+  assert.match(preload, /createGoogleInboxDraft: \(input\) => ipcRenderer\.invoke\("link:google-inbox-create-draft", input\)/);
+  assert.match(preload, /updateGoogleInboxDraft: \(input\) => ipcRenderer\.invoke\("link:google-inbox-update-draft", input\)/);
+  assert.doesNotMatch(preload, /sendGoogleInbox|google-inbox-send|gmail-send/);
+  assert.match(api, /export interface GoogleInboxThreadSummary/);
+  assert.match(api, /createGoogleInboxDraft\(input: GoogleInboxDraftInput\): Promise<GoogleInboxDraft>/);
+  assert.match(api, /updateGoogleInboxDraft\(input: GoogleInboxDraftInput & \{ draftId: string \}\): Promise<GoogleInboxDraft>/);
+});
+
+test("Google Tasks Taskbox integration uses guarded gog commands", async () => {
+  const main = await readFile("src/main/main.js", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
+  const app = await readFile("src/renderer/App.tsx", "utf8");
+
+  assert.match(main, /secureIpcHandle\("link:google-tasks-connect-gog", \(\) => connectGoogleTasksWithGog\(\)\)/);
+  assert.match(preload, /connectGoogleTasksWithGog: \(\) => ipcRenderer\.invoke\("link:google-tasks-connect-gog"\)/);
+  assert.match(api, /connectGoogleTasksWithGog\(\): Promise<GoogleInboxConnectionResult>/);
+  assert.match(main, /id:\s*"google-tasks"[\s\S]*?name:\s*"Google Tasks"[\s\S]*?category:\s*"Taskbox"/);
+  assert.match(main, /googleTasksGogExactCommandAllowlist = Object\.freeze/);
+  for (const command of ["tasks.lists.list", "tasks.list", "tasks.get", "tasks.add", "tasks.update", "tasks.done", "tasks.undo"]) {
+    assert.match(main, new RegExp(command.replace(".", "\\.")));
+  }
+  assert.doesNotMatch(main, /tasks\.delete|tasks\.clear/);
+  assert.match(main, /assertSafeGoogleTasksGogArgs/);
+  assert.match(main, /runSafeGoogleTasksGogJson/);
+  assert.match(main, /listGoogleTasksWorkboard/);
+  assert.match(main, /createGoogleTasksWorkboardCard/);
+  assert.match(main, /updateGoogleTasksWorkboardCard/);
+  assert.match(main, /googleTasksUnavailableMessage/);
+  assert.match(main, /aborted\|AbortError\|timeout/);
+  assert.match(app, /Connect Google Tasks/);
+  assert.match(app, /linkApi\.connectGoogleTasksWithGog\(\)/);
+  assert.match(app, /provider === "google_tasks"/);
+});
+
+test("Knowledge Agent support endpoint is live and failure-aware", async () => {
+  const main = await readFile("src/main/main.js", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
+  const knowledgeAgentBlock = main.slice(
+    main.indexOf("async function askKnowledgeAgent"),
+    main.indexOf("function fallbackTelnyxDocsResults"),
+  );
+
+  assert.match(main, /const knowledgeAgentAskUrl = "https:\/\/api\.telnyx\.com\/v2\/knowledge_agent\/ask"/);
+  assert.match(main, /secureIpcHandle\("link:ask-knowledge-agent", \(_event, input\) => askKnowledgeAgent\(input\)\)/);
+  assert.match(main, /async function askKnowledgeAgent\(input = \{\}\)/);
+  assert.match(main, /method: "POST"/);
+  assert.match(main, /"Content-Type": "application\/json"/);
+  assert.match(main, /body: JSON\.stringify\(\{ question \}\)/);
+  assert.match(main, /setTimeout\(\(\) => controller\.abort\(\), 120000\)/);
+  assert.match(main, /response\.status === 429/);
+  assert.match(main, /rate limited at 10 requests per minute/);
+  assert.match(main, /returned malformed JSON/);
+  assert.match(main, /returned an empty answer/);
+  assert.match(main, /timed out after 120 seconds/);
+  assert.match(main, /function normalizeKnowledgeAgentCitations/);
+  assert.doesNotMatch(knowledgeAgentBlock, /Authorization/);
+  assert.match(preload, /askKnowledgeAgent: \(input\) => ipcRenderer\.invoke\("link:ask-knowledge-agent", input\)/);
+  assert.match(api, /export interface KnowledgeAgentAskRequest/);
+  assert.match(api, /export interface KnowledgeAgentAskResponse/);
+  assert.match(api, /askKnowledgeAgent\(input: KnowledgeAgentAskRequest\): Promise<KnowledgeAgentAskResponse>/);
+  assert.match(api, /const knowledgeAgentAskUrl = "https:\/\/api\.telnyx\.com\/v2\/knowledge_agent\/ask"/);
+  assert.match(api, /async function askPublicKnowledgeAgent\(\{ question \}: KnowledgeAgentAskRequest\): Promise<KnowledgeAgentAskResponse>/);
+  assert.match(api, /method: "POST"/);
+  assert.match(api, /body: JSON\.stringify\(\{ question: trimmed \}\)/);
+  assert.match(api, /window\.setTimeout\(\(\) => controller\.abort\(\), 120000\)/);
+  assert.match(api, /response\.status === 429/);
+  assert.match(api, /returned malformed JSON/);
+  assert.match(api, /returned an empty answer/);
+  assert.match(api, /timed out after 120 seconds/);
+  assert.doesNotMatch(api, /Authorization/);
+  assert.match(api, /const previewLinkApi: LinkDesktopApi = \{/);
+  assert.match(api, /export const linkApi: LinkDesktopApi = \{\s*\.\.\.previewLinkApi,\s*\.\.\.\(window\.linkDesktop \?\? \{\}\),\s*\}/);
+  assert.doesNotMatch(api, /export const linkApi: LinkDesktopApi = window\.linkDesktop \?\?/);
+  assert.match(api, /async askKnowledgeAgent\(\{ question \}\)/);
+  assert.match(api, /return askPublicKnowledgeAgent\(\{ question \}\)/);
+  assert.doesNotMatch(api, /Preview answer for:/);
+});
+
+test("desktop skill markdown loads known GitHub paths on demand", async () => {
+  const main = await readFile("src/main/main.js", "utf8");
+
+  assert.match(main, /"product-launch-readiness":\s*"tools\/link\/skills\/product-launch-readiness\.md"/);
+  assert.match(main, /"support-reply-draft":\s*"tools\/link\/skills\/support-reply-draft\.md"/);
+  assert.match(main, /"shared-slack-channel-response-draft":\s*"tools\/link\/skills\/shared-slack-channel-response-draft\.md"/);
+  assert.match(main, /"sms-delivery-investigation":\s*"tools\/link\/skills\/sms-delivery-investigation\.md"/);
+  assert.match(main, /generatedSkillMarkdown\(name\)/);
+  assert.match(main, /Packaged fallback is unavailable for \$\{source\.path\}/);
+  assert.doesNotMatch(main, /failures\.push\(errorMessage\(error\)\);\n\s*}\n\n\s*throw new Error\(`Unable to load SKILL\.md/);
+});
+
 test("renderer includes canonical Link pages in the primary navigation", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
+  const chatsViewSource = app.slice(app.indexOf("function ChatsView"), app.indexOf("function MessageArtifacts"));
+  const chatResultRowHeadStyles = styles.slice(styles.indexOf(".chatResultRowHead"), styles.indexOf(".chatSessionRows"));
+  const navItemsSource = app.slice(app.indexOf("const navItems"), app.indexOf("const linkGettingStartedAgentId"));
 
-  for (const view of ["widgets", "chats", "agents", "workboard", "phone", "calendar", "dojo"]) {
+  for (const view of ["chats", "inbox", "agents", "workboard", "drive", "phone", "calendar", "apps", "skills", "dojo"]) {
     assert.match(app, new RegExp(`id: "${view}"`));
   }
-  assert.doesNotMatch(app, /const navItems:[\s\S]*?id: "memory"/);
+  assert.match(navItemsSource, /\{ id: "chats", label: "Chat"[\s\S]*?\{ id: "phone", label: "Calls"[\s\S]*?\{ id: "inbox", label: "Inbox"[\s\S]*?\{ id: "workboard", label: "Taskbox"[\s\S]*?\{ id: "drive", label: "Drive"[\s\S]*?\{ id: "calendar", label: "Calendar"[\s\S]*?\{ id: "agents", label: "Agents"[\s\S]*?\{ id: "skills", label: "Skills"[\s\S]*?\{ id: "apps", label: "Apps"[\s\S]*?\{ id: "dojo", label: "Wiki"/);
+  assert.doesNotMatch(app, /<div className="railSpacer" \/>\s*\{renderRailButton\(\{ id: "apps", label: "Apps", icon: Grid2X2Plus \}\)\}/);
+  assert.doesNotMatch(navItemsSource, /\{ id: "widgets", label: "Widgets"/);
+  assert.match(app, /function WidgetsView/);
+  assert.doesNotMatch(navItemsSource, /id: "memory"/);
   assert.doesNotMatch(app, /id: "connections"/);
   assert.doesNotMatch(app, /id: "marketplace"/);
-  assert.doesNotMatch(app, /id: "skills"/);
+  assert.doesNotMatch(navItemsSource, /id: "help"/);
+  assert.doesNotMatch(navItemsSource, /id: "docs"/);
+  assert.doesNotMatch(navItemsSource, /id: "wiki"/);
+  assert.doesNotMatch(navItemsSource, /id: "pylon"/);
   assert.doesNotMatch(app, /id: "workspaces"/);
   assert.doesNotMatch(app, /id: "design"/);
   assert.doesNotMatch(app, /view === "design"/);
-  assert.match(app, /useState<ViewId>\("widgets"\)/);
-  assert.ok(app.indexOf('id: "widgets"') < app.indexOf('id: "workboard"'));
-  assert.ok(app.indexOf('id: "workboard"') < app.indexOf('id: "chats"'));
-  assert.ok(app.indexOf('id: "chats"') < app.indexOf('id: "phone"'));
-  assert.ok(app.indexOf('id: "phone"') < app.indexOf('id: "calendar"'));
-  assert.ok(app.indexOf('id: "calendar"') < app.indexOf('id: "agents"'));
+  assert.match(app, /useState<ViewId>\("chats"\)/);
+  assert.ok(navItemsSource.indexOf('id: "chats"') < navItemsSource.indexOf('id: "phone"'));
+  assert.ok(navItemsSource.indexOf('id: "phone"') < navItemsSource.indexOf('id: "inbox"'));
+  assert.ok(navItemsSource.indexOf('id: "inbox"') < navItemsSource.indexOf('id: "workboard"'));
+  assert.ok(navItemsSource.indexOf('id: "workboard"') < navItemsSource.indexOf('id: "drive"'));
+  assert.ok(navItemsSource.indexOf('id: "drive"') < navItemsSource.indexOf('id: "calendar"'));
+  assert.ok(navItemsSource.indexOf('id: "calendar"') < navItemsSource.indexOf('id: "agents"'));
+  assert.ok(navItemsSource.indexOf('id: "agents"') < navItemsSource.indexOf('id: "skills"'));
+  assert.ok(navItemsSource.indexOf('id: "skills"') < navItemsSource.indexOf('id: "apps"'));
+  assert.ok(navItemsSource.indexOf('id: "apps"') < navItemsSource.indexOf('id: "dojo"'));
   assert.doesNotMatch(app, /\{ id: "memory", label: "Archive", icon: ArchiveIcon \},\n\s*\{ id: "dojo"/);
   assert.match(app, /agents:\s*\{\s*label:\s*"Agents",\s*icon:\s*Bot\s*\}/);
   assert.match(app, /chats:\s*\{\s*label:\s*"Chat",\s*icon:\s*MessageSquare\s*\}/);
-  assert.match(app, /phone:\s*\{\s*label:\s*"Phone",\s*icon:\s*Phone\s*\}/);
+  assert.match(app, /inbox:\s*\{\s*label:\s*"Inbox",\s*icon:\s*Inbox\s*\}/);
+  assert.match(app, /phone:\s*\{\s*label:\s*"Calls",\s*icon:\s*Phone\s*\}/);
   assert.match(app, /calendar:\s*\{\s*label:\s*"Calendar",\s*icon:\s*CalendarDays\s*\}/);
-  assert.match(app, /workboard:\s*\{\s*label:\s*"Tasks",\s*icon:\s*SquareCheck\s*\}/);
+  assert.match(app, /workboard:\s*\{\s*label:\s*"Taskbox",\s*icon:\s*SquareCheck\s*\}/);
+  assert.match(app, /drive:\s*\{\s*label:\s*"Drive",\s*icon:\s*FolderOpen\s*\}/);
+  assert.match(app, /apps:\s*\{\s*label:\s*"Apps",\s*icon:\s*Grid2X2Plus\s*\}/);
+  assert.match(app, /skills:\s*\{\s*label:\s*"Skills",\s*icon:\s*Zap\s*\}/);
   assert.match(app, /<span className="railIconSlot"><Icon size=\{17\} \/><\/span>/);
+  assert.match(app, /<span className="railIconSlot"><img src="\.\/telnyx-link-logo\.png" alt="" aria-hidden="true" \/><\/span>/);
+  assert.doesNotMatch(app, /<span className="railLabel">Telnyx Link<\/span>/);
+  assert.match(styles, /\.workspace\s*\{[\s\S]*?grid-template-columns:\s*54px 270px minmax\(0,\s*1fr\)/);
+  assert.match(styles, /\.workspaceNoSidebar\s*\{[\s\S]*?grid-template-columns:\s*54px minmax\(0,\s*1fr\)/);
+  assert.match(styles, /\.railButton\s*\{[\s\S]*?width:\s*var\(--top-control-height\)[\s\S]*?height:\s*var\(--top-control-height\)/);
+  assert.match(styles, /\.accountMenuWrap\s*\{[\s\S]*?width:\s*var\(--top-control-height\)[\s\S]*?height:\s*var\(--top-control-height\)/);
+  assert.match(styles, /\.avatar\s*\{[\s\S]*?width:\s*var\(--top-control-height\)[\s\S]*?height:\s*var\(--top-control-height\)/);
   assert.match(styles, /\.railIconSlot\s*\{[\s\S]*?width:\s*18px[\s\S]*?height:\s*18px/);
-  assert.match(styles, /\.brandButton \.railIconSlot\s*\{[\s\S]*?width:\s*24px[\s\S]*?height:\s*24px/);
+  assert.match(styles, /\.brandButton\s*\{[\s\S]*?background:\s*transparent[\s\S]*?box-shadow:\s*none/);
+  assert.match(styles, /\.brandButton:hover,\s*\n\.brandButton\.selected\s*\{[\s\S]*?background:\s*transparent/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.brandButton,[\s\S]*?\.desktop\[data-theme="dark"\] \.brandButton\.selected\s*\{[\s\S]*?background:\s*transparent/);
+  assert.match(styles, /\.brandButton \.railIconSlot\s*\{[\s\S]*?width:\s*32px[\s\S]*?height:\s*32px/);
   assert.doesNotMatch(app, /marketplace:\s*\{\s*label:\s*"App Marketplace",\s*icon:\s*Store\s*\}/);
   assert.doesNotMatch(app, /view === "marketplace"/);
   assert.doesNotMatch(app, /\{ id: "explorer", label: "Library", icon: BookOpen \}/);
@@ -199,7 +412,8 @@ test("renderer includes canonical Link pages in the primary navigation", async (
   assert.match(app, /memory:\s*\{\s*label:\s*"Archive",\s*icon:\s*ArchiveIcon\s*\}/);
   assert.doesNotMatch(app, /Hindsight infers the selected memory bank from the configured API key/);
   assert.doesNotMatch(app, /Memory bank scope/);
-  assert.match(app, /dojo:\s*\{\s*label:\s*"Experto",\s*icon:\s*ChessKnight\s*\}/);
+  assert.match(app, /function TriforceIcon/);
+  assert.match(app, /dojo:\s*\{\s*label:\s*"Wiki",\s*icon:\s*TriforceIcon\s*\}/);
   assert.doesNotMatch(app, /function TabStrip/);
   assert.doesNotMatch(app, /className="tabStrip"/);
 });
@@ -215,6 +429,7 @@ test("signed out users only see the Okta auth gate", async () => {
   assert.match(app, /bring your agents, tasks, calls, calendar, docs, and internal tools into one secure workspace/);
   assert.match(app, /Sign in with Okta/);
   assert.match(app, /<img src="\.\/triforce-26\.png" alt="" aria-hidden="true" \/>/);
+  assert.doesNotMatch(app.slice(app.indexOf("function AuthGate"), app.indexOf("function TitleBar")), /telnyx-link-logo\.png/);
   assert.match(app, /\{signedIn && memoryOpen && <MemoryModal/);
   assert.match(styles, /\.authGate\s*{/);
   assert.match(styles, /\.authGateCard\s*{/);
@@ -222,77 +437,140 @@ test("signed out users only see the Okta auth gate", async () => {
   assert.match(styles, /\.authGateIcon img\s*\{/);
 });
 
-test("Experto owns the skills catalog and squad kits", async () => {
+test("Wiki owns the tools and apps catalog", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
 
   assert.match(app, /function DojoView/);
-  assert.match(app, /Experto/);
-  assert.match(app, /ChessKnight/);
-  assert.match(app, /<header className="pageHeader">[\s\S]*?<h1>Experto Crede<\/h1>/);
+  assert.match(app, /Wiki/);
+  assert.match(app, /TriforceIcon/);
+  assert.match(app, /activePage === "wiki" \? \(/);
+  assert.match(app, /<PageSectionHeader parent="Wiki" title=\{activeWikiSourceTab\.title\} action=\{triforceHeaderAction\} \/>/);
+  assert.match(app, /<h1>\{dojoHeadingTitle\}<\/h1>/);
+  assert.doesNotMatch(app, /<PageSectionHeader parent="Wiki" title=\{activePage === "wiki" \? activeWikiSourceTab\.title : dojoHeadingTitle\} action=\{triforceHeaderAction\} \/>/);
   assert.doesNotMatch(app, /label:\s*"Dojo"/);
   assert.doesNotMatch(app, />Dojo</);
   assert.doesNotMatch(app, /dojoHeader/);
   assert.doesNotMatch(app, /dojoCard/);
   assert.doesNotMatch(app, /Start training/);
   assert.doesNotMatch(app, /skills mastered/);
-  assert.match(app, /squadKits/);
-  assert.match(app, /Search skills/);
+  assert.match(app, /Search apps/);
   assert.doesNotMatch(app, /Run selected/);
-  assert.match(app, /useState<"skills" \| "squads" \| "apps" \| "support" \| "developers" \| "wiki">\("skills"\)/);
-  assert.match(app, /aria-label="Experto sections"/);
-  assert.match(app, /\["skills", "Skills", Zap\]/);
-  assert.match(app, /\["squads", "Squads", Users\]/);
-  assert.match(app, /\["apps", "Apps", Store\]/);
-  assert.match(app, /\["support", "Help Center", BookOpen\]/);
-  assert.match(app, /\["developers", "Developer Docs", FileText\]/);
-  assert.match(app, /\["wiki", "Guru Wiki", BookOpen\]/);
-  assert.match(app, /Publish from local bot/);
+  assert.match(app, /type DojoTab = "apps" \| "skills" \| WikiSourceTab/);
+  assert.match(app, /type DojoPage = "apps" \| "skills" \| "wiki"/);
+  assert.match(app, /initialTab\?: Extract<DojoTab, "apps" \| "skills">/);
+  assert.match(app, /useState<DojoTab>\(initialTab \?\? "support"\)/);
+  assert.match(app, /label="Wiki sections"/);
+  assert.match(app, /pageSectionShell \$\{activePage === "wiki" \? "" : "pageSectionShellSingle"\}/);
+  assert.match(app, /className="pageSectionMain"/);
+  assert.match(app, /\["support", "Help", BookOpen\],[\s\S]*?\["developers", "Docs", FileText\],[\s\S]*?\["wiki", "Guru", BookOpen\],[\s\S]*?\["pylon", "Pylon", FileText\]/);
+  assert.doesNotMatch(app, /\["apps", "Apps", Grid2X2Plus\],[\s\S]*?\["skills", "Skills", Zap\],[\s\S]*?\["support", "Help", BookOpen\]/);
+  assert.doesNotMatch(app, /\["skills", "Tools", Zap\]/);
+  assert.doesNotMatch(app, /\["squads", "Squads", Users\]/);
+  assert.match(app, /Build from local bot/);
   assert.match(app, /function startPublishing\(option/);
   assert.doesNotMatch(app, /Start publishing/);
-  assert.match(app, /<h1>Experto Crede<\/h1>/);
+  assert.match(app, /pageSectionBreadcrumbParent/);
   assert.match(app, /activeAgent/);
   assert.match(app, /expertoHeaderActions/);
-  assert.match(app, /Agent: \$\{activeAgent\.displayName\}/);
-  assert.match(app, /Choose agent/);
+  assert.doesNotMatch(app, /Agent: \$\{activeAgent\.displayName\}/);
   assert.doesNotMatch(app, /Publish skills for Telnyx teams/);
   assert.doesNotMatch(app, /Installing to/);
   assert.doesNotMatch(app, /activeAgentInstallBanner/);
-  assert.match(app, /installSkill\(skill\)/);
+  assert.match(app, /installSkill\(trackedSkill\)/);
+  assert.match(app, /toggleSkillStar/);
+  assert.match(app, /recordSkillRegistryEvent/);
+  assert.match(app, /skillMarketplaceMeta/);
+  assert.match(app, /formatSkillUpdatedAt/);
+  assert.match(app, /formatCompactCount/);
   assert.match(app, /telnyx-link-installed-agent-skills/);
-  assert.match(app, /Choose an active agent on Agents > My Agents before installing skills/);
-  assert.match(app, /function renderSquadsTab/);
+  assert.match(app, /Choose an active agent on Agents > Personal before installing skills/);
   assert.match(app, /const \[filter, setFilter\]/);
   assert.match(app, /const \[sort, setSort\]/);
   assert.match(app, /dojoFilterButton/);
   assert.match(app, /dojoSelectField/);
-  assert.match(app, /Search squads or skills\.\.\./);
-  assert.match(app, /<h2>Your squads<\/h2>/);
-  assert.match(app, /<h2>Squad Skills<\/h2>/);
+  assert.doesNotMatch(app, /Search squads or skills\.\.\./);
+  assert.doesNotMatch(app, /title="Internal Tools"/);
+  assert.match(app, /tabPageActionBar/);
+  assert.doesNotMatch(app, /TabPageHeading/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Users\} title="Your Squads" className="dojoSectionHeading" \/>/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Zap\} title="Squad Skills" className="dojoSectionHeading" \/>/);
   assert.doesNotMatch(app, /Squad kits/);
-  assert.match(app, /dojoSectionHeading/);
-  assert.match(app, /dojoSkillList/);
-  assert.match(app, /toggleSquadKit/);
-  assert.match(app, /void runSkill\(skill\)/);
+  assert.doesNotMatch(app, /dojoSectionHeading/);
+  assert.match(app, /className="agentGrid dojoSkillList"/);
+  assert.match(app, /<Plus size=\{15\} \/>/);
+  assert.doesNotMatch(app, /className="skillCardActions"/);
   assert.match(app, /function renderAppsTab/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Grid2X2Plus\} title="Apps" \/>/);
+  assert.match(app, /tabPageActionBar[\s\S]*?refreshLocalDraftApps/);
+  assert.doesNotMatch(app, /aria-label="Squad Apps"/);
+  assert.doesNotMatch(app, /No squad apps yet/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Users\} title="Squad Apps" className="dojoSectionHeading" \/>/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Store\} title="Telnyx Apps" className="dojoSectionHeading" \/>/);
+  assert.match(app, /localDraftAppCard/);
+  assert.match(app, /appEmptyPanel/);
+  assert.match(app, /function renderWikiTab/);
+  assert.match(app, /wiki:\s*renderWikiTab/);
+  assert.doesNotMatch(app, /aria-label="Wiki sources"/);
+  assert.doesNotMatch(app, /setWikiSourceTab\(source\.id\)/);
   assert.match(app, /filteredApps\.map/);
-  assert.match(app, /externalQuery=\{query\}/);
-  assert.match(app, /externalSort=\{sort\}/);
+  assert.match(app, /filteredApps\.length > 0 \?/);
+  assert.match(app, /\.filter\(isEdgeHostedPublishedApp\)/);
+  assert.match(app, /function isEdgeHostedPublishedApp\(app: LinkPublishedApp\)/);
+  assert.match(app, /approvedPublishedAppHostSuffixes/);
+  assert.match(app, /hostname === suffix\.slice\(1\) \|\| hostname\.endsWith\(suffix\)/);
+  assert.doesNotMatch(app, /No apps found/);
+  assert.match(app, /function renderDocsSourceTab/);
+  assert.match(app, /<HelpCenterConsole selectedWorkspace=\{selectedWorkspace\} question=\{query\} setQuestion=\{setQuery\} sort=\{sort\} \/>/);
+  assert.match(app, /function HelpCenterConsole/);
+  assert.match(app, /helpCenterQuestionExamples/);
+  assert.match(app, /Ask Knowledge Agent/);
+  assert.match(app, /Slow responses can take up to 120 seconds/);
+  assert.match(app, /Copy bot-safe answer/);
+  assert.match(app, /Open sources/);
+  assert.match(app, /general Telnyx support and developer documentation questions only/);
+  assert.match(app, /Do not send secrets, private customer data, call logs, billing details, or account-specific identifiers/);
+  assert.doesNotMatch(app, /Public docs endpoint/);
+  assert.match(app, /linkApi\.askKnowledgeAgent\(\{ question: prompt \}\)/);
+  assert.match(app, /linkApi\.searchExplorer\(\{ query: term, workspaceId: selectedWorkspace\?\.id \}\)/);
+  assert.match(app, /result\.source === "telnyx_support" \|\| result\.source === "telnyx_developers"/);
+  assert.match(app, /No citations returned\. Use related sources before sharing externally\./);
+  assert.doesNotMatch(app, /This Wiki source is not available yet\./);
+  assert.match(app, /<div className="dojoContent">[\s\S]*?\{tabContent\(\)\}[\s\S]*?<\/div>/);
   assert.match(app, /function ExplorerView\(\{/);
-  assert.match(app, /ExplorerSourceTab = "support" \| "developers" \| "wiki" \| "local"/);
-  assert.match(app, /Help Center/);
-  assert.match(app, /Developer Docs/);
-  assert.match(app, /Company Wiki powered by Guru/);
-  assert.match(app, /Suggest improvement/);
+  assert.match(app, /ExplorerSourceTab = "support" \| "developers" \| "wiki" \| "pylon" \| "local"/);
+  assert.match(app, /type WikiSourceTab = Exclude<ExplorerSourceTab, "local">/);
+  assert.match(app, /type DojoTab = "apps" \| "skills" \| WikiSourceTab/);
+  assert.match(app, /const wikiSourceTabs = explorerSourceTabs\.filter\(\(source\): source is WikiSourceConfig => source\.id !== "local"\)/);
+  assert.match(app, /label:\s*"Dev Docs"/);
+  assert.match(app, /label:\s*"Help Center"/);
+  assert.match(app, /label:\s*"Guru"/);
+  assert.match(app, /label:\s*"Pylon"/);
+  assert.match(app, /sources:\s*\["pylon"\]/);
+  assert.match(app, /function suggestDocsUpdate/);
   assert.match(app, /docSourcesOnly/);
   assert.match(app, /docsSetupState/);
   assert.match(app, /No results found/);
+  assert.match(app, /externalQuery=\{query\}/);
+  assert.match(app, /externalSort=\{sort\}/);
+  assert.doesNotMatch(app, /Vault-backed docs relay/);
+  assert.doesNotMatch(app, /Open Docs access/);
   assert.match(app, /embeddedExplorerView/);
   assert.match(styles, /\.expertoTabs\s*{/);
+  assert.match(styles, /\.dojoView\s*\{[\s\S]*?overflow:\s*hidden/);
+  assert.match(styles, /\.dojoContent\s*\{[\s\S]*?flex:\s*0 0 auto[\s\S]*?min-height:\s*0[\s\S]*?overflow:\s*visible/);
   assert.match(styles, /\.embeddedExplorerView\s*{/);
+  assert.match(styles, /\.wikiView\s*{/);
   assert.match(styles, /\.explorerSourceTabs\s*{/);
   assert.match(styles, /\.explorerSourceHeader\s*{/);
   assert.match(styles, /\.explorerResultActions\s*{/);
+  assert.match(styles, /\.helpCenterConsole\s*{/);
+  assert.match(styles, /\.helpCenterConsole\s*\{[\s\S]*?align-content:\s*start/);
+  assert.match(styles, /\.helpCenterAskPanel,/);
+  assert.match(styles, /\.helpCenterQuestionComposer textarea\s*{/);
+  assert.match(styles, /\.helpCenterExamples button\s*{/);
+  assert.match(styles, /\.helpCenterAnswerBody > p\s*{/);
+  assert.match(styles, /\.helpCenterCitations a,/);
   assert.doesNotMatch(app, /Shirt/);
   assert.doesNotMatch(app, /skills from the Telnyx skills registry/);
   assert.match(app, /squadKitColumns/);
@@ -304,27 +582,39 @@ test("Experto owns the skills catalog and squad kits", async () => {
   assert.match(outboundProspectingSkill, /team: Sales/);
   assert.match(outboundProspectingSkill, /language: mcp/);
   assert.match(outboundProspectingSkill, /approval_required: true/);
-  assert.doesNotMatch(app, /view === "skills"/);
+  assert.doesNotMatch(app, /view === "help"/);
+  assert.doesNotMatch(app, /view === "docs"/);
+  assert.doesNotMatch(app, /view === "wiki"/);
+  assert.doesNotMatch(app, /view === "pylon"/);
   assert.match(styles, /\.squadKitColumns\s*{/);
   assert.match(styles, /\.squadKitColumns\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/);
-  assert.match(styles, /\.dojoSectionHeading h2\s*\{[\s\S]*?font-size:\s*18px/);
+  assert.doesNotMatch(styles, /\.dojoSectionHeading h2\s*\{/);
+  assert.doesNotMatch(styles, /\.tabPageHeading\s*\{/);
+  assert.match(styles, /\.tabPageActionBar\s*{/);
+  assert.match(styles, /\.clawHubButton\s*{/);
   assert.doesNotMatch(styles, /\.centeredLabel\s*{/);
   assert.match(styles, /\.squadKitHeader\s*\{[\s\S]*?min-height:\s*54px/);
   assert.match(styles, /\.squadKitHeader strong\s*\{[\s\S]*?font-size:\s*14px/);
   assert.match(styles, /\.squadKitSkillList\s*{/);
+  assert.match(styles, /\.squadKitSkillList\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/);
   assert.doesNotMatch(styles, /\.publishSkillsPanel\s*{/);
   assert.match(styles, /\.expertoHeaderActions\s*{/);
   assert.match(styles, /\.dojoToolbar\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(260px,\s*1fr\) 112px/);
   assert.match(styles, /\.dojoSelectField\s*{/);
-  assert.match(styles, /\.dojoSkillList\s*{/);
+  assert.match(styles, /\.appEmptyPanel\s*{/);
+  assert.match(styles, /\.localDraftAppCard\s*{/);
   assert.doesNotMatch(styles, /\.activeAgentInstallBanner\s*{/);
-  assert.match(styles, /\.skillCardActions\s*{/);
+  assert.doesNotMatch(styles, /\.skillCardActions\s*{/);
 });
 
 test("archive page mirrors memory sections without integration naming", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
   const main = await readFile("src/main/main.js", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
+  const titleBarSource = app.slice(app.indexOf("function TitleBar"), app.indexOf("function CodexBottomPanelIcon"));
+  const railSource = app.slice(app.indexOf("function Rail"), app.indexOf("function Sidebar"));
 
   assert.match(app, /Archive/);
   assert.match(app, /Refresh archive/);
@@ -336,6 +626,8 @@ test("archive page mirrors memory sections without integration naming", async ()
   assert.match(app, /type ArchiveTabId = "documents" \| "memories" \| "entities" \| "prompt" \| "settings"/);
   assert.match(app, /function ArchiveTabs/);
   assert.match(app, /<ArchiveTabs banks=\{banks\} openMemory=\{openMemory\} \/>/);
+  assert.match(app, /autoRecallKey/);
+  assert.match(app, /runRecallForQuery\(searchQuery\)/);
   assert.doesNotMatch(app, /label:\s*"API Keys"/);
   assert.doesNotMatch(app, />Console</);
   assert.match(app, /role="tablist" aria-label="Archive sections"/);
@@ -349,6 +641,12 @@ test("archive page mirrors memory sections without integration naming", async ()
   assert.match(app, /Quick add text/);
   assert.match(app, /Min mentions/);
   assert.match(app, /Retain/);
+  assert.match(app, /linkApi\.retainMemory/);
+  assert.match(main, /link:retain-memory/);
+  assert.match(main, /function retainMemory/);
+  assert.match(main, /\/v1\/default\/banks\/\$\{encodeURIComponent\(resolvedBankId\)\}\/memories/);
+  assert.match(main, /HINDSIGHT_BANK_ID/);
+  assert.match(api, /HINDSIGHT_BANK_ID/);
   assert.match(app, /Recall/);
   assert.match(app, /Reflect/);
   assert.match(styles, /\.archiveTabsSurface/);
@@ -377,7 +675,27 @@ test("onboarding is persisted, dismissible, and tied to setup steps", async () =
   assert.match(app, /Set up Agent Plugins/);
   assert.match(app, /Connect the accounts and plugin permissions Link can use/);
   assert.match(app, /Attach the squad archive/);
+  assert.match(app, /Internal testing readiness/);
+  assert.match(app, /First useful actions/);
+  assert.match(app, /Tester mission checklist/);
+  assert.match(app, /Feedback bundle/);
+  assert.match(app, /Report feedback/);
+  assert.match(app, /telnyx-link-internal-testing-checklist/);
+  assert.match(app, /startOnboardingPromptChat/);
+  assert.match(app, /startOnboardingSharedDraft/);
+  assert.match(app, /getWhisperStatus/);
+  assert.match(app, /getWebRtcStatus/);
+  assert.match(app, /Publisher\/VPN/);
+  assert.match(app, /Draft customer-safe update/);
+  assert.match(app, /Customer-visible actions should land in review/);
   assert.match(app, /Finish onboarding/);
+  assert.match(app, /icon:\s*ShieldCheck/);
+  assert.match(app, /icon:\s*Plug/);
+  assert.match(app, /icon:\s*Tags/);
+  assert.match(app, /icon:\s*ArchiveIcon/);
+  assert.match(app, /const StepIcon = step\.icon/);
+  assert.match(app, /!step\.complete && step\.action/);
+  assert.doesNotMatch(app, /step\.complete \? "OK"/);
   assert.doesNotMatch(app, /Training sessions/);
   assert.doesNotMatch(app, /trainingGrid/);
   assert.doesNotMatch(styles, /\.trainingGrid/);
@@ -389,11 +707,19 @@ test("onboarding is persisted, dismissible, and tied to setup steps", async () =
   assert.match(styles, /\.railDismiss\s*\{[\s\S]*?background:\s*transparent/);
   assert.match(styles, /\.railDismiss:hover,[\s\S]*?background:\s*var\(--surface-soft\)/);
   assert.match(styles, /\.onboardingGrid/);
+  assert.match(styles, /\.startReadinessGrid/);
+  assert.match(styles, /\.startActionGrid/);
+  assert.match(styles, /\.testerChecklistItem/);
+  assert.match(styles, /\.stepIcon svg\s*\{/);
 });
 
 test("widgets page exposes a report library for the home dashboard", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
+  const main = await readFile("src/main/main.js", "utf8");
+  const index = await readFile("index.html", "utf8");
+  const pkg = JSON.parse(await readFile("package.json", "utf8")) as { dependencies: Record<string, string> };
 
   assert.match(app, /function WidgetsView/);
   assert.match(app, /libraryOpen:\s*boolean/);
@@ -402,19 +728,25 @@ test("widgets page exposes a report library for the home dashboard", async () =>
   assert.match(app, /saveWidgetLayout/);
   assert.match(app, /refreshWidgetData/);
   assert.match(app, /WidgetChart/);
+  assert.match(app, /TableauEmbeddedWidget/);
+  assert.match(app, /TableauEventType\.FirstInteractive/);
+  assert.match(app, /TableauEventType\.SummaryDataChanged/);
+  assert.match(app, /document\.createElement\("tableau-viz"\)/);
   assert.match(app, /ResizeObserver/);
   assert.match(app, /LineChart/);
   assert.match(app, /BarChart/);
   assert.match(app, /AreaChart/);
-  assert.match(app, /No authorized Tableau widgets/);
+  assert.match(app, /No authorized widgets/);
+  assert.match(app, /icon=\{BarChart\}/);
   assert.match(app, /Search reports/);
   assert.match(app, /Add widget/);
   assert.match(app, /Widget library/);
+  assert.match(app, />\s*Add Widget\s*</);
   assert.match(app, /layoutEditing/);
   assert.match(app, /aria-pressed=\{layoutEditing\}/);
-  assert.match(app, />\s*Manage layout\s*</);
-  assert.match(app, /layoutEditing && \(/);
-  assert.match(app, />\s*Done\s*</);
+  assert.match(app, /layoutEditing \? "Done" : "Manage layout"/);
+  assert.match(app, /dashboardWidgets\.length >= 2 && \(/);
+  assert.match(app, /layoutEditing \? "Done" : "Manage layout"/);
   assert.doesNotMatch(app, /Home view/);
   assert.doesNotMatch(app, /Personal report snapshots/);
   assert.match(app, /startWidgetDrag/);
@@ -422,14 +754,31 @@ test("widgets page exposes a report library for the home dashboard", async () =>
   assert.match(app, /dropWidget/);
   assert.match(app, /draggable=\{layoutEditing\}/);
   assert.match(app, /libraryOpen \? \(/);
-  assert.match(styles, /\.widgetsView \.headerActions\s*{[^}]*margin-top:\s*4px/s);
+  assert.doesNotMatch(styles, /\.widgetsView \.headerActions\s*{[^}]*margin-top/s);
+  assert.match(styles, /\.widgetHomeGrid\s*\{[\s\S]*?flex:\s*1 1 auto[\s\S]*?min-height:\s*0/);
+  assert.match(styles, /\.widgetCanvas\s*\{[\s\S]*?flex:\s*1 1 auto[\s\S]*?min-height:\s*0/);
   assert.match(styles, /\.widgetLibraryTakeover\s*{/);
+  assert.doesNotMatch(styles, /calc\(100vh - 170px\)/);
   assert.match(styles, /\.widgetLibraryControls\s*{[^}]*grid-template-columns:\s*minmax\(260px,\s*1fr\) minmax\(320px,\s*420px\)/s);
   assert.match(styles, /\.widgetLibraryList\s*{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(220px,\s*1fr\)\)/s);
   assert.match(styles, /\.dashboardWidgetGrid\s*{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(220px,\s*1fr\)\)/s);
   assert.match(styles, /@keyframes widgetJiggle/);
   assert.match(styles, /\.dashboardWidgetGrid\.layoutEditing \.dashboardWidget/);
   assert.match(styles, /\.dashboardWidgetGrid\.layoutEditing \.dashboardWidget\.dropTarget/);
+  assert.match(styles, /\.dashboardWidget\.tableauEmbedWidget/);
+  assert.match(styles, /\.tableauWidgetEmbed/);
+  assert.match(api, /interface WidgetTableauEmbedSpec/);
+  assert.match(api, /renderMode\?: WidgetRenderMode/);
+  assert.match(api, /standard-revenue-overview/);
+  assert.match(api, /TABLEAU_REVENUE_OVERVIEW_URL/);
+  assert.match(api, /VITE_\$\{fieldName\}/);
+  assert.match(main, /standardTableauWidgetDefinitions/);
+  assert.match(main, /TABLEAU_REVENUE_OVERVIEW_URL/);
+  assert.match(main, /standardTableauWidgetCatalog/);
+  assert.match(main, /mergeWidgetCatalog/);
+  assert.match(index, /https:\/\/\*\.online\.tableau\.com/);
+  assert.doesNotMatch(index, /frame-src 'none'/);
+  assert.match(pkg.dependencies["@tableau/embedding-api"], /\^3\./);
   assert.match(styles, /\.widgetDataState/);
   assert.match(styles, /\.spinning/);
   assert.match(styles, /prefers-reduced-motion:\s*reduce/);
@@ -440,6 +789,10 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   const styles = await readFile("src/renderer/styles.css", "utf8");
   const api = await readFile("src/renderer/api.ts", "utf8");
   const main = await readFile("src/main/main.js", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
+  const appPublisher = await readFile("../../tools/link/src/app-publisher.ts", "utf8");
+  const linkCli = await readFile("../../tools/link/src/cli.ts", "utf8");
+  const localApp = await readFile("../../tools/link/src/local-app.ts", "utf8");
 
   assert.doesNotMatch(app, /id: "marketplace"/);
   assert.match(app, /function MarketplaceView/);
@@ -447,22 +800,120 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.match(app, /publishedApps/);
   assert.match(api, /interface LinkPublishedApp/);
   assert.match(main, /Link App Publisher/);
+  assert.match(main, /let livePublishedApps = \[\]/);
+  assert.match(main, /return mergePublishedApps\(livePublishedApps, publishedApps\)/);
+  assert.match(main, /return mergePublishedApps\(livePublishedApps, publishedApps\)\.find/);
+  assert.match(main, /return \[path\.join\(repoRoot, "edge-apps"\), path\.join\(repoRoot, "apps"\)\]/);
+  assert.doesNotMatch(main, /Only draft apps inside this repo's edge-apps or apps folders can be removed/);
+  assert.doesNotMatch(main, /liveApps\.length > 0 \? liveApps : defaultPublishedApps\(\)/);
+  assert.match(main, /function isPlaceholderPublishedApp/);
+  assert.match(main, /function isEdgeHostedPublishedApp/);
+  assert.match(main, /isAllowedLinkAppUrl\(url\)/);
+  assert.match(app, /approvedPublishedAppHostSuffixes/);
+  assert.match(app, /hostname === suffix\.slice\(1\) \|\| hostname\.endsWith\(suffix\)/);
+  assert.match(main, /app-carrier-readiness/);
+  assert.match(main, /app-release-desk/);
+  assert.match(main, /team-telnyx\/mcp-apps/);
+  assert.match(api, /let previewPublishedApps: LinkPublishedApp\[\] = \[\]/);
+  assert.match(main, /inspectLocalLinkApp/);
+  assert.match(main, /secureIpcHandle\("link:publisher-readiness"/);
+  assert.match(main, /function getPublisherReadiness/);
+  assert.match(main, /optionalPublisherHeaders/);
+  assert.match(main, /Connect VPN/);
+  assert.match(main, /function selectLocalPublishApp/);
+	  assert.match(main, /importLocalLinkApp/);
+	  assert.match(main, /extractZip/);
+	  assert.match(main, /secureIpcHandle\("link:edge-import-local-app"/);
+	  assert.match(main, /async function importLocalEdgeApp/);
+	  assert.match(main, /edge-apps", "personal", slug/);
+	  assert.match(main, /edge-apps", "company", slug/);
+	  assert.match(main, /secureIpcHandle\("link:edge-preview-local-app"/);
+	  assert.match(main, /async function previewLocalEdgeApp/);
+	  assert.match(main, /secureIpcHandle\("link:edge-deploy-local-app"/);
+	  assert.match(main, /async function deployLocalEdgeApp/);
+  assert.match(main, /Select Edge app directory/);
+  assert.match(main, /runAllowedLocalAppCommand/);
+  assert.match(main, /telnyx-edge did not return an approved Link app URL/);
+  assert.match(main, /\.telnyxcompute\.com/);
+	  assert.match(api, /interface LinkLocalEdgeDeployResult/);
+	  assert.match(api, /interface LinkLocalEdgeImportResult/);
+	  assert.match(api, /importLocalEdgeApp\(input\?: \{ scope\?: LinkLocalEdgeImportScope; slug\?: string; replaceExisting\?: boolean \}\): Promise<LinkLocalEdgeImportResult>/);
+	  assert.match(api, /previewLocalEdgeApp\(input\?: \{ directory\?: string; slug\?: string \}\): Promise<LinkLocalEdgeDeployResult>/);
+	  assert.match(api, /deployLocalEdgeApp\(input\?: \{ directory\?: string; slug\?: string; replaceExisting\?: boolean \}\): Promise<LinkLocalEdgeDeployResult>/);
+	  assert.match(localApp, /link-app\.yml/);
+	  assert.match(localApp, /export async function importLocalLinkApp/);
+	  assert.match(localApp, /Generated scripts\/link-build\.mjs/);
+  assert.match(localApp, /runGit\("rev-parse", "HEAD"\)/);
   assert.match(main, /POST/);
   assert.match(main, /\/apps\/\$\{encodeURIComponent\(appId\)\}\/versions/);
   assert.match(main, /\/apps\/\$\{encodeURIComponent\(appId\)\}\/reviews/);
+  assert.match(main, /\/apps\/\$\{encodeURIComponent\(appId\)\}\/rollback/);
+  assert.match(main, /\/apps\/\$\{encodeURIComponent\(appId\)\}\/ownership/);
+  assert.match(main, /\/apps\/\$\{encodeURIComponent\(appId\)\}\/deprecations/);
   assert.match(main, /\/apps\/\$\{encodeURIComponent\(appId\)\}\/duplicate/);
+  assert.match(appPublisher, /\/apps\/\{id\}\/versions|parts\[2\] === "versions"/);
+  assert.match(appPublisher, /parts\[2\] === "rollback"/);
+  assert.match(appPublisher, /parts\[2\] === "ownership"/);
+  assert.match(appPublisher, /parts\[2\] === "deprecations"/);
+  assert.match(appPublisher, /parts\[2\] === "deployments" && parts\[4\] === "logs"/);
+  assert.match(appPublisher, /\/readyz/);
+  assert.match(appPublisher, /requireAuthContext/);
+  assert.match(appPublisher, /Authenticated actor context enforced/);
+  assert.match(main, /publisherLocalFallbackEnabled/);
+  assert.match(main, /LINK_APP_PUBLISHER_LOCAL_FALLBACK/);
+  assert.match(linkCli, /LINK_APP_PUBLISHER_REQUIRE_AUTH_CONTEXT|--require-auth-context/);
+  assert.match(main, /X-Telnyx-Actor/);
+  assert.match(main, /X-Telnyx-Groups/);
+  assert.match(main, /X-On-Behalf-Of/);
   assert.match(app, /App Marketplace/);
   assert.match(app, /publishMenuOpen/);
-  assert.match(app, /Publish from local bot/);
-  assert.match(app, /Submit a private app to the managed publisher/);
+  assert.match(app, /Build from local bot/);
+  assert.match(app, /Build and deploy an Edge-hosted app with your bot/);
+  assert.match(app, /sourceRepo:\s*"https:\/\/github\.com\/team-telnyx\/link"/);
+  assert.match(app, /sourceSubdir:\s*"edge-apps"/);
   assert.match(app, /function renderPublishAppPanel/);
+  assert.match(app, /function renderPublisherReadiness/);
+  assert.doesNotMatch(app, /\{renderPublisherReadiness\(\)\}/);
+  assert.match(app, /publisherReadiness/);
+  assert.match(app, /publisherReachable/);
+  assert.match(app, /Connect VPN/);
+  assert.match(api, /interface LinkAppPublisherReadiness/);
+  assert.match(api, /interface EdgeComputeStatus/);
+  assert.match(api, /getPublisherReadiness/);
+  assert.match(api, /getEdgeComputeStatus\(\): Promise<EdgeComputeStatus>/);
+  assert.match(main, /defaultTelnyxEdgeApiEndpoint = "https:\/\/apidev\.telnyx\.com"/);
+  assert.match(main, /id:\s*"edge-compute"[\s\S]*?name:\s*"Telnyx Edge Compute"[\s\S]*?category:\s*"Apps"/);
+  assert.match(main, /function withTelnyxEdgeDevEndpoint/);
+  assert.match(main, /function ensureTelnyxEdgeDevConfig/);
+  assert.match(main, /api_endpoint = "\$\{defaultTelnyxEdgeApiEndpoint\}"/);
+  assert.match(main, /function telnyxEdgeCommandCandidates/);
+  assert.match(main, /process\.resourcesPath, "bin"/);
+  assert.match(main, /path\.resolve\(__dirname, "\.\.\/\.\.\/bin"\)/);
+  assert.match(main, /for \(const command of telnyxEdgeCommandCandidates\(\)\)/);
+  assert.match(main, /\["auth", "api-key", "set", apiKey\]/);
+  assert.match(preload, /getEdgeComputeStatus:\s*\(\) => ipcRenderer\.invoke\("link:edge-compute-status"\)/);
+  assert.match(preload, /importLocalEdgeApp:\s*\(input\) => ipcRenderer\.invoke\("link:edge-import-local-app", input\)/);
+  assert.match(preload, /previewLocalEdgeApp:\s*\(input\) => ipcRenderer\.invoke\("link:edge-preview-local-app", input\)/);
+  assert.match(app, /linkApi\.selectLocalPublishApp/);
+  assert.match(app, /linkApi\.importLocalEdgeApp/);
+  assert.match(app, /Import personal/);
+  assert.match(app, /Import company/);
+  assert.match(app, /Load link-app\.yml/);
   assert.match(app, /linkApi\.createPublishIntent/);
   assert.match(app, /linkApi\.openPublishedApp/);
   assert.match(app, /linkApi\.duplicatePublishedApp/);
   assert.match(app, /linkApi\.reviewPublishedApp/);
-  assert.match(app, /Publish a reusable bot skill/);
-  assert.match(app, /Share a local bot page/);
-  assert.match(app, /Publish a scheduled workflow/);
+  assert.match(app, /linkApi\.rollbackPublishedApp/);
+  assert.match(app, /linkApi\.deprecatePublishedApp/);
+  assert.match(main, /function duplicateCommandsForApp/);
+  assert.match(api, /commands\?: string\[\]/);
+  assert.match(app, /function isPublishedAppOpenable/);
+  assert.match(app, /!isPublishedAppOpenable\(app\)/);
+  assert.match(main, /function isPublishedAppOpenable/);
+  assert.match(main, /This app is not ready to open from Link/);
+  assert.doesNotMatch(app, /Package repeated bot work as a shareable Tool Studio skill/);
+  assert.match(app, /Build a local bot page/);
+  assert.match(app, /Build a scheduled workflow/);
   assert.match(app, /aria-haspopup="menu"/);
   assert.match(app, /role="menuitem"/);
   assert.match(app, /Open VPN/);
@@ -481,16 +932,173 @@ test("app marketplace uses the managed Link App Publisher catalog", async () => 
   assert.doesNotMatch(styles, /\.marketplaceSummary/);
   assert.doesNotMatch(styles, /\.marketplacePublish/);
   assert.match(styles, /\.publisherPanel\s*{/);
+  assert.match(styles, /\.publisherStatus\s*{/);
+  assert.match(styles, /\.publisherStatus\.danger\s*{/);
   assert.match(styles, /\.publisherForm\s*{/);
   assert.match(styles, /\.publisherSource\s*{/);
   assert.match(styles, /\.publishMenu\s*{/);
   assert.match(styles, /\.publishMenuHeader\s*{/);
   assert.match(styles, /\.publishMenu button\s*{/);
+  assert.match(styles, /\.publishMenu button > span\s*\{[\s\S]*?display:\s*grid/);
   assert.match(styles, /\.marketplaceGrid\s*{/);
   assert.match(styles, /\.marketplaceCard\s*{/);
 });
 
-test("renderer uses Telnyx media-kit brand colors", async () => {
+test("managed Link App Publisher API satisfies the desktop publish contract", async () => {
+  const server = createLinkAppPublisherServer(undefined, { requireAuth: true });
+  const listener = await listenLinkAppPublisherServer(server);
+  const headers = {
+    Authorization: "Bearer test-rev2-token",
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const publishResponse = await fetch(`${listener.url}/publish-intents`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        app: {
+          name: "Customer Signals Board",
+          slug: "customer-signals-board",
+          description: "Internal customer signal review board for squad handoffs.",
+          owner_squad: "customer-ops.squad",
+          audience: "Support, Product",
+          app_type: "web",
+          access: "vpn",
+          risk_level: "medium",
+          env_schema: ["TELNYX_API_KEY", "HINDSIGHT_BANK_ID"],
+          reviewers: ["customer-ops.squad", "link-platform.squad"],
+        },
+        source: {
+          repo: "https://github.com/team-telnyx/mcp-apps",
+          ref: "main",
+          subdir: "apps/customer-signals-board",
+        },
+        build: {
+          command: "npm run build",
+          output_dir: "dist",
+        },
+      }),
+    });
+    assert.equal(publishResponse.status, 202);
+    const publishPayload = (await publishResponse.json()) as {
+      mode: string;
+      app: { id: string; slug: string; status: string; access: string; previewUrl: string; sourceRepo: string };
+      version: { id: string; status: string; buildLogUrl: string };
+    };
+    assert.equal(publishPayload.mode, "managed");
+    assert.equal(publishPayload.app.id, "app-customer-signals-board");
+    assert.equal(publishPayload.app.access, "vpn");
+    assert.equal(publishPayload.app.status, "preview");
+    assert.equal(publishPayload.version.status, "preview");
+    assert.match(publishPayload.app.previewUrl, /^https:\/\/customer-signals-board\.link-apps-preview\.query\.prod\.telnyx\.io$/);
+    assert.equal(publishPayload.app.sourceRepo, "https://github.com/team-telnyx/mcp-apps");
+
+    const catalogResponse = await fetch(`${listener.url}/apps`, { headers: { Authorization: headers.Authorization } });
+    assert.equal(catalogResponse.status, 200);
+    const catalogPayload = (await catalogResponse.json()) as { apps: Array<{ slug: string; latestVersion: { buildLogUrl: string } }> };
+    assert.deepEqual(catalogPayload.apps.map((app) => app.slug), ["customer-signals-board"]);
+    assert.match(catalogPayload.apps[0].latestVersion.buildLogUrl, /\/logs\/version-/);
+
+    const deploymentsResponse = await fetch(`${listener.url}/apps/customer-signals-board/deployments`, { headers: { Authorization: headers.Authorization } });
+    assert.equal(deploymentsResponse.status, 200);
+    const deploymentsPayload = (await deploymentsResponse.json()) as { deployments: Array<{ id: string; target: string; status: string; logUrl: string }> };
+    assert.deepEqual(deploymentsPayload.deployments.map((deployment) => `${deployment.target}:${deployment.status}`), ["preview:succeeded"]);
+    assert.match(deploymentsPayload.deployments[0].logUrl, /\/logs\/version-/);
+
+    const deploymentLogsResponse = await fetch(`${listener.url}/apps/customer-signals-board/deployments/${deploymentsPayload.deployments[0].id}/logs`, { headers: { Authorization: headers.Authorization } });
+    assert.equal(deploymentLogsResponse.status, 200);
+    const deploymentLogsPayload = (await deploymentLogsResponse.json()) as { deployment: { id: string }; logs: string };
+    assert.equal(deploymentLogsPayload.deployment.id, deploymentsPayload.deployments[0].id);
+    assert.match(deploymentLogsPayload.logs, /record-only mode/);
+
+    const versionResponse = await fetch(`${listener.url}/apps/customer-signals-board/versions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        source_repo: "https://github.com/team-telnyx/mcp-apps",
+        source_ref: "release-v2",
+        source_subdir: "apps/customer-signals-v2",
+      }),
+    });
+    assert.equal(versionResponse.status, 202);
+    const versionPayload = (await versionResponse.json()) as { app: { sourceRef: string; sourceSubdir: string }; version: { sourceRef: string } };
+    assert.equal(versionPayload.app.sourceRef, "release-v2");
+    assert.equal(versionPayload.version.sourceRef, "release-v2");
+
+    const versionsResponse = await fetch(`${listener.url}/apps/customer-signals-board/versions`, { headers: { Authorization: headers.Authorization } });
+    assert.equal(versionsResponse.status, 200);
+    const versionsPayload = (await versionsResponse.json()) as { versions: Array<{ sourceRef: string }> };
+    assert.deepEqual(new Set(versionsPayload.versions.map((version) => version.sourceRef)), new Set(["main", "release-v2"]));
+
+    const reviewResponse = await fetch(`${listener.url}/apps/app-customer-signals-board/reviews`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ decision: "approve", notes: "Approved for VPN preview." }),
+    });
+    assert.equal(reviewResponse.status, 200);
+    const reviewPayload = (await reviewResponse.json()) as { app: { status: string; vpnUrl: string; deployedUrl: string } };
+    assert.equal(reviewPayload.app.status, "approved");
+    assert.equal(reviewPayload.app.vpnUrl, "https://customer-signals-board.apps.telnyx.io");
+    assert.equal(reviewPayload.app.deployedUrl, "https://customer-signals-board.apps.telnyx.io");
+
+    const rollbackResponse = await fetch(`${listener.url}/apps/customer-signals-board/rollback`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ version_id: publishPayload.version.id, notes: "Rollback to first reviewed version." }),
+    });
+    assert.equal(rollbackResponse.status, 200);
+    const rollbackPayload = (await rollbackResponse.json()) as { app: { sourceRef: string; sourceSubdir: string; status: string } };
+    assert.equal(rollbackPayload.app.status, "approved");
+    assert.equal(rollbackPayload.app.sourceRef, "main");
+    assert.equal(rollbackPayload.app.sourceSubdir, "apps/customer-signals-board");
+
+    const duplicateResponse = await fetch(`${listener.url}/apps/customer-signals-board/duplicate`, {
+      method: "POST",
+      headers: { Authorization: headers.Authorization },
+    });
+    assert.equal(duplicateResponse.status, 200);
+    const duplicatePayload = (await duplicateResponse.json()) as { action: string; source_repo: string; source_ref: string; source_subdir: string; command: string; commands: string[]; path: string };
+    assert.equal(duplicatePayload.action, "source_ref");
+    assert.equal(duplicatePayload.source_repo, "https://github.com/team-telnyx/mcp-apps");
+    assert.equal(duplicatePayload.source_ref, "main");
+    assert.equal(duplicatePayload.source_subdir, "apps/customer-signals-board");
+    assert.deepEqual(duplicatePayload.commands, [
+      "git clone 'https://github.com/team-telnyx/mcp-apps' 'customer-signals-board'",
+      "cd 'customer-signals-board'",
+      "git checkout 'main'",
+      "cd 'apps/customer-signals-board'",
+    ]);
+    assert.equal(duplicatePayload.command, duplicatePayload.commands.join(" && "));
+    assert.equal(duplicatePayload.path, "customer-signals-board/apps/customer-signals-board");
+
+    const ownershipResponse = await fetch(`${listener.url}/apps/customer-signals-board/ownership`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ owner_squad: "signals-platform.squad", reviewers: ["signals-platform.squad"] }),
+    });
+    assert.equal(ownershipResponse.status, 200);
+    const ownershipPayload = (await ownershipResponse.json()) as { app: { ownerSquad: string; reviewers: string[] } };
+    assert.equal(ownershipPayload.app.ownerSquad, "signals-platform.squad");
+    assert.deepEqual(ownershipPayload.app.reviewers, ["signals-platform.squad"]);
+
+    const deprecateResponse = await fetch(`${listener.url}/apps/customer-signals-board/deprecations`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ notes: "Superseded." }),
+    });
+    assert.equal(deprecateResponse.status, 200);
+    const deprecatePayload = (await deprecateResponse.json()) as { app: { status: string } };
+    assert.equal(deprecatePayload.app.status, "deprecated");
+
+    const unauthorizedResponse = await fetch(`${listener.url}/apps`);
+    assert.equal(unauthorizedResponse.status, 401);
+  } finally {
+    await listener.close();
+  }
+});
+
+test("renderer uses neutral design-system color labels", async () => {
   const styles = await readFile("src/renderer/styles.css", "utf8");
   const main = await readFile("src/main/main.js", "utf8");
   const app = await readFile("src/renderer/App.tsx", "utf8");
@@ -499,17 +1107,45 @@ test("renderer uses Telnyx media-kit brand colors", async () => {
   assert.match(styles, /--telnyx-black:\s*#000000/i);
   assert.match(styles, /--accent:\s*var\(--telnyx-green\)/);
   assert.match(main, /--accent:\s*#00E3AA/);
-  assert.match(app, /Telnyx Green/);
-  assert.match(app, /Telnyx Black/);
+  assert.doesNotMatch(app, /\[".* Green", "--telnyx-green"\]/);
+  assert.doesNotMatch(app, /\[".* Black", "--telnyx-black"\]/);
 });
 
 test("page layouts use full-width app canvas", async () => {
   const styles = await readFile("src/renderer/styles.css", "utf8");
 
-  assert.match(styles, /\.content\s*{[^}]*padding:\s*14px/s);
-  assert.match(styles, /\.content\s*{[^}]*gap:\s*14px/s);
-  assert.match(styles, /\.assistantPanel\s*{[^}]*padding:\s*14px/s);
+  assert.match(styles, /--app-top-inset:\s*14px/);
+  assert.match(styles, /--app-bottom-inset:\s*14px/);
+  assert.match(styles, /--top-row-gap:\s*14px/);
+  assert.match(styles, /--top-control-height:\s*40px/);
+  assert.match(styles, /--rail-top-inset:\s*var\(--app-top-inset\)/);
+  assert.match(styles, /\.rail\s*{[^}]*padding:\s*var\(--rail-top-inset\) 7px 10px/s);
+  assert.match(styles, /\.content\s*{[^}]*padding:\s*var\(--app-top-inset\) 14px max\(var\(--app-bottom-inset\), 20px\)/s);
+  assert.match(styles, /\.content\s*{[^}]*scroll-padding-bottom:\s*var\(--app-bottom-inset\)/s);
+  assert.match(styles, /\.content > :last-child\s*{[^}]*margin-bottom:\s*0/s);
+  assert.match(styles, /\.content\s*{[^}]*gap:\s*var\(--top-row-gap\)/s);
+  assert.match(styles, /\.assistantPanel\s*{[^}]*gap:\s*var\(--top-row-gap\)/s);
+  assert.match(styles, /\.assistantPanel\s*{[^}]*padding:\s*var\(--app-top-inset\) 14px var\(--app-bottom-inset\)/s);
+  assert.match(styles, /\.assistantTabs\s*{[^}]*height:\s*var\(--top-control-height\)/s);
+  assert.match(styles, /\.phoneTabs,[\s\S]*?\.agentTabs,[\s\S]*?\.expertoTabs,[\s\S]*?\.settingsTabs\s*\{[\s\S]*?height:\s*var\(--top-control-height\)[\s\S]*?border:\s*1px solid var\(--border\)/);
+  assert.match(styles, /\.phoneTabs button,[\s\S]*?\.agentTabs button,[\s\S]*?\.expertoTabs button,[\s\S]*?\.settingsTabs button\s*\{[\s\S]*?height:\s*30px[\s\S]*?border:\s*0/);
+  assert.match(styles, /\.phoneTabs button\.selected,[\s\S]*?\.agentTabs button\.selected,[\s\S]*?\.expertoTabs button\.selected,[\s\S]*?\.settingsTabs button\.selected\s*\{[\s\S]*?box-shadow:\s*inset 0 0 0 1px var\(--border-soft\)/);
+  assert.match(styles, /\.pageHeader \.button\.primary\s*{[^}]*height:\s*var\(--top-control-height\)/s);
+  assert.match(styles, /\.pageHeader\s*{[^}]*min-height:\s*var\(--top-control-height\)/s);
+  assert.match(styles, /\.pageHeader h1\s*{[^}]*min-height:\s*var\(--top-control-height\)[^}]*line-height:\s*1/s);
   assert.match(styles, /\.pageHeader\s*{[^}]*margin-bottom:\s*0/s);
+  assert.match(styles, /\.settingsTabs\s*{[^}]*margin:\s*0;/s);
+  assert.match(styles, /\.agentTabs\s*{[^}]*margin:\s*0 auto;/s);
+  assert.match(styles, /\.expertoTabs\s*{[^}]*margin:\s*0 auto;/s);
+  assert.match(styles, /\.explorerResults,[\s\S]*?\.skillCatalog,[\s\S]*?\.agentGrid\s*\{[\s\S]*?margin-top:\s*0;/s);
+  assert.match(styles, /\.workboardSearchRow\s*\{[\s\S]*?margin:\s*0;/s);
+  assert.match(styles, /\.workboardToolbar\s*\{[\s\S]*?margin-bottom:\s*0;/s);
+  assert.match(styles, /\.calendarControls\s*\{[\s\S]*?margin-bottom:\s*0;/s);
+  assert.match(styles, /\.calendarFilterPanel\s*\{[\s\S]*?margin:\s*0 0 0 56px;/s);
+  assert.match(styles, /\.dojoToolbar\s*\{[\s\S]*?margin:\s*0 auto;/s);
+  assert.match(styles, /\.recallList\s*\{[\s\S]*?margin-top:\s*0;/s);
+  assert.match(styles, /\.designTabs\s*{[^}]*margin-bottom:\s*14px;/s);
+  assert.match(styles, /\.phoneTabs\s*{[^}]*margin-bottom:\s*0;/s);
   assert.match(styles, /\.appSurface\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*2fr\) minmax\(340px,\s*1fr\)/s);
   assert.match(styles, /\.pageSurface > \.content\s*{[^}]*height:\s*100%/s);
   assert.doesNotMatch(styles, /max-width:\s*(920|940|980)px/);
@@ -518,7 +1154,7 @@ test("page layouts use full-width app canvas", async () => {
   assert.match(styles, /\.settingsView \.pageHeader,[\s\S]*?width:\s*100%/);
 });
 
-test("settings uses tabs for credentials theme and design system", async () => {
+test("settings uses auth plugins speech and design tabs with nested sections", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const api = await readFile("src/renderer/api.ts", "utf8");
   const main = await readFile("src/main/main.js", "utf8");
@@ -526,15 +1162,45 @@ test("settings uses tabs for credentials theme and design system", async () => {
   const styles = await readFile("src/renderer/styles.css", "utf8");
 
   assert.doesNotMatch(api, /\|\s*"design"/);
-  assert.match(app, /setTab\] = useState<"credentials" \| "theme" \| "design">\("credentials"\)/);
-  for (const label of ["Credentials", "Link Theme", "Design System"]) {
+  assert.match(app, /settingsTab, setSettingsTab\] = useState<SettingsTab>\("auth"\)/);
+  assert.doesNotMatch(app, /setSetupTab/);
+  assert.match(app, /\["auth", "Auth", ShieldCheck\]/);
+  assert.match(app, /\["plugins", "Plugins", Plug\]/);
+  assert.match(app, /\["contacts", "Contacts", Users\]/);
+  assert.match(app, /\["assistants", "Assistants", Bot\]/);
+  assert.match(app, /\["numbers", "Numbers", PhoneCall\]/);
+  assert.match(app, /\["agents", "Agents", Bot\]/);
+  assert.match(app, /\["speak", "Speech", Mic\]/);
+  assert.match(app, /\["dialer", "Dialer Builder", Keyboard\]/);
+  assert.match(app, /\["design", "Design System", Grid2X2\]/);
+  assert.match(app, /className="pageSectionShell"/);
+  assert.match(app, /label="Settings sections"/);
+  assert.match(app, /className="pageSectionSidebar"/);
+  assert.match(app, /className="pageSectionMain"/);
+  assert.match(app, /<PageSectionHeader parent="Settings" title=\{settingsHeadingTitle\} \/>/);
+  assert.doesNotMatch(app, /aria-label="Setup sections"/);
+  assert.doesNotMatch(app, /\["credentials", "Credentials", ShieldCheck\]/);
+  for (const label of ["Auth", "Plugins", "Contacts", "Assistants", "Numbers", "Agents", "Dialer Builder", "Speech", "Design System"]) {
     assert.match(app, new RegExp(label));
   }
+  assert.match(app, /className="mcpsPanel pluginsSettingsPanel"/);
+  assert.match(app, /tab === "auth" && renderAuthTab\(\)/);
+  assert.match(app, /tab === "plugins" && renderPluginsTab\(\)/);
+  assert.match(app, /showHeader=\{false\}/);
+  const settingsSource = app.slice(app.indexOf("function SettingsView"), app.indexOf("function CredentialSection"));
+  assert.doesNotMatch(settingsSource, /\|\s*"theme"/);
+  assert.doesNotMatch(settingsSource, /\["theme", "Dark Mode", Sun\]/);
+  assert.doesNotMatch(settingsSource, /tab === "theme"/);
+  assert.doesNotMatch(settingsSource, /themeSettingsCard/);
+  assert.doesNotMatch(settingsSource, /themeColorControl/);
   assert.doesNotMatch(app, /\["troubleshooting", "Troubleshooting"\]/);
   assert.doesNotMatch(app, /tab === "troubleshooting"/);
   assert.doesNotMatch(app, /useState<"my-agents" \| "credentials" \| "troubleshooting" \| "design">/);
+  assert.doesNotMatch(app, /useState<"credentials" \| "plugins" \| "speak" \| "dialer" \| "design">/);
   assert.doesNotMatch(app, /\["access", "Access"\]/);
   assert.doesNotMatch(app, /\["plugins", "Agent Plugins"\]/);
+  const settingsViewSource = app.slice(app.indexOf("function SettingsView"), app.indexOf("function SpeakSettingsPanel"));
+  assert.doesNotMatch(settingsViewSource, /className="settingsTabs" role="tablist" aria-label="Settings sections"/);
   assert.doesNotMatch(api, /connector\("aida", "AIDA", "Agent tools"/);
   assert.match(main, /id:\s*"aida"[\s\S]*?name:\s*"AIDA"[\s\S]*?category:\s*"Agent tools"/);
   assert.match(main, /id:\s*"telnyx-docs"[\s\S]*?name:\s*"Telnyx Docs"[\s\S]*?category:\s*"Knowledge"/);
@@ -545,9 +1211,24 @@ test("settings uses tabs for credentials theme and design system", async () => {
   assert.match(app, /data-theme=\{colorMode\}/);
   assert.match(app, /setColorMode\(colorMode === "dark" \? "light" : "dark"\)/);
   assert.match(app, /<DesignSystemView embedded \/>/);
+  const designSystemSource = app.slice(app.indexOf("function DesignSystemView"), app.indexOf("function MemoryModal"));
+  assert.match(designSystemSource, /useState<"colors" \| "components" \| "surfaces" \| "typography" \| "agents">\("components"\)/);
+  assert.match(designSystemSource, /\["colors", "Colors", Sun\][\s\S]*?\["components", "Components", Component\][\s\S]*?\["surfaces", "Surfaces", LayoutDashboard\][\s\S]*?\["typography", "Typography", FileText\][\s\S]*?\["agents", "Agents", Bot\]/);
+  assert.match(designSystemSource, /Embedded app contract/);
+  assert.match(designSystemSource, /Agent instruction preview/);
+  assert.match(designSystemSource, /telnyx-link-theme/);
+  assert.doesNotMatch(designSystemSource, /\["spacing", "Spacing", LayoutDashboard\]/);
+  assert.doesNotMatch(designSystemSource, /\["chat", "Chat", MessageSquare\]/);
+  assert.doesNotMatch(designSystemSource, /\["backend", "Backend", SquareTerminal\]/);
+  assert.doesNotMatch(designSystemSource, /\["skills", "Skills", Zap\]/);
+  assert.doesNotMatch(designSystemSource, /Agent-facing backend contracts/);
+  assert.doesNotMatch(designSystemSource, /Git-ready skill structure/);
+  assert.doesNotMatch(designSystemSource, /tools\/link\/skills/);
+  assert.doesNotMatch(designSystemSource, /open a PR so reviewers can validate metadata/);
   assert.match(app, /function CredentialSection/);
   assert.match(app, /isRequiredCredentialGroup/);
   assert.match(app, /group\.id !== "agent-control-plane"/);
+  assert.doesNotMatch(app, /connectors\.find\(\(connector\) => connector\.id === "agent-control-plane"\)/);
   assert.match(app, /group\.id !== "mcp-proxy"/);
   assert.match(main, /id:\s*"agent-control-plane",\s*label:\s*"Agent Control Plane"[\s\S]*?fields:\s*\["AUTH_INTERNAL_URL", "TELNYX_AUTH_REV2"\]/);
   assert.match(main, /const loginUrl = authInternalAuthorizationUrl\(callbackServer\.callbackUrl, state\)/);
@@ -562,49 +1243,183 @@ test("settings uses tabs for credentials theme and design system", async () => {
   assert.match(main, /function openAgentControlPlaneSetup/);
   assert.match(main, /AGENT_CONTROL_PLANE_ADD_AGENT_URL/);
   assert.match(main, /new URL\("\/agents\/new", `\$\{agentControlPlaneUrl\(\)\}\/`\)/);
-  assert.match(preload, /openAgentControlPlaneSetup:\s*\(\) => ipcRenderer\.invoke\("link:agent-control-plane-open-setup"\)/);
+  assert.match(preload, /openAgentControlPlaneSetup:\s*\(input\) => ipcRenderer\.invoke\("link:agent-control-plane-open-setup", input\)/);
   assert.doesNotMatch(main, /linkOktaSignInHtml/);
   assert.doesNotMatch(main, /Telnyx internal auth relay/);
   assert.match(api, /credentials\("agent-control-plane", "Agent Control Plane"/);
   assert.doesNotMatch(api, /credentials\("telnyx-okta", "Telnyx Okta"/);
   assert.doesNotMatch(main, /label:\s*"Telnyx Okta"/);
   assert.match(app, /compareCredentialGroups/);
-  assert.match(app, /<CredentialSection title="Required" groups=\{requiredCredentials\}>/);
+  assert.match(app, /<CredentialSection title="" groups=\{requiredCredentials\}>/);
   assert.doesNotMatch(app, /<CredentialSection title="Optional" groups=\{optionalCredentials\}>/);
   assert.match(styles, /\.credentialCard\.expanded\s*\{[\s\S]*?box-shadow:\s*none/);
   assert.match(styles, /\.credentialSummary:focus\s*\{[\s\S]*?outline:\s*0/);
+  assert.match(styles, /\.credentialSummary\s*\{[\s\S]*?grid-template-columns:\s*48px minmax\(0,\s*1fr\) 30px 28px[\s\S]*?min-height:\s*62px/);
+  assert.match(styles, /\.credentialIcon\s*\{[\s\S]*?width:\s*48px[\s\S]*?height:\s*48px/);
+  assert.match(styles, /\.credentialSectionList\s*\{[\s\S]*?gap:\s*8px/);
+  assert.match(styles, /\.credentialChevron\s*\{[\s\S]*?justify-self:\s*end/);
   assert.match(app, /function CredentialGroupCards/);
   assert.match(app, /groups=\{requiredCredentials\}/);
   assert.match(app, /setGroups=\{setCredentials\}/);
   assert.match(app, /credentialFieldLabel/);
   assert.match(app, /if \(name === "LITELLM_API_KEY"\) return "LiteLLM API Key"/);
-  assert.match(app, /https:\/\/telnyx\.enterprise\.slack\.com\/archives\/D0995UB1PLY/);
-  assert.match(app, />\s*AI-swe-Agent\s*<\/a>/);
+  assert.match(app, /Ask AI-swe-Agent in Slack for your LiteLLM key/);
   assert.match(main, /id:\s*"litellm"[\s\S]*?fields:\s*\["LITELLM_API_KEY"\]/);
-  assert.match(api, /credentials\("litellm", "Telnyx LiteLLM"[\s\S]*?\["LITELLM_API_KEY"\]\)/);
+  assert.match(api, /credentials\("litellm", "Telnyx Inference"[\s\S]*?\["LITELLM_API_KEY"\]\)/);
+  assert.match(main, /id:\s*"litellm", label:\s*"Telnyx Inference"/);
+  assert.match(main, /id:\s*"telnyx", label:\s*"Telnyx API Key"/);
+  assert.match(main, /\{\s*id:\s*"guru", label:\s*"Guru"/);
+  assert.match(api, /credentials\("guru", "Guru"/);
+  assert.match(main, /\{\s*id:\s*"pylon", label:\s*"Pylon"/);
+  assert.match(api, /credentials\("pylon", "Pylon"/);
+  assert.match(api, /"PYLON_MCP_CLIENT_ID"/);
+  assert.match(api, /"PYLON_MCP_REFRESH_TOKEN"/);
+  assert.match(main, /pylonMcpAllowedTools/);
+  assert.match(main, /connectPylonWithOAuth/);
+  assert.match(main, /requestPylonDeviceCode/);
+  assert.match(main, /sourceRepo:\s*"team-telnyx\/pylon-mcp-server"/);
+  assert.match(main, /"create_issue"/);
+  assert.match(main, /pylonMcpBlockedTools/);
+  assert.match(main, /"update_issue"/);
+  assert.match(main, /"update_account"/);
+  assert.match(preload, /connectPylonWithOAuth:\s*\(\) => ipcRenderer\.invoke\("link:pylon-connect-oauth"\)/);
+  assert.match(preload, /createPylonIssue:\s*\(input\) => ipcRenderer\.invoke\("link:pylon-create-issue", input\)/);
+  assert.match(preload, /connectGuruWithOAuth/);
+  assert.match(app, /const visibleFields = group\.id === "guru" \|\| group\.id === "pylon" \? \[\] : visibleCredentialFields\(group\)/);
+  assert.match(app, /async function connectPylon/);
+  assert.match(app, /Link opens Pylon OAuth and stores the MCP refresh token securely/);
+  assert.match(app, /className=\{`credentialStatusIcon \$\{connected \? "connected" : "disconnected"\}`\}/);
+  assert.match(app, /<Check size=\{15\} strokeWidth=\{3\} \/> : <X size=\{15\} strokeWidth=\{3\} \/>/);
+  assert.match(app, /limitWords\(credentialHelpCopy\(group\)\)/);
+  assert.match(styles, /\.credentialStatusIcon\.connected\s*\{/);
+  assert.match(styles, /\.credentialStatusIcon\.disconnected\s*\{/);
+  assert.match(app, /className="credentialRowInfo"/);
+  assert.match(styles, /\.credentialRowInfo\s*\{/);
+  assert.match(styles, /\.credentialDescription\s*\{[\s\S]*?border-top:\s*1px solid var\(--border-soft\)/);
+  assert.match(styles, /\.credentialManagedSkillConnect\s*\{[\s\S]*?grid-template-columns:\s*48px minmax\(0,\s*1fr\) 112px 28px/);
+  assert.match(styles, /\.credentialManagedSkillConnect div\s*\{[\s\S]*?grid-column:\s*1 \/ 3/);
+  assert.match(styles, /\.credentialManagedSkillConnect \.button\s*\{[\s\S]*?grid-column:\s*3/);
+  assert.doesNotMatch(app, /"mintlify-developer-docs", "guru"/);
+  assert.match(main, /help:\s*"Telnyx API key for account, phone, messaging, and WebRTC token generation\."/);
+  assert.doesNotMatch(main, /Link can create and save TELNYX_WEBRTC_CONNECTION_ID and TELNYX_WEBRTC_CREDENTIAL_ID automatically/);
+  assert.doesNotMatch(main, /The client secret is optional for installed-app OAuth clients/);
+  assert.match(app, /return left\.label\.localeCompare\(right\.label, undefined, \{ sensitivity: "base" \}\)/);
   assert.doesNotMatch(main, /fields:\s*\["LITELLM_API_KEY", "LITELLM_MODEL"\]/);
   assert.doesNotMatch(api, /\["LITELLM_API_KEY", "LITELLM_MODEL"\]/);
   assert.doesNotMatch(app, /\{missingCount\} missing/);
   assert.doesNotMatch(app, /Saved values are write-only and encrypted in Electron secure storage/);
   assert.doesNotMatch(app, /<Badge tone=\{field\.configured \? "success" : "warning"\}>\{field\.source\}<\/Badge>/);
-  assert.match(app, /credentialSavedBadge/);
-  assert.match(styles, /\.credentialSavedBadge\s*\{[\s\S]*?background:\s*var\(--surface-soft\)/);
+  assert.doesNotMatch(app, /\$\{configuredCount\}\/\$\{group\.fields\.length\} saved/);
+  assert.doesNotMatch(app, /credentialSavedBadge/);
+  assert.match(app, /function CredentialLogoMark/);
+  assert.match(app, /import\.meta\.env\.BASE_URL\}credential-logos\/google-logo\.jpeg/);
+  assert.match(app, /onError=\{\(\) => setImageFailed\(true\)\}/);
+  assert.match(app, /credentialGoogleMark/);
+  assert.match(app, /credentialGitHubMark/);
+  assert.match(app, /credentialLiteLlmMark/);
+  assert.match(app, /credentialTelnyxMark/);
+  assert.match(app, /className=\{`credentialIcon credentialIcon-\$\{group\.id\}`\}/);
+  assert.match(app, /className="credentialChevron"[\s\S]*?<ChevronDown size=\{22\}/);
+  assert.match(app, /function visibleCredentialFields/);
+  assert.match(app, /if \(group\.id === "github"\) return false/);
+  assert.match(app, /group\.id === "telnyx" && field\.name !== "TELNYX_API_KEY"/);
+  assert.match(app, /function credentialGroupConnected/);
+  assert.match(app, /const connected = credentialGroupConnected\(group, connectors, googleWorkspaceConnected, visibleFields\)/);
+  assert.match(app, /field\.configured && !credentialDrafts\[field\.name\]\?\.trim\(\) \? "Connected" : "Connect"/);
+  assert.match(app, /connectGitHub/);
+  assert.match(app, /connectGitHubWithDeviceFlow/);
+  assert.match(app, /managedCredentialAction/);
+  assert.match(app, /Link pairs GitHub and stores the read-only app token securely/);
+  assert.match(preload, /connectGitHubWithDeviceFlow:\s*\(\) => ipcRenderer\.invoke\("link:github-connect-device"\)/);
+  assert.match(main, /secureIpcHandle\("link:github-connect-device", \(\) => connectGitHubWithDeviceFlow\(\)\)/);
+  assert.match(main, /function connectGitHubWithDeviceFlow/);
+  assert.match(main, /connectGitHubWithDeveloperTokenFallback/);
+  assert.match(main, /githubDeveloperFallbackToken/);
+  assert.match(main, /execFileAsync\("gh", \["auth", "token"\]/);
+  assert.match(main, /requestGitHubDeviceCode/);
+  assert.match(main, /pollGitHubDeviceToken/);
+  assert.match(main, /githubUserAccessTokenField/);
+  assert.match(main, /githubAppVerificationRepo = "team-telnyx\/link"/);
+  assert.match(main, /githubAppDeviceVerificationRepo/);
+  assert.match(main, /linkDesktopConfigValue\("githubAppClientId"\)/);
+  assert.match(main, /link-desktop-config\.json/);
+  assert.match(main, /LINK_GITHUB_APP_VERIFY_REPO/);
+  assert.match(main, /readGitHubRepoTextWithToken\("README\.md", token\.access_token, verificationRepo\)/);
+  assert.match(app, /connectGoogleWorkspace/);
+  assert.match(app, /connectGoogleWorkspaceWithSkill/);
+  assert.match(app, /managedAction \? \(/);
+  assert.match(app, /Link opens Google sign-in and verifies Calendar and Contacts access/);
+  assert.match(app, /if \(group\.id === "google-workspace"\) return false/);
+  assert.match(preload, /connectGoogleWorkspaceWithSkill:\s*\(\) => ipcRenderer\.invoke\("link:google-workspace-connect-skill"\)/);
+  assert.match(main, /secureIpcHandle\("link:google-workspace-connect-skill", \(\) => connectGoogleWorkspaceWithSkill\(\)\)/);
+  assert.match(main, /function connectGoogleWorkspaceWithSkill/);
+  assert.match(main, /resolveGoogleWorkspaceSetupUtilityMetadata/);
+  assert.match(main, /googleWorkspaceSetupUtilsRepo = "team-telnyx\/openclaw-itops-setup-utils"/);
+  assert.match(main, /googleWorkspaceSetupScriptPath = "gog-setup"/);
+  assert.match(main, /ensureGoogleWorkspaceGogAuthorized/);
+  assert.match(main, /resolveGogCommand/);
+  assert.match(main, /gogCommandCandidates/);
+  assert.match(main, /process\.resourcesPath, "bin"/);
+  assert.match(main, /path\.resolve\(__dirname, "\.\.\/\.\.\/bin"\)/);
+  assert.match(main, /stageGoogleWorkspaceSetupUtility/);
+  assert.match(main, /execFileAsync\(setupPath, \[account\]/);
+  assert.match(main, /validateGoogleWorkspaceSetupUtility/);
+  assert.match(main, /gog auth credentials/);
+  assert.match(main, /gog auth add/);
+  assert.match(main, /readOktaBackedSkillAssetText/);
+  assert.match(main, /GOOGLE_WORKSPACE_SETUP_ASSET_URL/);
+  assert.match(main, /GOOGLE_WORKSPACE_SKILL_ASSET_URL/);
+  assert.match(main, /GOOGLE_WORKSPACE_SETUP_SCRIPT/);
+  assert.match(main, /GOG_KEYRING_BACKEND:\s*"file"/);
+  assert.match(main, /GOG_KEYRING_PASSWORD/);
+  assert.match(main, /GOG_KEYRING_PASSWORD_FILE/);
+  assert.match(main, /GOG_HOME:\s*googleWorkspaceGogHome\(\)/);
+  assert.match(main, /normalizeGoogleWorkspaceSetupUtilityScript/);
+  assert.match(main, /\$\{GOG_KEYRING_PASSWORD:-\}/);
+  assert.match(main, /ensureGoogleWorkspaceGogFileKeyring/);
+  assert.match(main, /isRecoverableGoogleWorkspaceKeyringError/);
+  assert.match(main, /resetGoogleWorkspaceGogFileKeyring/);
+  assert.match(main, /crypto\.randomBytes\(32\)\.toString\("base64url"\)/);
+  assert.match(main, /listGogCalendarEvents/);
+  assert.match(main, /listGogContacts/);
+  assert.match(main, /GOOGLE_WORKSPACE_AGENT_CONNECTION_ID/);
+  assert.match(app, /if \(group\.id === "google-workspace"\) return false/);
+  assert.doesNotMatch(styles, /\.credentialSavedBadge\s*\{/);
+  assert.match(styles, /\.credentialStatusIcon\s*\{/);
+  assert.match(styles, /\.credentialFields\s*\{[\s\S]*?padding:\s*0;/);
+  assert.match(styles, /\.credentialGoogleMark\s*\{/);
+  assert.match(styles, /\.credentialLiteLlmMark\s*\{/);
+  assert.match(styles, /\.credentialTelnyxMark\s*\{/);
+  assert.match(styles, /\.credentialManagedSkillConnect\s*\{/);
   assert.doesNotMatch(app, /groups\.length === 1 \? "entry" : "entries"/);
   assert.doesNotMatch(app, /messageTroubleshootingBot/);
   assert.doesNotMatch(app, /Run Doctor/);
-  assert.match(styles, /\.settingsTabs\s*{/);
+  assert.match(styles, /\.pageSectionShell\s*{/);
+  assert.match(styles, /\.pageSectionSidebar\s*{/);
+  assert.match(styles, /\.pageSectionMain\s*{/);
+  assert.match(styles, /\.pageSectionBreadcrumb\s*{/);
+  assert.match(styles, /\.setupSettingsPanel\s*{/);
+  assert.doesNotMatch(styles, /\.setupTabs\s*{/);
   assert.match(styles, /\.credentialSectionHeader\s*{/);
   assert.doesNotMatch(styles, /\.credentialSectionHeader small\s*{/);
   assert.match(styles, /\.accessCard p\s*\{[\s\S]*?white-space:\s*normal/);
-  assert.match(styles, /\.credentialSummaryText small\s*\{[\s\S]*?white-space:\s*normal/);
+  assert.doesNotMatch(styles, /\.credentialSummaryText small\s*\{/);
   assert.match(styles, /\.connectorBody p,[\s\S]*?white-space:\s*normal/);
   assert.match(styles, /\.themeToggle\s*{/);
   assert.match(styles, /\.desktop\[data-theme="dark"\]/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.widgetsView/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.assistantPanel \.button/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.widgetCanvas/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.assistantChatFrame/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardLayoutToggle/);
-  assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardLayoutToggle button\.active\s*\{[\s\S]*?color:\s*#151515;[\s\S]*?background:\s*#f4f1ec/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardCreate,[\s\S]*?\.desktop\[data-theme="dark"\] \.workboardRowCard,[\s\S]*?\.desktop\[data-theme="dark"\] \.kanbanCard/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.calendarEventCard,[\s\S]*?\.desktop\[data-theme="dark"\] \.calendarDetailBlock,[\s\S]*?\.desktop\[data-theme="dark"\] \.chatSessionPreview,[\s\S]*?\.desktop\[data-theme="dark"\] \.chatReviewItem/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardCreateField input,[\s\S]*?\.desktop\[data-theme="dark"\] \.statusControl select/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardRowIcon\s*\{[\s\S]*?background:\s*#181817/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.iconButton,[\s\S]*?background:\s*#2d2b28/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.workboardLayoutToggle button\.active\s*\{[\s\S]*?color:\s*var\(--text\);[\s\S]*?background:\s*#3a3835/);
+  assert.doesNotMatch(styles, /\.desktop\[data-theme="dark"\] \.workboardLayoutToggle button\.active\s*\{[\s\S]*?background:\s*#f4f1ec/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.chatReviewTabs button\.selected,[\s\S]*?\.desktop\[data-theme="dark"\] \.calendarEventCard\.expanded\s*\{[\s\S]*?background:\s*#242321/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.chatReviewTabs button\.selected/);
 });
 
@@ -614,6 +1429,8 @@ test("user avatar opens an account menu with identity and logout", async () => {
   const main = await readFile("src/main/main.js", "utf8");
   const preload = await readFile("src/main/preload.cjs", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
+  const titleBarSource = app.slice(app.indexOf("function TitleBar"), app.indexOf("function CodexBottomPanelIcon"));
+  const railSource = app.slice(app.indexOf("function Rail"), app.indexOf("function Sidebar"));
 
   assert.match(api, /signOutAgentControlPlane/);
   assert.match(preload, /link:agent-control-plane-sign-out/);
@@ -633,26 +1450,31 @@ test("user avatar opens an account menu with identity and logout", async () => {
   assert.match(main, /function slackProfileImageUrl/);
   assert.match(main, /users\.lookupByEmail/);
   assert.match(app, /accountAuthButton/);
+  assert.match(app, /accountThemeButton/);
+  assert.match(app, /<strong>\{signedIn \? "Signed in as" : "Signed out"\}<\/strong>/);
   assert.match(app, /\{signedIn \? "Sign out" : "Sign in"\}/);
   assert.doesNotMatch(app, /Account settings/);
   assert.doesNotMatch(app, /Open assistant/);
   assert.doesNotMatch(styles, /\.avatar span\s*{/);
   assert.doesNotMatch(app, /<BookOpen size=\{14\} \/>[\s\S]*?Sign in with Okta/);
   assert.doesNotMatch(app, /accountMenuTheme/);
-  assert.match(app, /\["theme", "Link Theme", Sun\]/);
-  assert.match(app, /themeSettingsCard/);
+  assert.match(app, /telnyx-link-primary-color/);
+  assert.doesNotMatch(app, /aria-label="Primary color"/);
+  assert.doesNotMatch(app, /titleBarColorInput/);
   assert.match(app, /aria-label=\{colorMode === "dark" \? "Switch to light mode" : "Switch to dark mode"\}/);
+  assert.match(railSource, /className="accountThemeButton"[\s\S]*?setColorMode\(colorMode === "dark" \? "light" : "dark"\)/);
+  assert.match(railSource, /colorMode === "dark" \? <Sun size=\{15\} strokeWidth=\{1\.5\} \/> : <Moon size=\{15\} strokeWidth=\{1\.5\} \/>/);
+  assert.doesNotMatch(titleBarSource, /setColorMode\(colorMode === "dark" \? "light" : "dark"\)/);
+  assert.match(styles, /\.accountMenuHeader\s*\{[\s\S]*?grid-template-columns:\s*42px minmax\(0,\s*1fr\) 34px auto/);
+  assert.match(styles, /\.accountThemeButton\s*\{[\s\S]*?width:\s*34px[\s\S]*?height:\s*34px[\s\S]*?border-radius:\s*999px/);
+  assert.match(styles, /\.desktop\[data-theme="dark"\] \.accountThemeButton/);
   assert.match(app, /setRailExpanded\(!railExpanded\)/);
-  assert.match(app, /<span className="themeSettingsRowLabel">[\s\S]*?<span className="accessIcon">[\s\S]*?<PanelLeftOpen size=\{18\}/);
-  assert.match(app, /Switch to dark mode/);
+  assert.match(app, /aria-label=\{railExpanded \? "Collapse left sidebar" : "Expand left sidebar"\}/);
   assert.doesNotMatch(app, /Okta session active/);
   assert.match(styles, /\.accountMenu\s*{/);
-  assert.match(styles, /\.accountAuthButton\s*{/);
-  assert.match(styles, /\.themeSettingsCard\s*{/);
-  assert.match(styles, /\.settingsToggle\s*{/);
-  assert.match(styles, /\.themeSettingsRow\s*{/);
-  assert.match(styles, /\.themeSettingsRow\s*\{[\s\S]*?border:\s*0;[\s\S]*?background:\s*transparent/);
-  assert.match(styles, /\.themeSettingsRowLabel > span:last-child\s*\{[\s\S]*?align-items:\s*center/);
+  assert.match(styles, /\.accountAuthButton\s*\{[\s\S]*?min-height:\s*34px/);
+  assert.match(styles, /\.accountAuthButton\.signedIn\s*\{[\s\S]*?color:\s*var\(--accent\)[\s\S]*?background:\s*var\(--surface-soft\)/);
+  assert.doesNotMatch(styles, /\.titleBarColorInput\s*{/);
   assert.match(styles, /\.avatar img,[\s\S]*?\.accountAvatar img\s*\{[\s\S]*?object-fit:\s*cover/);
 });
 
@@ -660,10 +1482,17 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const api = await readFile("src/renderer/api.ts", "utf8");
   const main = await readFile("src/main/main.js", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
+  const softphone = await readFile("src/renderer/phone/softphone.tsx", "utf8");
+  const dialerConfig = await readFile("src/renderer/phone/dialer-config.ts", "utf8");
+  const titleBarSource = app.slice(app.indexOf("function TitleBar"), app.indexOf("function CodexBottomPanelIcon"));
+  const railSource = app.slice(app.indexOf("function Rail"), app.indexOf("function Sidebar"));
 
   assert.match(api, /export interface ChatArtifact/);
+  assert.match(api, /createChatSession\(input\?:/);
   assert.match(main, /function createChatArtifacts/);
+  assert.match(main, /link:create-chat-session/);
   assert.match(app, /selectedArtifact/);
   assert.match(app, /function ArtifactViewer/);
   assert.match(app, /function MessageArtifacts/);
@@ -675,8 +1504,19 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(app, /linkApi\.transcribeAudio/);
   assert.match(api, /transcribeAudio\(input: VoiceTranscriptionInput\)/);
   assert.match(main, /link:voice-transcribe/);
+  assert.match(api, /export interface ChatAttachment/);
+  assert.match(api, /selectChatAttachments\(\): Promise<ChatAttachmentSelection>/);
+  assert.match(preload, /selectChatAttachments: \(\) => ipcRenderer\.invoke\("link:select-chat-attachments"\)/);
+  assert.match(main, /secureIpcHandle\("link:select-chat-attachments", \(\) => selectChatAttachments\(\)\)/);
+  assert.match(main, /dialog\.showOpenDialog\(\{[\s\S]*?title: "Add photos and files"[\s\S]*?multiSelections/);
   assert.match(main, /setPermissionRequestHandler/);
   assert.match(main, /\/audio\/transcriptions/);
+  assert.doesNotMatch(app, /resolveCallableChatTarget/);
+  assert.doesNotMatch(app, /registeredPhoneNumberForAgent/);
+  assert.doesNotMatch(app, /className="iconButton assistantCallButton"/);
+  assert.doesNotMatch(app, /startChatAgentCall/);
+  assert.doesNotMatch(app, /disabled=\{!callableChatTarget\}/);
+  assert.doesNotMatch(app, /<PhoneCall size=\{17\} \/>[\s\S]*?<button[\s\S]*?voiceInputButton/);
   assert.match(app, /className=\{`iconButton voiceInputButton/);
   assert.match(app, /<Mic size=\{17\}/);
   assert.match(app, /className="assistantComposerSubmit"/);
@@ -686,71 +1526,268 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(app, /mode:\s*"chat" \| "phone"/);
   assert.match(app, /setMode\("chat"\)/);
   assert.match(app, /setMode\("phone"\)/);
-  assert.match(app, /Telnyx LiteLLM/);
-  assert.match(app, /panelPhoneDialer/);
-  assert.match(app, /dialpadKeys/);
-  assert.match(app, /appendDialDigit/);
-  assert.match(app, /deleteDialDigit/);
-  assert.match(app, /panelPhoneKeypad/);
-  assert.match(app, /panelPhoneCallButton/);
-  assert.match(app, /panelPhoneActiveControls/);
-  assert.match(app, /sidebarCallActive &&/);
+  assert.match(app, /assistantCollapsed/);
+  assert.match(app, /terminalOpen/);
+  assert.match(app, /function TitleBar/);
+  assert.match(app, /titleBarActions/);
+  assert.match(app, /aria-label=\{terminalOpen \? "Close terminal" : "Open terminal"\}/);
+  assert.match(app, /function CodexBottomPanelIcon/);
+  assert.match(app, /function CodexLeftSidebarIcon/);
+  assert.match(app, /function CodexRightSidebarIcon/);
+  assert.doesNotMatch(app, /<Palette size=\{15\} strokeWidth=\{1\.4\} \/>/);
+  assert.doesNotMatch(app, /className="titleBarColorInput"/);
+  assert.doesNotMatch(app, /setPrimaryColor\(normalizeHexColor\(event\.currentTarget\.value\) \|\| defaultPrimaryColor\)/);
+  assert.doesNotMatch(titleBarSource, /setColorMode\(colorMode === "dark" \? "light" : "dark"\)/);
+  assert.match(railSource, /className="accountThemeButton"[\s\S]*?setColorMode\(colorMode === "dark" \? "light" : "dark"\)/);
+  assert.match(railSource, /colorMode === "dark" \? <Sun size=\{15\} strokeWidth=\{1\.5\} \/> : <Moon size=\{15\} strokeWidth=\{1\.5\} \/>/);
+  assert.match(app, /onClick=\{\(\) => setRailExpanded\(!railExpanded\)\}/);
+  assert.match(app, /<CodexLeftSidebarIcon collapsed=\{!railExpanded\} \/>/);
+  assert.match(app, /<CodexBottomPanelIcon \/>/);
+  assert.match(app, /<CodexRightSidebarIcon collapsed=\{assistantCollapsed\} \/>/);
+  assert.match(app, /className="codexTitleBarIcon codexRightSidebarIcon"/);
+  assert.match(app, /className="titleBarAction"/);
+  assert.doesNotMatch(app, /className=\{`titleBarAction/);
+  assert.doesNotMatch(app, /titleBarAction \$\{/);
+  assert.match(app, /function TerminalDock/);
+  assert.match(app, /const \[tabs, setTabs\] = useState\(\[\{ id: initialTerminalId, title: "Telnyx Link" \}\]\)/);
+  assert.match(app, /const \[activeTerminalId, setActiveTerminalId\] = useState\(initialTerminalId\)/);
+  assert.match(app, /async function addTerminalTab/);
+  assert.match(app, /async function closeTerminalTab/);
+  assert.match(app, /event\.stopPropagation\(\)/);
+  assert.match(app, /await linkApi\.stopTerminal\(\{ terminalId \}\)\.catch\(\(\) => undefined\)/);
+  assert.match(app, /className="terminalDockTabClose"/);
+  assert.match(app, /aria-label=\{`Close \$\{tab\.title\}`\}/);
+  assert.match(app, /role="tablist" aria-label="Terminal tabs"/);
+  assert.match(app, /aria-label="Open bottom panel tab"/);
+  assert.match(app, /linkApi\.startTerminal/);
+  assert.match(app, /linkApi\.startTerminal\(\{ terminalId, title \}\)/);
+  assert.match(app, /linkApi\.writeTerminal\(\{ terminalId: activeTerminalId, text: `\$\{nextCommand\}\\n` \}\)/);
+  assert.match(app, /linkApi\.onTerminalOutput/);
+  assert.match(app, /assistantPanelCollapsed/);
+  assert.match(app, /aria-label=\{assistantCollapsed \? "Expand assistant sidebar" : "Collapse assistant sidebar"\}/);
+  assert.match(app, /aria-label="Open Chat assistant"/);
+  assert.match(app, /aria-label="Open Phone assistant"/);
+  assert.match(app, /function openAssistantMode\(nextMode: "chat" \| "phone"\)\s*\{[\s\S]*?setMode\(nextMode\);[\s\S]*?setCollapsed\(false\);[\s\S]*?\}/);
+  assert.doesNotMatch(app, /className=\{`assistantRailButton \$\{mode ===/);
+  assert.match(main, /const terminalSessions = new Map\(\)/);
+  assert.match(main, /function getTerminalSession\(input = \{\}, create = false\)/);
+  assert.match(main, /secureIpcHandle\("link:terminal-start", \(event, input\) => startTerminalProcess\(event\.sender, input\)\)/);
+  assert.match(main, /secureIpcHandle\("link:terminal-write", \(_event, input\) => writeTerminalInput\(input\)\)/);
+  assert.match(main, /function startTerminalProcess/);
+  assert.match(main, /terminalId: session\.id/);
+  assert.match(main, /spawn\(shell, \["-i"\]/);
+  assert.match(preload, /startTerminal:\s*\(input\) => ipcRenderer\.invoke\("link:terminal-start", input\)/);
+  assert.match(preload, /stopTerminal:\s*\(input\) => ipcRenderer\.invoke\("link:terminal-stop", input\)/);
+  assert.match(preload, /getTerminalStatus:\s*\(input\) => ipcRenderer\.invoke\("link:terminal-status", input\)/);
+  assert.match(preload, /onTerminalOutput:\s*\(listener\) =>/);
+  assert.match(styles, /\.titleBarActions\s*\{/);
+  assert.match(styles, /\.titleBarActions\s*\{[\s\S]*?gap:\s*10px[\s\S]*?padding-right:\s*20px/);
+  assert.match(styles, /\.titleBarAction\s*\{[\s\S]*?width:\s*15px[\s\S]*?height:\s*30px/);
+  assert.doesNotMatch(styles, /\.titleBarAction \+ \.titleBarAction/);
+  assert.match(styles, /\.codexTitleBarIcon\s*\{[\s\S]*?width:\s*15px[\s\S]*?height:\s*15px[\s\S]*?stroke-width:\s*1/);
+  assert.doesNotMatch(styles, /\.codexRightSidebarIcon\s*\{[\s\S]*?transform:/);
+  assert.doesNotMatch(styles, /\.titleBarColorInput\s*\{/);
+  assert.match(styles, /\.titleBarAction:hover\s*\{[\s\S]*?background:\s*transparent/);
+  assert.doesNotMatch(styles, /\.titleBarAction\.selected/);
+  assert.match(styles, /\.desktop\.terminalOpen\s*\{[\s\S]*?grid-template-rows:\s*30px minmax\(0,\s*1fr\) minmax\(220px,\s*30vh\)/);
+  assert.match(styles, /\.terminalDock\s*\{[\s\S]*?grid-template-rows:\s*40px minmax\(0,\s*1fr\) 38px/);
+  assert.match(styles, /\.terminalDockTabs\s*\{/);
+  assert.match(styles, /\.terminalDockTab\.selected\s*\{/);
+  assert.match(styles, /\.terminalDockTabClose\s*\{/);
+  assert.match(styles, /\.terminalDockTabClose:hover\s*\{/);
+  assert.match(styles, /\.terminalNewTabButton\s*\{/);
+  assert.match(styles, /\.appSurface\.assistantCollapsed\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*54px/);
+  assert.match(styles, /\.assistantPanelCollapsed\s*\{[\s\S]*?padding:\s*var\(--app-top-inset\)\s*7px var\(--app-bottom-inset\)/);
+  assert.match(styles, /\.assistantRailButton\s*\{[\s\S]*?width:\s*40px;[\s\S]*?height:\s*40px/);
+  assert.match(styles, /\.assistantRailButton:hover\s*\{[\s\S]*?background:\s*transparent/);
+  assert.doesNotMatch(styles, /\.assistantRailButton\.selected\s*\{/);
+  assert.doesNotMatch(styles, /\.desktop\[data-theme="dark"\] \.assistantRailButton\.selected/);
+  assert.match(app, /route through LiteLLM when configured/);
+  assert.match(app, /LinkSoftphone/);
+  assert.match(app, /activeDialerConfig/);
+  assert.match(dialerConfig, /export const dialpadKeys/);
+  assert.match(softphone, /appendDigit/);
+  assert.match(softphone, /deleteDigit/);
+  assert.match(softphone, /linkSoftphoneKeypad/);
+  assert.match(softphone, /linkSoftphoneCallButton/);
+  assert.match(softphone, /linkSoftphoneActions/);
+  assert.match(softphone, /TelnyxRTC/);
+  assert.match(softphone, /linkApi\.getWebRtcToken/);
+  assert.match(softphone, /linkApi\.getWebRtcStatus/);
+  assert.match(softphone, /client\.newCall/);
+  assert.match(softphone, /link-phone-remote-audio/);
   assert.match(app, /linkedPhoneNumber/);
-  assert.match(app, /Search bookmarked agents/);
   assert.match(app, /bookmarkedAgentIds/);
+  assert.match(app, /id:\s*"link-default-runtime"/);
+  assert.match(app, /displayName:\s*"Link"/);
+  assert.match(app, /Default runtime route using your configured LiteLLM key/);
+  assert.match(app, /const linkGettingStartedAgentId = "c4de5f6a-e2e9-4568-9611-80cd35b483f7"/);
+  assert.match(app, /const linkGettingStartedAgentName = "Link"/);
+  assert.match(app, /linkApi\.openAgentControlPlaneSetup/);
+  assert.match(main, /new URL\("\/agents\/new", `\$\{agentControlPlaneUrl\(\)\}\/`\)/);
+  assert.match(app, /id:\s*linkGettingStartedAgentId/);
+  assert.match(app, /displayName:\s*linkGettingStartedAgentName/);
+  assert.match(app, /Central OpenClaw agent for Link app help/);
   assert.match(app, /telnyx-link-bookmarked-agents/);
   assert.match(app, /agent\.id !== "slack-bot-troubleshooting"/);
-  assert.match(app, /Bookmark agents on the Agents page to use them in chat/);
   assert.doesNotMatch(app, /<em>\{agent\.source\}<\/em>/);
   assert.match(app, /selectedChatAgentId/);
   assert.match(app, /telnyx-link-selected-chat-agent/);
-  assert.match(app, /assistantAgentTrigger/);
-  assert.match(app, /assistantSettingsOpen/);
+  assert.match(app, /newSessionBotPickerOpen/);
+  assert.match(app, /Search agents/);
+  assert.match(app, /No agents found/);
+  assert.match(app, /function EmptyState\(\{ title, body, icon: Icon = List \}/);
+  assert.match(app, /<EmptyState title="No agents found" body="Try a different search term or squad filter\." icon=\{Bot\} \/>/);
+  assert.match(app, /assistantNewSessionSetting/);
+  assert.doesNotMatch(app, /assistantAgentTrigger/);
+  assert.doesNotMatch(app, /assistantSettingsOpen/);
   assert.match(app, /assistantAttachMenuOpen/);
   assert.match(app, /assistantAttachMenuRef/);
-  assert.match(app, /agentPickerRef/);
-  assert.match(app, /assistantSettingsTriggerRef/);
-  assert.match(app, /assistantSettingsPopoverRef/);
+  assert.match(app, /newSessionBotPickerRef/);
+  assert.doesNotMatch(app, /agentPickerRef/);
+  assert.doesNotMatch(app, /assistantSettingsTriggerRef/);
+  assert.doesNotMatch(app, /assistantSettingsPopoverRef/);
   assert.match(app, /handleOutsidePointerDown/);
-  assert.match(app, /document\.addEventListener\("mousedown", handleOutsidePointerDown\)/);
+  assert.match(app, /window\.addEventListener\("pointerdown", handleOutsidePointerDown, true\)/);
   assert.match(app, /document\.addEventListener\("keydown", handleEscape\)/);
-  assert.match(app, /Chat settings/);
+  assert.match(app, /Approval mode/);
+  assert.match(app, /Runtime route/);
   assert.match(app, /className="assistantComposerTools"/);
   assert.match(app, /className="assistantAttachMenu"/);
+  assert.match(app, /event\.composedPath\?\.\(\)/);
+  assert.match(app, /assistantSkillPickerOpen/);
+  assert.match(app, /assistantSkillPickerQuery/);
+  assert.match(app, /className="assistantSkillPicker" role="dialog" aria-label="Add skill to session"/);
+  assert.match(app, /className="assistantSkillSearch"/);
+  assert.match(app, /className="assistantSkillPickerSection"/);
+  assert.doesNotMatch(app, /className="assistantAttachSkillSection" aria-label="Use a skill"/);
+  assert.doesNotMatch(app, /className="iconButton assistantSkillTrigger"/);
+  assert.doesNotMatch(app, /className="assistantSkillMenu"/);
+  assert.doesNotMatch(app, /aria-label="Use a starred skill"/);
+  assert.match(app, /Add skill/);
+  assert.match(app, /No starred skills yet/);
   assert.match(app, /Add photos & files/);
   assert.doesNotMatch(app, /Attach Electron/);
   assert.match(app, /Plan mode/);
   assert.match(app, /Pursue goal/);
-  assert.match(app, /Feature request/);
-  assert.match(app, /Create skill/);
-  assert.match(app, /featureRequestMode/);
+  assert.match(app, /Make skill/);
+  assert.match(app, /Last response/);
+  assert.match(app, /Make skill from last response/);
+  assert.match(app, /Save last response to archive/);
+  assert.doesNotMatch(app, /className="assistantMessageActions"/);
+  assert.match(app, /function saveMessageToArchive/);
+  assert.match(app, /source: "link-chat-message"/);
+  assert.match(app, /Prompt: \$\{lastUserPrompt\}/);
+  assert.match(app, /onArchiveSaved\(\)/);
+  assert.doesNotMatch(app, /Pull request/);
+  assert.match(app, /Only my agents/);
+  assert.match(app, /Publish to Telnyx/);
+  assert.match(app, /team-telnyx\/telnyx-clawdbot-skills/);
+  assert.match(app, /Build app/);
+  assert.match(app, /deployAppMode/);
+  assert.match(app, /designSystemSessionPreferences/);
+  assert.match(app, /designSystemSessionStorageKey/);
+  assert.match(app, /Use Link design system/);
+  assert.match(app, /setSessionDesignSystemPreference/);
+  assert.doesNotMatch(app, /pullRequestMode/);
   assert.match(app, /createSkillMode/);
+  assert.match(app, /skillPublishMode/);
+  assert.match(app, /Make skill[\s\S]*?Only my agents[\s\S]*?Publish to Telnyx[\s\S]*?Build app/);
+  assert.match(app, /Local skill workflow:[\s\S]*?only installed for their agents/);
+  assert.match(app, /Skill publishing workflow:[\s\S]*?telnyx-clawdbot-skills/);
+  assert.match(app, /Edge app deployment workflow:[\s\S]*?Telnyx Edge Compute app/);
+  assert.match(app, /Link design system instruction:[\s\S]*?embedded Link tool/);
+  assert.match(app, /buildEdgeAppSystemInstruction\(edgeAppSlug, useLinkDesignSystemForSession\)/);
+  assert.match(app, /buildLinkDesignSystemInstruction\(\)/);
+  assert.match(app, /telnyx-link-theme/);
+  assert.doesNotMatch(app, /Pull request workflow/);
+  assert.match(app, /setSelectedChatAgentId\(linkGettingStartedAgentId\)/);
   assert.match(app, /team-telnyx\/link/);
   assert.match(app, /SKILL\.md/);
+  assert.match(app, /readInstalledAgentSkillKeys/);
+  assert.match(app, /sessionSkillSelections/);
+  assert.match(app, /prompt\.trimStart\(\)\.startsWith\("\/"\)/);
+  assert.match(app, /filteredStarredSkills\[0\]/);
+  assert.match(app, /Skill session instruction: use the/);
+  assert.match(app, /Apply this skill's intended workflow/);
+  assert.match(app, /systemInstruction:\s*instructionPrefix \|\| undefined/);
+  assert.match(api, /systemInstruction\?: string/);
+  assert.match(main, /hiddenInstruction/);
+  assert.match(app, /removeLeadingSkillCommand/);
+  assert.match(app, /className="assistantActiveSkill"/);
   assert.doesNotMatch(app, /openPluginsFromComposer/);
   assert.doesNotMatch(app, /<span>Plugins<\/span>/);
   assert.match(app, /assistantSessionAgent/);
+  assert.match(app, /className="assistantSessionAgent"[\s\S]*?<span>\{selectedChatAgent\.displayName\}<\/span>/);
+  assert.doesNotMatch(app, /<Bot size=\{12\} aria-hidden="true" \/>/);
+  assert.match(app, /className="assistantChatFrame"/);
+  assert.match(app, /className="assistantChatBody"/);
+  assert.match(app, /className="assistantChatDock"/);
+  assert.match(app, /newSessionDraftOpen/);
+  assert.match(app, /assistantNewSessionCard/);
+  assert.match(app, /aria-label="New session name"/);
+  assert.match(app, /aria-label="New session bot"/);
+  assert.match(app, /newSessionBotQuery/);
+  assert.match(app, /Search agents/);
+  assert.match(app, /refreshNewSessionBots/);
+  assert.match(app, /aria-label="Refresh bots"/);
+  assert.match(styles, /\.newSessionBotMenuTools\s*\{/);
+  assert.match(styles, /\.newSessionBotRefresh\s*\{/);
+  assert.match(app, /renderNewSessionBotSection\("MY AGENTS", myAgentOptions\)/);
+  assert.match(app, /renderNewSessionBotSection\("TELNYX LINK APP", telnyxLinkAppOptions\)/);
+  assert.match(app, /renderNewSessionBotSection\("VOICE ASSISTANTS", voiceAssistantOptions\)/);
+  assert.match(app, /renderNewSessionBotSection\("A2A Bots", a2aBotOptions\)/);
+  assert.match(app, /source: "voice-assistant"/);
+  assert.match(app, /agent\.source !== "a2a-discovery" && agent\.source !== "voice-assistant" && !isLinkChatAgent\(agent\)/);
+  assert.match(app, /const telnyxLinkAppOptions = newSessionBotMatches\.filter\(isLinkChatAgent\)/);
+  assert.match(app, /const voiceAssistantOptions = newSessionBotMatches\.filter\(\(agent\) => agent\.source === "voice-assistant"\)/);
+  assert.match(app, /agent\.source === "a2a-discovery" && agent\.status !== "unavailable"/);
+  assert.match(app, /Start Session/);
+  assert.match(app, /createNewChatSession\(\{/);
+  assert.match(app, /title:\s*newSessionTitleDraft\.trim\(\) \|\| newSessionDefaultTitle/);
+  assert.match(app, /agentId:\s*selectedChatAgent\.id/);
+  assert.match(app, /agentName:\s*selectedChatAgent\.displayName/);
+  assert.match(app, /agentType:\s*selectedChatAgent\.type/);
+  assert.doesNotMatch(app, /Agent: \{selectedChatAgent\.displayName\}/);
   assert.match(app, /attachPhotosAndFiles/);
+  assert.match(app, /linkApi\.selectChatAttachments\(\)/);
+  assert.match(app, /className="assistantAttachmentTray"/);
+  assert.match(app, /buildAttachmentContext\(attachmentsSnapshot\)/);
+  assert.doesNotMatch(app, /File attachment picker will open when local file ingestion is wired/);
   assert.doesNotMatch(app, /attachElectronContext/);
-  assert.match(app, /className="iconButton assistantSettingsTrigger"/);
+  assert.doesNotMatch(app, /className="iconButton assistantSettingsTrigger"/);
   assert.doesNotMatch(app, />\\s*New Chat\\s*</);
   assert.doesNotMatch(app, /assistantActionsOpen/);
   assert.match(app, /<small>Session<\/small>/);
   assert.match(app, /aria-label="Session name"/);
   assert.match(app, /linkApi\.renameChatSession/);
+  assert.match(styles, /\.assistantSessionContext\s*\{[\s\S]*?align-items:\s*center[\s\S]*?gap:\s*10px[\s\S]*?padding:\s*12px[\s\S]*?border:\s*1px solid var\(--border-soft\)[\s\S]*?background:\s*var\(--surface-raised\)/);
+  assert.match(styles, /\.assistantSessionContext small\s*\{[\s\S]*?min-height:\s*22px[\s\S]*?font-size:\s*11px[\s\S]*?line-height:\s*1/);
+  assert.match(styles, /\.assistantSessionAgent\s*\{[\s\S]*?grid-row:\s*1[\s\S]*?align-self:\s*center[\s\S]*?gap:\s*5px[\s\S]*?min-height:\s*22px[\s\S]*?font-size:\s*11px[\s\S]*?line-height:\s*1/);
+  assert.doesNotMatch(styles, /\.assistantSessionAgent svg\s*\{/);
   assert.match(styles, /\.assistantSessionTitleInput\s*{/);
+  assert.match(styles, /\.assistantSessionTitleInput\s*\{[\s\S]*?font-size:\s*14px[\s\S]*?font-weight:\s*850/);
+  assert.match(styles, /\.assistantChatFrame\s*\{[\s\S]*?border:\s*1px solid var\(--border\)[\s\S]*?border-radius:\s*8px/);
+  assert.match(styles, /\.assistantChatDock\s*\{[\s\S]*?border-top:\s*1px solid var\(--border-soft\)/);
+  assert.match(styles, /\.assistantChatDock \.assistantComposer\s*\{[\s\S]*?border:\s*0/);
+  assert.match(styles, /\.assistantNewSessionFields\s*{/);
+  assert.match(styles, /\.assistantNewSessionFields\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+  assert.match(styles, /\.newSessionBotMenu\s*\{/);
+  assert.match(styles, /\.newSessionBotSearch\s*\{/);
+  assert.match(styles, /\.newSessionBotSection\s*\{/);
   assert.doesNotMatch(app, /<small>Project session<\/small>/);
   assert.match(app, /Approval mode/);
   assert.match(app, /Runtime route/);
   assert.match(app, /Automatic from selected agent/);
-  assert.match(app, /Automatic/);
+  assert.match(app, /selectedChatAgent\?\.id === "link-default-runtime"/);
   assert.doesNotMatch(app, /Context scope/);
   assert.match(app, /approvalMode:\s*acceptMode/);
   assert.match(app, /modelMode/);
-  assert.doesNotMatch(app, /contextScope/);
-  assert.match(app, /setAgentPickerOpen\(false\);[\s\S]*?setAssistantSettingsOpen/);
-  assert.match(app, /agentId:\s*selectedChatAgent\?\.id/);
-  assert.match(app, /agentName:\s*selectedChatAgent\?\.displayName/);
+  assert.doesNotMatch(app, /setAgentPickerOpen/);
+  assert.doesNotMatch(app, /setAssistantSettingsOpen/);
+  assert.match(app, /newSessionBotPickerOpen[\s\S]*?setNewSessionBotPickerOpen\(false\)/);
+  assert.match(app, /agentId:\s*selectedChatAgent\?\.id === "link-default-runtime" \? undefined : selectedChatAgent\?\.id/);
+  assert.match(app, /agentName:\s*selectedChatAgent\?\.id === "link-default-runtime" \? undefined : selectedChatAgent\?\.displayName/);
   assert.match(app, /function suggestDocsUpdate/);
   assert.doesNotMatch(app, /Suggest docs update/);
   assert.match(app, /function openLiteLlmSettings/);
@@ -763,78 +1800,256 @@ test("chat and phone stay available in the persistent assistant panel", async ()
   assert.match(styles, /\.runtimeSettingsButton\s*{/);
   assert.match(main, /aidaAgentRouteInstruction/);
   assert.match(main, /createAidaAgentHandoff/);
-  assert.match(main, /confirm your Telnyx LiteLLM API key is saved/);
+  assert.match(main, /confirm your LiteLLM API key is saved/);
   assert.match(main, /OpenClaw or Hermes as the agent runtime/);
   assert.match(main, /https:\/\/api-internal\.telnyx\.com\/aida\/mcp\//);
   assert.doesNotMatch(main, /claude mcp add/);
   assert.doesNotMatch(main, /mcp-remote/);
-  assert.match(app, /Choose number/);
+  assert.match(softphone, /aria-label="Your number"/);
+  assert.match(softphone, /Your number/);
+  assert.match(softphone, /Include bot/);
+  assert.match(softphone, /<option value="">None<\/option>/);
+  assert.match(softphone, /Call Contact or Bot/);
+  assert.match(softphone, /normalizeDialString/);
+  assert.doesNotMatch(softphone, /aria-label="Open Telnyx agents"/);
+  assert.doesNotMatch(softphone, /openPhoneAgents/);
+  assert.match(softphone, /Invite AI agent/);
+  assert.match(softphone, /startAiAssistantOnCall/);
+  assert.doesNotMatch(softphone, /WebRTC Dialer/);
+  assert.doesNotMatch(softphone, /Caller ID/);
+  assert.doesNotMatch(softphone, /Destination/);
   assert.doesNotMatch(styles, /\.assistantOverflowButton\s*{/);
   assert.doesNotMatch(styles, /\.assistantActionMenu\s*{/);
+  assert.doesNotMatch(styles, /\.assistantMessageActions\s*{/);
+  assert.match(styles, /\.assistantAttachSectionLabel\s*{/);
   assert.match(styles, /\.assistantComposerTools\s*{/);
   assert.match(styles, /\.assistantAttachMenu\s*{/);
+  assert.doesNotMatch(styles, /\.assistantSkillMenuRoot\s*{/);
+  assert.doesNotMatch(app, /className="iconButton assistantSkillTrigger"[\s\S]*?<Zap size=\{16\} \/>/);
+  assert.doesNotMatch(styles, /\.assistantSkillTrigger span\s*{/);
+  assert.doesNotMatch(styles, /\.assistantSkillMenu\s*{/);
+  assert.doesNotMatch(styles, /\.assistantAttachSkillSection\s*{/);
+  assert.match(styles, /\.assistantSkillPicker\s*{/);
+  assert.match(styles, /\.assistantSkillSearch\s*{/);
+  assert.match(styles, /\.assistantSkillPickerSection\s*{/);
+  assert.match(styles, /\.assistantSkillPickerSection button\s*{/);
+  assert.match(styles, /\.assistantSkillList button\s*{/);
+  assert.match(styles, /\.assistantSkillList button:hover,\s*\n\.assistantSkillList button\.selected\s*{/);
+  assert.match(styles, /\.assistantActiveSkill\s*{/);
   assert.match(styles, /\.assistantAttachToggle input:checked::before\s*{/);
+  assert.match(styles, /\.assistantAttachSubToggle\s*{/);
+  assert.match(styles, /\.assistantDesignSystemOption\s*{/);
+  assert.match(styles, /\.assistantDesignSystemOption input:checked::before\s*{/);
   assert.match(styles, /\.assistantComposerSubmit\s*{/);
+  assert.doesNotMatch(styles, /\.assistantCallButton:disabled\s*{/);
   assert.match(styles, /\.messageArtifactLink\s*{/);
+  assert.match(styles, /\*\s*\{[\s\S]*?scrollbar-width:\s*auto/);
+  assert.match(styles, /\*::-webkit-scrollbar\s*\{[\s\S]*?width:\s*14px[\s\S]*?height:\s*14px/);
+  assert.match(styles, /\.content\s*\{[\s\S]*?height:\s*100%[\s\S]*?padding:\s*var\(--app-top-inset\) 14px max\(var\(--app-bottom-inset\), 20px\)/);
+  assert.match(styles, /\.pageSectionMain\s*\{[\s\S]*?height:\s*100%[\s\S]*?scroll-padding-bottom:\s*max\(var\(--app-bottom-inset\), 20px\)/);
+  assert.match(styles, /\.dojoContent\s*\{[\s\S]*?overflow:\s*visible[\s\S]*?padding-bottom:\s*0/);
+  assert.match(styles, /\.assistantPanel\s*{[^}]*overflow-x:\s*hidden/s);
+  assert.match(styles, /\.assistantChatFrame\s*\{[\s\S]*?min-width:\s*0[\s\S]*?overflow:\s*hidden/);
+  assert.match(styles, /\.assistantChatBody\s*\{[\s\S]*?min-width:\s*0[\s\S]*?overflow:\s*hidden/);
+  assert.match(styles, /\.assistantLog\s*\{[\s\S]*?overflow-x:\s*hidden[\s\S]*?overflow-y:\s*auto/);
+  assert.match(styles, /\.assistantMessage p\s*\{[\s\S]*?overflow-wrap:\s*anywhere[\s\S]*?word-break:\s*break-word/);
+  assert.match(styles, /\.assistantComposer textarea\s*\{[\s\S]*?min-width:\s*0[\s\S]*?overflow-x:\s*hidden/);
+  assert.match(styles, /\.messageArtifactLink\s*\{[\s\S]*?min-width:\s*0/);
   assert.match(styles, /\.artifactViewer\s*{/);
   assert.match(styles, /\.assistantSendButton\s*{/);
   assert.match(styles, /\.voiceInputButton\.active\s*{/);
-  assert.match(styles, /\.voiceInputStatus\s*{/);
-  assert.match(styles, /\.assistantSettingsPopover\s*{/);
-  assert.match(styles, /\.assistantSettingsPopover\s*\{[\s\S]*?z-index:\s*80/);
+	  assert.match(styles, /\.voiceInputStatus\s*{/);
+	  assert.match(styles, /\.assistantDeployCard\s*{/);
+	  assert.match(styles, /\.agentInstructionPreview\s*{/);
+	  assert.match(styles, /\.designCodeBlock\s*{/);
+	  assert.match(styles, /\.assistantDeployRecovery\s*{/);
+	  assert.match(styles, /\.edgePreviewBrowser\s*{/);
+	  assert.match(app, /function previewLocalEdgeApp/);
+	  assert.match(app, /function seedEdgeAppResumePrompt/);
+	  assert.match(app, /composerTextareaRef/);
+	  assert.match(app, /No generated app folder found[\s\S]*seedEdgeAppResumePrompt/);
+	  assert.match(app, /function previewEdgeAppFromSession/);
+	  assert.match(app, /async function previewEdgeAppFromMessage/);
+	  assert.match(app, /inferEdgePreviewSlugFromSession/);
+	  assert.match(app, /messageHasEdgePreviewCandidate/);
+	  assert.match(app, /linkApi\.previewLocalEdgeApp/);
+	  assert.match(app, /function deployLocalEdgeApp/);
+	  assert.match(app, /linkApi\.deployLocalEdgeApp/);
+		  assert.match(app, /Deploy/);
+		  assert.match(app, /Preview app/);
+		  assert.match(app, /Prepare build prompt/);
+		  assert.match(app, /Chat/);
+		  assert.match(app, /Browser/);
+	  assert.match(app, /Open URL/);
+  assert.doesNotMatch(styles, /\.assistantSettingsPopover\s*{/);
   assert.doesNotMatch(app, /className="assistantSettingsSummary"/);
   assert.match(styles, /\.assistantNotice\.warning\s*{/);
-  assert.match(styles, /\.assistantAgentPicker\s*{/);
-  assert.match(styles, /\.agentPickerMenu\s*\{[\s\S]*?bottom:\s*calc\(100% \+ 8px\)/);
-  assert.match(styles, /\.agentPickerList button\s*\{[\s\S]*?grid-template-columns:\s*auto minmax\(0,\s*1fr\)/);
-  assert.match(styles, /\.agentPickerList\s*{/);
-  assert.match(styles, /\.agentPickerEmpty\s*{/);
+  assert.doesNotMatch(styles, /\.assistantAgentPicker\s*{/);
+  assert.doesNotMatch(styles, /\.agentPickerMenu\s*{/);
+  assert.doesNotMatch(styles, /\.agentPickerList\s*{/);
+  assert.match(styles, /\.newSessionBotMenu\s*\{/);
+  assert.match(styles, /\.newSessionBotSection button\s*\{/);
   assert.match(styles, /\.bookmarkButton\.selected\s*{/);
   assert.match(styles, /\.assistantPanel\s*{[^}]*background:\s*#fbfaf9/s);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.assistantTabs button\s*{/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.assistantMessage strong\s*{/);
   assert.match(styles, /\.desktop\[data-theme="dark"\] \.assistantComposer textarea::placeholder\s*{/);
   assert.match(styles, /\.assistantComposer textarea/);
-  assert.match(styles, /\.panelPhoneDialer\s*{/);
-  assert.match(styles, /\.panelPhoneKeypad\s*{/);
-  assert.match(styles, /\.panelPhoneKey\s*{/);
-  assert.match(styles, /\.panelPhoneCallButton\s*{/);
-  assert.match(styles, /\.panelPhoneActiveControls\s*{/);
+  assert.match(softphone, /className=\{`linkSoftphone/);
+  assert.match(softphone, /className="linkSoftphoneKeypad"/);
+  assert.match(softphone, /className="linkSoftphoneActions"/);
 });
 
-test("chats page uses expandable project-grouped session rows", async () => {
+test("chats page uses compact session table rows and a detail review page", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
+  const chatsViewSource = app.slice(app.indexOf("function ChatsView"), app.indexOf("function MessageArtifacts"));
+  const chatResultRowHeadStyles = styles.slice(styles.indexOf(".chatResultRowHead"), styles.indexOf(".chatSessionRows"));
 
   assert.match(app, /workspaces=\{workspaces\}/);
   assert.match(app, /memoryBanks=\{memoryBanks\}/);
   assert.match(app, /openMemory=\{\(\) => setMemoryOpen\(true\)\}/);
-  assert.match(app, /sessionsByWorkspace/);
-  assert.match(app, /aria-label="Chat sessions"/);
+  assert.doesNotMatch(app, /sessionsByWorkspace/);
+  assert.match(app, /role="table" aria-label="Chat sessions"/);
   assert.match(app, /<h1>Chat<\/h1>/);
+  assert.match(app, /New Session/);
+  assert.match(app, /function openNewChatSessionDraft/);
+  assert.match(app, /function resolveNewSessionAgent/);
+  assert.match(app, /function startEdgeAppDeployChat\(session\?: ChatSession\)/);
+  assert.match(app, /Edge app deployment workflow/);
+  assert.match(app, /sourceRepo=https:\/\/github\.com\/team-telnyx\/link/);
+  assert.match(app, /sourceSubdir=edge-apps\/<app-slug>/);
+  assert.match(app, /pending-chat-\$\{requestId\}/);
+  assert.match(app, /pending-message-user-\$\{requestId\}/);
+  assert.match(app, /setChatSessions\(\(current\) => \[optimisticSession/);
+  assert.match(app, /setChatSessions\(\(current\) => \[session,[\s\S]*optimisticSessionId/);
+  assert.match(app, /Deploy to Edge Compute/);
+  assert.match(app, /startEdgeAppDeployChat=\{startEdgeAppDeployChat\}/);
+  assert.match(app, /linkApi\.createChatSession/);
+  assert.match(app, /setAssistantMode\("chat"\)/);
   assert.match(app, /const \[filtersOpen, setFiltersOpen\] = useState\(false\)/);
   assert.match(app, /chatSearchRow/);
   assert.match(app, /Search chats, docs, actions, sources, outputs, or archive/);
   assert.match(app, /aria-label=\{filtersOpen \? "Hide chat filters" : "Show chat filters"\}/);
+  assert.match(app, /aria-label=\{sessionBulkEdit \? "Exit bulk edit" : "Edit chats"\}/);
+  assert.match(app, /title=\{sessionBulkEdit \? "Exit bulk edit" : "Edit chats"\}/);
+  assert.match(app, /<Pencil size=\{16\} \/>/);
   assert.match(app, /chatFilterBar/);
-  assert.match(app, /All models/);
-  assert.match(app, /className="chatDirectorySectionTitle"/);
+  assert.doesNotMatch(app, /All models/);
+  assert.doesNotMatch(app, /modelFilter/);
+  assert.doesNotMatch(app, /className="chatDirectorySectionTitle"/);
   assert.doesNotMatch(app, /<div className="chatDirectorySectionTitle">Chat<\/div>/);
   assert.match(app, /function renderSessionRow/);
-  assert.match(app, /className=\{`chatResultRow/);
+  assert.match(app, /const \[detailSessionId, setDetailSessionId\] = useState\(""\)/);
+  assert.match(app, /function openSessionDetails\(sessionId: string\)/);
+  assert.doesNotMatch(app, /expandedSessionIds/);
+  assert.doesNotMatch(app, /toggleSessionExpanded/);
+  assert.doesNotMatch(app, /className="chatResultSummary"/);
+  assert.doesNotMatch(chatsViewSource, /<ChevronDown size=\{24\} className="connectorRowChevron" aria-hidden="true" \/>/);
+  assert.match(app, /className="chatResultRow chatResultRowHead"/);
+  assert.match(app, />Session Name<\/span>/);
+  assert.match(app, />Agent<\/span>/);
+  assert.match(app, />Last<\/span>/);
+  assert.match(app, /formatChatAgentName\(attachedAgentName \?\? "Link"\)/);
+  assert.match(app, /name\.split\(" \/ "\)/);
+  assert.match(app, /lastMessageAt: lastVisibleMessage\?\.createdAt \?\? session\.updatedAt/);
+  assert.match(app, /compactRelativeTime\(sessionMeta\.lastMessageAt\)/);
+  assert.match(app, /className="chatSessionOpenButton"/);
+  assert.match(app, /function TableRowLifecycleActions/);
+  assert.match(app, /function BulkEditControls/);
+  assert.match(app, /function BulkSelectCell/);
+  assert.match(app, /const \[sessionBulkEdit, setSessionBulkEdit\] = useState\(false\)/);
+  assert.match(app, /const \[selectedSessionRowIds, setSelectedSessionRowIds\] = useState<string\[]>\(\[]\)/);
+  assert.match(app, /telnyx-link-hidden-chat-session-ids/);
+  assert.match(app, /telnyx-link-hidden-drive-row-ids/);
+  assert.match(app, /telnyx-link-hidden-inbox-thread-ids/);
+  assert.match(app, /telnyx-link-hidden-call-ids/);
+  assert.match(app, /telnyx-link-hidden-done-task-ids/);
+  assert.match(app, /aria-label=\{`Archive \$\{label\}`\}/);
+  assert.match(app, /aria-label=\{`Delete \$\{label\}`\}/);
+  assert.match(app, /<strong title=\{session\.title\}>\{session\.title\}<\/strong>/);
+  assert.match(app, /<BulkSelectCell[\s\S]*?active=\{sessionBulkEdit\}[\s\S]*?checked=\{selectedSessionRowIds\.includes\(session\.id\)\}/);
+  assert.match(app, /<BulkEditControls[\s\S]*?active=\{sessionBulkEdit\}[\s\S]*?onArchive=\{\(\) => hideSelectedSessionRows\("archive"\)\}/);
+  assert.match(app, /<TableRowLifecycleActions[\s\S]*?label=\{detailSession\.title\}[\s\S]*?onArchive=\{\(\) => hideSessionRow\(detailSession, "archive"\)\}/);
+  assert.match(app, /<ArrowRight size=\{16\} \/>/);
+  assert.doesNotMatch(app, />Open<\/span>/);
+  assert.doesNotMatch(chatsViewSource, /className="connectorIcon"/);
+  assert.match(app, /className="content chatView canonicalChat chatDetailView"/);
   assert.match(app, /className="chatResultDetails"/);
+  assert.doesNotMatch(app, /⌘\{index \+ 1\}/);
+  assert.doesNotMatch(app, /<kbd>/);
+  assert.doesNotMatch(app, /Standalone chat/);
   assert.match(app, /\["chat", "Chat", MessageSquare\]/);
-  assert.match(app, /\["docs", "Docs", BookOpen\]/);
   assert.match(app, /\["actions", "Actions", SquareCheck\]/);
+  assert.match(app, /\["sources", "Sources", ExternalLink\]/);
   assert.match(app, /\["archive", "Archive", ArchiveIcon\]/);
+  assert.doesNotMatch(app, /\["docs", "Docs", BookOpen\]/);
+  assert.doesNotMatch(app, /\["outputs", "Outputs", FileText\]/);
+  assert.doesNotMatch(app, /No docs yet/);
+  assert.doesNotMatch(app, /No outputs yet/);
+  assert.match(app, /chatReviewPane phoneContentTable/);
+  assert.match(app, /className="phoneNumberTableHeader chatReviewPaneHeader"/);
+  assert.match(app, /className="chatReviewPaneBody"/);
   assert.match(app, /initialTab="memories"/);
   assert.match(app, /initialQuery=\{archiveQueryForSession\(session\)\}/);
+  assert.match(app, /item\.id === "deploy-edge-app" \? void startEdgeAppDeployChat\(session\) : selectSession\(session\.id\)/);
+  assert.match(app, /Edge app deployment workflow: help me turn this chat work into a deployable Telnyx Edge Compute app/);
+  assert.match(app, /<span><Upload size=\{16\} \/>Build app<\/span>/);
+  assert.match(app, /checked=\{deployAppMode\}/);
   assert.match(styles, /\.chatSessionRows\s*{/);
   assert.match(styles, /\.chatView\s*\{[\s\S]*?grid-template-rows:\s*auto auto auto minmax\(0,\s*1fr\)[\s\S]*?align-content:\s*start/);
   assert.match(styles, /\.chatSearchRow\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(280px,\s*1fr\)/);
+  assert.match(styles, /\.canonicalChat > \.chatSearchRow\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(280px,\s*1fr\) 44px/);
   assert.match(styles, /\.chatFilterBar\s*\{/);
+  assert.doesNotMatch(styles, /\.chatResultSummary\s*\{/);
+  assert.match(styles, /\.chatResultRow\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(120px,\s*220px\) 112px 44px/);
+  assert.match(styles, /\.chatSessionRows:not\(\.bulkEditing\) \.chatResultRow\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(120px,\s*220px\) 112px 44px/);
+  assert.match(styles, /\.chatSessionRows\.bulkEditing \.chatResultRow\s*\{[\s\S]*?grid-template-columns:\s*28px minmax\(0,\s*1fr\) minmax\(120px,\s*220px\) 112px 44px/);
+  assert.match(styles, /\.bulkEditControls\s*\{/);
+  assert.match(styles, /\.bulkEditing \.bulkSelectCell\s*\{/);
+  assert.match(app, /<span role="columnheader">Last<\/span>/);
+  assert.doesNotMatch(app, /<span role="columnheader">Messages<\/span>/);
+  assert.doesNotMatch(app, /<span role="columnheader">Last Message<\/span>/);
+  assert.match(styles, /\.chatResultRowHead\s*\{/);
+  assert.doesNotMatch(chatResultRowHeadStyles, /border-top:/);
+  assert.match(styles, /\.chatSessionNameCell\s*\{[\s\S]*?display:\s*block[\s\S]*?overflow:\s*hidden/);
+  assert.match(styles, /\.chatSessionNameCell strong,[\s\S]*?\.chatResultRow > span\s*\{[\s\S]*?display:\s*block[\s\S]*?text-overflow:\s*ellipsis[\s\S]*?white-space:\s*nowrap/);
+  assert.match(styles, /\.chatSessionNameCell strong\s*\{[\s\S]*?font-size:\s*inherit;[\s\S]*?font-weight:\s*inherit;/);
+  assert.match(styles, /\.chatSessionOpenButton\s*\{/);
+  assert.match(app, /view === "drive"/);
+  assert.match(app, /function DriveView/);
+  assert.match(app, /const \[driveQuery, setDriveQuery\] = useState\(""\)/);
+  assert.match(app, /const \[driveFiltersOpen, setDriveFiltersOpen\] = useState\(false\)/);
+  assert.match(app, /Search files, agents, sessions, or archive/);
+  assert.match(app, /aria-label=\{driveFiltersOpen \? "Hide file filters" : "Show file filters"\}/);
+  assert.match(app, /role="group" aria-label="File filters"/);
+  assert.match(app, /role="table" aria-label="Agent files"/);
+  assert.match(app, /<span role="columnheader">File<\/span>/);
+  assert.match(app, /<span role="columnheader">Created<\/span>/);
+  assert.match(app, /\.filter\(\(message\) => message\.role === "assistant"\)/);
+  assert.match(app, /Files created by your agents will appear here/);
+  assert.match(app, /title=\{driveQuery\.trim\(\) \? "No files found" : "No files yet"\}/);
+  assert.match(app, /icon=\{FolderOpen\}/);
+  assert.match(app, /const \[driveBulkEdit, setDriveBulkEdit\] = useState\(false\)/);
+  assert.match(app, /const \[selectedDriveRowIds, setSelectedDriveRowIds\] = useState<string\[]>\(\[]\)/);
+  assert.match(app, /<BulkEditControls[\s\S]*?active=\{driveBulkEdit\}[\s\S]*?onArchive=\{hideSelectedDriveRows\}/);
+  assert.match(app, /<BulkSelectCell[\s\S]*?active=\{driveBulkEdit\}[\s\S]*?checked=\{selectedDriveRowIds\.includes\(row\.id\)\}/);
+  assert.match(styles, /\.driveResultRow\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(120px,\s*190px\) minmax\(140px,\s*240px\) 112px 44px/);
+  assert.match(styles, /\.driveFileRows\.bulkEditing \.driveResultRow\s*\{[\s\S]*?grid-template-columns:\s*28px minmax\(0,\s*1fr\) minmax\(120px,\s*190px\) minmax\(140px,\s*240px\) 112px 44px/);
+  assert.match(styles, /\.tableRowLifecycleActions\s*\{/);
+  assert.match(styles, /\.driveFileNameCell,\s*\n\.driveSessionCell\s*\{/);
+  assert.match(styles, /\.chatDetailView\s*\{[\s\S]*?grid-template-rows:\s*auto minmax\(0,\s*1fr\)/);
+  assert.match(styles, /\.chatDetailView \.pageHeader h1\s*\{[\s\S]*?white-space:\s*nowrap/);
+  assert.match(styles, /\.chatDetailView \.pageHeader p\s*\{[\s\S]*?text-overflow:\s*ellipsis/);
+  assert.match(styles, /\.chatReviewTabs\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(styles, /\.chatReviewPane\s*\{[\s\S]*?margin:\s*14px/);
+  assert.match(styles, /\.chatReviewPaneBody\s*\{[\s\S]*?padding:\s*16px 18px/);
+  assert.doesNotMatch(styles, /\.chatResultExpand\s*\{/);
+  assert.doesNotMatch(styles, /\.chatPreviewToolbar\s*\{/);
+  assert.doesNotMatch(styles, /\.chatResultSummary kbd/);
   assert.match(styles, /\.chatResultRow\s*{/);
   assert.match(styles, /\.chatResultDetails\s*{/);
+  assert.match(styles, /\.chatPreviewMessages \.message\s*\{[\s\S]*?width:\s*min\(100%,\s*820px\)/);
   assert.match(styles, /\.archiveTabsSurface\.compact/);
 });
 
@@ -857,16 +2072,60 @@ test("chat sessions are selectable without the global top tab bar", async () => 
 
 test("main process has v2 state, live-ready adapters, and approval-gated PR flow", async () => {
   const main = await readFile("src/main/main.js", "utf8");
+  const app = await readFile("src/renderer/App.tsx", "utf8");
+  const preload = await readFile("src/main/preload.cjs", "utf8");
 
-  assert.match(main, /const stateVersion = 5/);
-  assert.match(main, /saved\.version === stateVersion \|\| saved\.version === 4/);
+  assert.match(main, /const stateVersion = 9/);
+  assert.match(main, /saved\.version === stateVersion \|\| saved\.version === 8 \|\| saved\.version === 7 \|\| saved\.version === 6 \|\| saved\.version === 5 \|\| saved\.version === 4/);
+  assert.match(main, /defaultSkillRegistryUrl/);
+  assert.match(main, /link:skill-registry-event/);
+  assert.match(main, /link:list-tool-catalog/);
+  assert.match(main, /link:publish-tool-manifest/);
+  assert.match(main, /toolCatalogItems/);
+  assert.match(main, /pendingToolCatalogPublishes/);
   assert.match(main, /TABLEAU_WIDGETS_SERVICE_URL/);
   assert.match(main, /link:list-widget-catalog/);
   assert.match(main, /widgetLayout/);
+  assert.match(main, /dialerState/);
+  assert.match(main, /speakSettings/);
+  assert.match(main, /link:list-dialer-configs/);
+  assert.match(main, /link:save-dialer-config/);
+  assert.match(main, /link:activate-dialer-config/);
+  assert.match(main, /link:get-active-dialer-config/);
+  assert.match(main, /link:get-webrtc-token/);
+  assert.match(main, /link:get-webrtc-status/);
+  assert.match(main, /link:get-speak-settings/);
+  assert.match(main, /link:whisper-start/);
+  assert.match(main, /link:tts-list-voices/);
+  assert.match(main, /link:tts-generate-sample/);
+  assert.match(main, /function generateTelnyxTtsSample/);
+  assert.match(main, /\/v2\/text-to-speech/);
+  assert.match(main, /function startWhisperHelper/);
+  assert.match(main, /function normalizeSpeakSettings/);
+  assert.match(main, /TELNYX_WEBRTC_CONNECTION_ID/);
+  assert.match(main, /TELNYX_WEBRTC_CREDENTIAL_ID/);
+  assert.match(main, /function ensureWebRtcCredential/);
+  assert.match(main, /function ensureWebRtcConnection/);
+  assert.match(main, /\/credential_connections/);
+  assert.match(main, /\/telephony_credentials/);
+  assert.match(main, /filter\[resource_id\]/);
+  assert.match(main, /\/v2\/telephony_credentials\/\$\{encodeURIComponent\(credentialId\)\}\/token/);
+  assert.match(main, /function normalizeDialerState/);
+  assert.match(main, /function normalizeDialerConfig/);
+  assert.match(main, /Standard Dialer/);
+  assert.match(main, /Sales Dialer/);
+  assert.match(main, /Support Dialer/);
   assert.match(main, /tableauWidgetHeaders/);
   assert.match(main, /ACP identity and Tableau view entitlement/);
   assert.match(main, /LITELLM_BASE_URL/);
   assert.match(main, /HINDSIGHT_API_KEY/);
+
+  assert.match(preload, /generateTtsSample/);
+
+  assert.match(app, /Voice Library/);
+  assert.match(app, /sampleVoice/);
+  assert.match(app, /All hosted/);
+  assert.match(app, /TTS Library/);
   assert.match(main, /GURU_COLLECTION_ID/);
   assert.match(main, /GOOGLE_DRIVE_ACCESS_TOKEN/);
   assert.match(main, /TELNYX_ACTOR/);
@@ -876,13 +2135,25 @@ test("main process has v2 state, live-ready adapters, and approval-gated PR flow
   assert.match(main, /a2a-discovery\.query\.prod\.telnyx\.io:4000/);
   assert.match(main, /\/api\/agents\?page=1&page_size=50/);
   assert.match(main, /telnyxDocsSources/);
+  assert.doesNotMatch(main, /GitHub Markdown source of truth/);
   assert.match(main, /searchTelnyxDocs/);
+  assert.match(main, /fallbackTelnyxDocsResults/);
+  assert.match(main, /filter\(\(source\) => !String\(source\.id \|\| ""\)\.startsWith\("explorer-docs-fallback-"\)\)/);
+  assert.match(main, /fallbackGuruSkillResults/);
+  assert.match(main, /Built-in Help Center and Developer Docs search/);
+  assert.match(main, /Guru-backed Link skills/);
   assert.match(main, /searchIntercomHelpCenter/);
   assert.match(main, /searchMintlifyDocs/);
   assert.match(main, /INTERCOM_ACCESS_TOKEN/);
   assert.match(main, /MINTLIFY_API_KEY/);
   assert.match(main, /team-telnyx\/link/);
   assert.match(main, /Selected Link chat agent/);
+  assert.match(main, /function createChatSession/);
+  assert.match(main, /New session initialized/);
+  assert.match(main, /runA2aDiscoveryChat/);
+  assert.match(main, /message\/send/);
+  assert.match(main, /\/a2a\/\$\{encodeURIComponent\(targetAgentId\)\}\/rpc/);
+  assert.match(main, /X-A2A-Idempotency-Key/);
   assert.match(main, /hindsightAgentCapabilityInstruction/);
   assert.match(main, /Hindsight is Link's source-attributed long-term memory layer/);
   assert.match(main, /listA2aDiscoveryAgents/);
@@ -903,10 +2174,11 @@ test("main process has v2 state, live-ready adapters, and approval-gated PR flow
 test("workboard page has provider-aware adapters and local fallback UI", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const api = await readFile("src/renderer/api.ts", "utf8");
+  const main = await readFile("src/main/main.js", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
 
   assert.match(app, /WorkboardView/);
-  assert.match(app, /<h1>Tasks<\/h1>/);
+  assert.match(app, /<h1>Taskbox<\/h1>/);
   assert.doesNotMatch(app, /Dispatch ready/);
   assert.doesNotMatch(app, /workboardProviderGrid/);
   assert.doesNotMatch(app, /workboardSummary/);
@@ -917,26 +2189,105 @@ test("workboard page has provider-aware adapters and local fallback UI", async (
   assert.match(app, /workboardSearchRow/);
   assert.match(app, /const \[filtersOpen, setFiltersOpen\] = useState\(false\)/);
   assert.match(app, /Hide task filters/);
-  assert.match(app, /savedBotAssignees/);
-  assert.match(app, /Choose saved bot/);
-  assert.match(app, /Add Task/);
+  assert.match(app, /acpAgentAssignees/);
+  assert.match(app, /hostedTaskAgents/);
+  assert.match(app, /linkApi\.listHostedAgents\(\)/);
+  assert.match(app, /workboardAgentRuntimeType/);
+  assert.match(app, /accountStatus=\{accountStatus\}/);
+  assert.match(app, /selfAssignee/);
+  assert.match(app, /taskAssignees/);
+  assert.match(app, /Assign to Self/);
+  assert.match(app, /Choose assignee/);
+  assert.match(app, /agent\.source === "agent-control-plane"/);
+  assert.match(app, /directoryAcpAgents = agents[\s\S]*?filter\(\(agent\) => agent\.source === "agent-control-plane"\)/);
+  assert.match(app, /hostedAcpAgents = hostedTaskAgents/);
+  assert.match(app, /Send to Agent/);
+  assert.match(app, /Create/);
+  assert.match(app, /Save Task/);
+  assert.doesNotMatch(app, /Save Draft/);
+  assert.match(app, /openTaskMonitoringSession/);
+  assert.match(app, /finishTaskMutation/);
+  assert.match(app, /ensureTaskSessionForCard/);
+  assert.match(app, /dispatchTaskSessionForCard/);
+  assert.match(app, /linkApi\.ensureWorkboardTaskSession/);
+  assert.match(app, /linkApi\.dispatchWorkboardTask/);
+  assert.match(app, /setSelectedSessionId\(session\.id\)/);
+  assert.match(app, /setAssistantCollapsed\(false\)/);
+  assert.match(app, /Edit task/);
+  assert.match(app, /selectedWorkboardChatAgent/);
+  assert.match(app, /selectedChatAgent=\{selectedWorkboardChatAgent\}/);
+  assert.match(app, /setSelectedChatAgentId=\{setSelectedChatAgentId\}/);
+  assert.match(app, /selectedChatAgent/);
+  assert.match(app, /preferredAgentType/);
+  assert.match(app, /autoDispatch:\s*false/);
+  assert.match(app, /useState<WorkboardStatus>\("todo"\)/);
+  assert.match(app, /card\.status === "todo" && status === "in_progress"/);
+  assert.match(app, /Choose an ACP or A2A agent before sending the task/);
+  assert.match(app, /agent\.source === "a2a-discovery"/);
+  assert.match(app, /if \(status === "todo"\) return "To Do"/);
+  assert.match(app, /if \(status === "needs_review"\) return "Needs Review"/);
+  assert.match(app, /Resync tasks/);
+  assert.match(app, /className="iconButton agentFilterButton"[\s\S]*?aria-label="Resync tasks"/);
+  assert.doesNotMatch(app, />\s*Refresh tasks\s*</);
+  assert.doesNotMatch(app, /lastSyncedAt/);
+  assert.doesNotMatch(app, /workboardSyncStatus/);
+  assert.doesNotMatch(app, /availableProvider\?\.label/);
   assert.doesNotMatch(app, /Add card/);
   assert.match(styles, /\.workboardView\s*\{[\s\S]*?overflow-x:\s*hidden/);
-  assert.match(styles, /\.workboardSearchRow\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(280px,\s*1fr\)/);
-  assert.match(styles, /\.workboardToolbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(180px,\s*220px\) auto/);
+  assert.match(styles, /\.workboardSearchRow\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(280px,\s*1fr\) 44px/);
+  assert.match(styles, /\.workboardSearchRow\s*\{[\s\S]*?margin:\s*0;/);
+  assert.doesNotMatch(styles, /\.workboardSyncStatus/);
+  assert.match(styles, /\.workboardToolbar\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(180px,\s*220px\)\)/);
   assert.match(styles, /\.kanbanScroller\s*\{[\s\S]*?overflow-x:\s*auto/);
   assert.match(styles, /\.kanbanBoard\s*\{[\s\S]*?width:\s*max-content/);
   assert.match(app, /Search cards, labels, assignees, or diagnostics/);
   assert.match(styles, /\.kanbanColumn\s*{[^}]*min-width:\s*0/s);
   assert.match(styles, /\.workboardRows\s*\{[\s\S]*?gap:\s*10px/);
   assert.match(styles, /\.workboardRowEmpty\s*\{[\s\S]*?min-height:\s*42px/);
-  assert.match(api, /WorkboardProvider = "auto" \| "hermes" \| "openclaw" \| "local"/);
+  assert.match(api, /WorkboardProvider = "auto" \| "hermes" \| "openclaw" \| "google_tasks" \| "local"/);
+  assert.match(api, /WorkboardStatus =[\s\S]*?"todo"[\s\S]*?"in_progress"[\s\S]*?"needs_review"[\s\S]*?"done"/);
+  assert.match(api, /const workboardColumns: WorkboardStatus\[\] = \["needs_review", "todo", "in_progress", "done"\]/);
+  assert.match(api, /taskBoardOperatingGuide/);
+  assert.match(api, /Agents move finished work to Needs Review, not Done/);
+  assert.match(api, /preferredAgentType\?: "hermes" \| "openclaw"/);
+  assert.match(api, /assigneeId\?: string/);
+  assert.match(api, /autoDispatch\?: boolean/);
+  assert.match(api, /WorkboardTaskSession/);
+  assert.match(api, /ensureWorkboardTaskSession/);
+  assert.match(api, /dispatchWorkboardTask/);
   assert.match(api, /WorkboardSnapshot/);
+  assert.match(app, /startCardPointerDrag/);
+  assert.match(app, /finishCardPointerDrag/);
+  assert.match(app, /data-workboard-status=\{status\}/);
+  assert.match(app, /card\.status === "done" &&/);
+  assert.match(app, /Archive done task/);
+  assert.match(app, /Delete done task/);
+  assert.match(styles, /\.workboardRowCard\.pointerDragging,[\s\S]*?\.kanbanCard\.pointerDragging/);
+  assert.match(main, /resolveWorkboardProvider\(requested, providers, preferredAgentType\)/);
+  assert.match(main, /preferred === "hermes"/);
+  assert.match(main, /listA2aDiscoveryAgents\(\)\.catch\(\(\) => \[\]\)/);
+  assert.match(main, /status\.ready \? listHostedAgents\(\) : \[\]/);
+  assert.match(main, /workboardStatusArchitecture/);
+  assert.match(main, /Needs Review/);
+  assert.match(main, /final response ready for a human in the loop to review/);
+  assert.match(main, /workboardStatusGuideInstruction/);
+  assert.match(main, /Agents must move work to Needs Review, not Done/);
+  assert.match(main, /updateOpenClawWorkboardCard/);
+  assert.match(main, /"workboard", "update"/);
+  assert.match(main, /workboardTaskSessions/);
+  assert.match(main, /ensureWorkboardTaskSession/);
+  assert.match(main, /dispatchWorkboardTask/);
+  assert.match(main, /workboardTaskSessionKey/);
+  assert.doesNotMatch(main, /OpenClaw Workboard card mutation is not wired yet/);
 });
 
 test("phone page links existing Telnyx numbers and keeps calling controls in the sidebar", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const main = await readFile("src/main/main.js", "utf8");
+  const softphone = await readFile("src/renderer/phone/softphone.tsx", "utf8");
+  const api = await readFile("src/renderer/api.ts", "utf8");
+  const builder = await readFile("src/renderer/phone/dialer-builder.tsx", "utf8");
+  const dialerConfig = await readFile("src/renderer/phone/dialer-config.ts", "utf8");
   const styles = await readFile("src/renderer/styles.css", "utf8");
   const pkg = JSON.parse(await readFile("package.json", "utf8")) as {
     dependencies: Record<string, string>;
@@ -944,8 +2295,9 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
 
   assert.ok(pkg.dependencies["@telnyx/webrtc"]);
   assert.match(app, /PhoneView/);
-  assert.match(app, /Your Telnyx numbers/);
-  assert.match(app, /Refresh numbers/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Phone\} title="Numbers" \/>/);
+  assert.doesNotMatch(app, /Refresh numbers/);
+  assert.match(app, /tab === "numbers" && telnyxApiReady/);
   assert.match(app, /listAccountPhoneNumbers/);
   assert.match(app, /telnyxApiReady/);
   assert.doesNotMatch(app, /Generate setup plan/);
@@ -954,42 +2306,184 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   assert.doesNotMatch(app, /SIP \/ WebRTC/);
   assert.doesNotMatch(app, /Telnyx API key<\/span>/);
   assert.match(app, /Add your Telnyx API key in Settings/);
-  assert.match(app, /Voice AI assistant/);
-  assert.match(app, /AI Assistants/);
+  assert.match(app, /Telnyx Voice AI assistants/);
+  assert.match(app, /\["assistants", "Assistants", Bot\]/);
+  assert.match(app, /view === "phone"[\s\S]*?tab="calls"[\s\S]*?hideSectionSidebar[\s\S]*?headerParent="Link"/);
+  assert.match(app, /tab === "contacts" \|\| tab === "assistants" \|\| tab === "numbers"/);
+  assert.match(app, /settingsPhoneView/);
+  assert.match(app, /hideHeader/);
+  assert.doesNotMatch(app, /\{ id: "builder", label: "Dialer", icon: Keyboard \}/);
+  assert.match(app, /\["dialer", "Dialer Builder", Keyboard\]/);
+  assert.match(app, /Dialer Builder/);
+  assert.match(app, /tab === "dialer" &&/);
+  assert.match(app, /DialerBuilder activeConfig=\{activeDialerConfig\}/);
+  assert.match(builder, /linkApi\.listDialerConfigs/);
+  assert.match(builder, /linkApi\.saveDialerConfig/);
+  assert.match(builder, /linkApi\.activateDialerConfig/);
+  assert.doesNotMatch(builder, /SettingGroup title="Identity"/);
+  assert.doesNotMatch(builder, /Config name/);
+  assert.doesNotMatch(builder, /Caller ID name/);
+  assert.doesNotMatch(builder, /Outbound number/);
+  assert.doesNotMatch(builder, /SettingGroup title="Saved configs"/);
+  assert.match(builder, /phase === "in-call" &&/);
+  assert.match(builder, /dialerTemplateStrip/);
+  assert.match(dialerConfig, /Standard Dialer/);
+  assert.match(dialerConfig, /Sales Dialer/);
+  assert.match(dialerConfig, /Support Dialer/);
   assert.match(app, /Refresh assistants/);
-  assert.match(app, /Link assistant to number/);
-  assert.match(app, /Open Telnyx Portal/);
-  assert.match(app, /selectedPhoneAssistantId/);
+  assert.match(app, /phoneAssistantTable/);
+  assert.match(app, /phoneAssistantTable phoneContentTable/);
+  assert.match(app, /phoneAssistantRows/);
+  assert.doesNotMatch(app, /Telnyx Voice AI assistant\$\{phoneAssistants\.length === 1 \? "" : "s"\} found/);
+  assert.match(app, /No Telnyx Voice AI assistants found for this account/);
+  assert.match(app, /phoneContactTable phoneContentTable/);
+  assert.match(app, /phoneContactControls/);
+  assert.match(app, /phoneCallsTable phoneContentTable/);
+  assert.match(app, /phoneInboxTable phoneContentTable/);
+  assert.match(app, /inboxConnectedOverride/);
+  assert.match(app, /setInboxConnectedOverride\(true\)/);
+  assert.match(app, /chatSearchRow phoneInboxSearchRow/);
+  assert.match(app, /Search unread messages, senders, subjects, or snippets/);
+  assert.match(app, /role="table" aria-label="Unread inbox threads"/);
+  assert.match(app, /<span role="columnheader">From<\/span>/);
+  assert.match(app, /<span role="columnheader">Subject<\/span>/);
+  assert.match(app, /<span role="columnheader">Last<\/span>/);
+  assert.match(app, /<span role="columnheader">Status<\/span>/);
+  assert.match(app, /<span role="columnheader" aria-label="Open thread" \/>/);
+  assert.match(app, /Inbox connected\. 0 unread messages\./);
+  assert.match(app, /const \[inboxBulkEdit, setInboxBulkEdit\] = useState\(false\)/);
+  assert.match(app, /const \[selectedInboxRowIds, setSelectedInboxRowIds\] = useState<string\[]>\(\[]\)/);
+  assert.match(app, /<BulkEditControls[\s\S]*?active=\{inboxBulkEdit\}[\s\S]*?onArchive=\{hideSelectedInboxRows\}/);
+  assert.match(app, /<BulkSelectCell[\s\S]*?active=\{inboxBulkEdit\}[\s\S]*?checked=\{selectedInboxRowIds\.includes\(thread\.threadId\)\}/);
+  assert.match(app, /<TableRowLifecycleActions[\s\S]*?label=\{selectedInboxThread\.subject \|\| "inbox thread"\}[\s\S]*?onArchive=\{hideSelectedInboxThread\}/);
+  assert.match(app, /callQuery/);
+  assert.match(app, /callFiltersOpen/);
+  assert.match(app, /callAgentFilter/);
+  assert.match(app, /callDirectionFilter/);
+  assert.match(app, /callStatusFilter/);
+  assert.match(app, /const \[callBulkEdit, setCallBulkEdit\] = useState\(false\)/);
+  assert.match(app, /const \[selectedCallRowIds, setSelectedCallRowIds\] = useState<string\[]>\(\[]\)/);
+  assert.match(app, /Search calls, numbers, contacts, or agents/);
+  assert.match(app, /<BulkEditControls[\s\S]*?active=\{callBulkEdit\}[\s\S]*?onArchive=\{hideSelectedCallRows\}/);
+  assert.match(app, /<BulkSelectCell[\s\S]*?active=\{callBulkEdit\}[\s\S]*?checked=\{selectedCallRowIds\.includes\(call\.id\)\}/);
+  assert.match(app, /<div className="chatSearchRow phoneCallSearchRow">[\s\S]*?<section className=\{`phoneCallsTable phoneContentTable \$\{callBulkEdit \? "bulkEditing" : ""\}`\} aria-label="Recent calls">/);
+  assert.doesNotMatch(app, /<section className="phoneCallsTable phoneContentTable" aria-label="Recent calls">\s*<div className="chatSearchRow phoneCallSearchRow">/);
+  assert.match(app, /title=\{callQuery\.trim\(\)[\s\S]*?\? "No calls found" : "No call history yet"\}/);
+  assert.match(app, /body=\{callQuery\.trim\(\)[\s\S]*?\? "Try another search term or filter\." : "Calls placed from Link will appear here\."\}/);
+  assert.match(app, /aria-label=\{callFiltersOpen \? "Hide call filters" : "Show call filters"\}/);
+  assert.match(app, /role="group" aria-label="Call filters"/);
+  assert.match(app, /All agents/);
+  assert.match(app, /All directions/);
+  assert.match(app, /All statuses/);
+  assert.match(app, /No calls found/);
+  assert.match(app, /Try another search term or filter\./);
+  assert.match(app, /phoneCallRows/);
+  assert.match(app, /<span role="columnheader">Agent<\/span>/);
+  assert.doesNotMatch(app, /<Panel title="Contact search">/);
+  assert.doesNotMatch(app, /<Panel title="Calls">/);
+  assert.match(app, /phoneNumberTable phoneContentTable/);
+  assert.doesNotMatch(app, /is selected for Link/);
+  assert.match(app, /button className="button primary" onClick=\{\(\) => window\.open\("https:\/\/portal\.telnyx\.com\/#\/app\/numbers\/my-numbers", "_blank"\)\}>Open Telnyx Portal/);
   assert.match(app, /listPhoneAssistants/);
   assert.doesNotMatch(app, /Create assistant/);
   assert.doesNotMatch(app, /Assistant instructions/);
-  assert.match(app, /Multi-participant AI calls/);
-  assert.match(app, /multiParticipantEnabled/);
-  assert.match(app, /Phone or SIP URI/);
-  assert.match(app, /Skip Turn/);
-  assert.match(app, /Weekly availability windows/);
-  assert.match(app, /defaultAvailabilityWindows/);
-  assert.match(app, /\$\{window\.label\} start time/);
-  assert.match(app, /availabilitySlider/);
-  assert.match(app, /Google Calendar availability/);
+  assert.doesNotMatch(app, /Link assistant to number/);
+  assert.doesNotMatch(app, /selectedPhoneAssistantId/);
+  assert.doesNotMatch(app, /Multi-participant AI calls/);
+  assert.doesNotMatch(app, /multiParticipantEnabled/);
+  assert.doesNotMatch(app, /Phone or SIP URI/);
+  assert.doesNotMatch(app, /Skip Turn/);
+  assert.doesNotMatch(app, /Weekly availability windows/);
+  assert.doesNotMatch(app, /defaultAvailabilityWindows/);
+  assert.doesNotMatch(app, /\$\{window\.label\} start time/);
+  assert.doesNotMatch(app, /availabilitySlider/);
+  assert.doesNotMatch(app, /Google Calendar availability/);
   assert.doesNotMatch(app, /Calendar ID/);
   assert.doesNotMatch(app, /Calendar action/);
   assert.doesNotMatch(app, /Calendar webhook/);
   assert.doesNotMatch(app, /Google Calendar OAuth still belongs/);
-  assert.match(app, /Contact search/);
+  assert.match(app, /className="tabPageActionBar"[\s\S]*?Add Contact/);
   assert.match(app, /Search connected contacts/);
   assert.match(app, /Contact source filters/);
+  assert.match(app, /label: "Telnyx"/);
   assert.match(app, /label: "Google"/);
   assert.match(app, /label: "Salesforce"/);
+  assert.match(app, /label: "Salesloft"/);
+  assert.match(app, /Google Workspace/);
+  assert.match(app, /Salesforce Contacts/);
+  assert.match(app, /Connect contact sync through Skills/);
+  assert.match(app, /telnyx-link-dismissed-contact-skill-prompts/);
+  assert.match(app, /visibleContactSkillLinks/);
+  assert.match(app, /dismissContactSkillPrompt/);
+  assert.match(app, /startManagedSkillSetupChat/);
+  assert.match(app, /Connect/);
+  assert.match(app, /<Zap size=\{14\} \/>/);
+  assert.match(app, /Link Bot/);
+  assert.match(app, /telnyxBotContacts/);
   assert.match(app, /setDialNumber\(contact\.phone\)/);
-  assert.match(app, /No connected contacts yet/);
+  assert.match(app, /No callable number/);
   assert.doesNotMatch(app, /contact-pete/);
   assert.doesNotMatch(app, /AI SWE Agent/);
   assert.doesNotMatch(app, /Acme Primary Contact/);
   assert.doesNotMatch(app, /Seb Goodijn/);
   assert.doesNotMatch(app, /Acme QBR attendee/);
-  assert.match(app, /panelPhoneDialer/);
-  assert.match(app, /Choose number/);
+  assert.match(app, /LinkSoftphone/);
+  assert.match(softphone, /aria-label="Your number"/);
+  assert.match(softphone, /new TelnyxRTC/);
+  assert.match(softphone, /remoteElement:\s*"link-phone-remote-audio"/);
+  assert.match(softphone, /telnyxCallControlId/);
+  assert.match(softphone, /linkApi\.listAccountPhoneNumbers/);
+  assert.match(softphone, /setLinkedPhoneNumber/);
+  assert.match(softphone, /initialDialNumber/);
+  assert.match(softphone, /linkSoftphoneBotPicker/);
+  assert.match(softphone, /Include bot/);
+  assert.match(softphone, /Include Bot/);
+  assert.match(softphone, /<Users size=\{24\} \/>/);
+  assert.doesNotMatch(softphone, /BotAssistedContactIcon/);
+  assert.match(softphone, /visiblePhaseFeatures/);
+  assert.match(softphone, /linkSoftphonePhaseModules/);
+  assert.match(softphone, /featureIconMap/);
+  assert.match(softphone, /crmProviderReady/);
+  assert.match(softphone, /openPhoneContacts/);
+  assert.match(softphone, /callState === "ended" \? "post-call"/);
+  assert.match(main, /phone-start-ai-assistant/);
+  assert.match(main, /ai_assistant_start/);
+  assert.match(main, /command_id: crypto\.randomUUID\(\)/);
+  assert.match(styles, /\.linkSoftphone\s*{/);
+  assert.match(styles, /\.linkSoftphoneIdentityRow\s*{/);
+  assert.match(styles, /\.linkSoftphoneBotField\s*{/);
+  assert.match(styles, /\.linkSoftphoneBotPicker\s*{/);
+  assert.match(styles, /\.linkSoftphoneContactCard\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) 44px/);
+  assert.match(styles, /\.linkSoftphoneContactShortcut\s*\{[\s\S]*?width:\s*44px[\s\S]*?min-width:\s*44px[\s\S]*?height:\s*44px/);
+  assert.match(styles, /\.linkSoftphoneContactShortcuts\s*\{[\s\S]*?justify-self:\s*end[\s\S]*?width:\s*44px/);
+  assert.match(styles, /\.linkSoftphonePhaseModules\s*{/);
+  assert.match(styles, /\.linkSoftphoneFeatureModule\s*{/);
+  assert.match(styles, /\.linkSoftphoneModuleField textarea,\s*\n\.linkSoftphoneModuleField select\s*{/);
+  assert.match(styles, /\.linkSoftphoneAgentInvite\s*{/);
+  assert.doesNotMatch(styles, /\.linkSoftphoneNumberShortcut\s*{/);
+  assert.match(styles, /\.linkSoftphoneNumberField/);
+  assert.match(styles, /\.linkSoftphoneContactShortcuts\s*{/);
+  assert.match(styles, /\.phoneContentTable/);
+  assert.match(styles, /\.phoneContactTable,\s*\n\.phoneCallsTable\s*{/);
+  assert.match(styles, /\.phoneContactControls\s*{/);
+  assert.match(styles, /\.phoneContactRows\s*{/);
+  assert.match(styles, /\.phoneContactTable \.contactResult\s*\{[\s\S]*?border:\s*0[\s\S]*?border-bottom:\s*1px solid var\(--border\)/);
+  assert.match(styles, /\.phoneCallSearchRow\s*\{/);
+  assert.match(styles, /\.phoneCallFilterBar\s*\{[\s\S]*?grid-template-columns:\s*auto repeat\(3,\s*minmax\(150px,\s*190px\)\)/);
+  assert.match(styles, /\.phoneCallRow\s*\{[\s\S]*?grid-template-columns:\s*minmax\(120px,\s*1\.1fr\) minmax\(110px,\s*0\.8fr\) minmax\(100px,\s*0\.75fr\)[\s\S]*?minmax\(76px,\s*0\.55fr\)/);
+  assert.match(styles, /\.phoneCallsTable\.bulkEditing \.phoneCallRow\s*\{[\s\S]*?grid-template-columns:\s*28px minmax\(120px,\s*1\.1fr\)/);
+  assert.match(styles, /\.phoneCallRowHead\s*\{/);
+  assert.match(styles, /\.phoneInboxSearchRow\s*\{[\s\S]*?grid-template-columns:\s*var\(--top-control-height\) minmax\(0,\s*1fr\)/);
+  assert.match(styles, /\.phoneInboxRow\s*\{[\s\S]*?grid-template-columns:\s*minmax\(120px,\s*0\.9fr\) minmax\(170px,\s*1\.5fr\)[\s\S]*?34px/);
+  assert.match(styles, /\.phoneInboxRows\.bulkEditing \.phoneInboxRow\s*\{[\s\S]*?grid-template-columns:\s*28px minmax\(120px,\s*0\.9fr\)/);
+  assert.match(styles, /\.phoneInboxRowHead\s*\{/);
+  assert.match(styles, /\.phoneInboxEmptyState\s*\{/);
+  assert.match(styles, /\.contactMcpLinks\s*{/);
+  assert.match(styles, /\.contactMcpDismiss\s*{/);
+  assert.match(styles, /\.contactMcpEnable\s*{/);
+  assert.match(styles, /\.dialerBuilder\s*{/);
+  assert.match(styles, /\.dialerTemplateGrid\s*{/);
+  assert.match(styles, /\.dialerPreview\s*{/);
   assert.match(app, /connectors=\{connectors\}/);
   assert.ok(main.includes("/ai/assistants"));
   assert.ok(main.includes("/phone_numbers"));
@@ -1001,7 +2495,7 @@ test("phone page links existing Telnyx numbers and keeps calling controls in the
   assert.doesNotMatch(app, /Link can handle the phone number, dialer, and Voice AI setup for you\./);
 });
 
-test("calendar page uses Google Calendar meetings for calls and transcripts", async () => {
+test("calendar page uses Google Calendar events for meetings, calls, and descriptions", async () => {
   const app = await readFile("src/renderer/App.tsx", "utf8");
   const api = await readFile("src/renderer/api.ts", "utf8");
   const main = await readFile("src/main/main.js", "utf8");
@@ -1009,19 +2503,45 @@ test("calendar page uses Google Calendar meetings for calls and transcripts", as
 
   assert.match(api, /\|\s*"calendar"/);
   assert.match(app, /CalendarDays/);
-  assert.match(app, /\{ id: "phone", label: "Phone", icon: Phone \},\n\s*\{ id: "calendar", label: "Calendar", icon: CalendarDays \}/);
+  assert.match(app, /\{ id: "phone", label: "Calls", icon: Phone \},\n\s*\{ id: "inbox", label: "Inbox", icon: Inbox \},\n\s*\{ id: "workboard", label: "Taskbox", icon: SquareCheck \},\n\s*\{ id: "drive", label: "Drive", icon: FolderOpen \},\n\s*\{ id: "calendar", label: "Calendar", icon: CalendarDays \}/);
   assert.match(app, /view === "calendar"/);
   assert.match(app, /function CalendarView/);
   assert.match(app, /connectors=\{connectors\} linkedPhoneNumber=\{linkedPhoneNumber\} setView=\{setView\}/);
   assert.match(app, /Google Calendar/);
-  assert.match(app, /calendarEvents:\s*CalendarEventItem\[\]\s*=\s*\[\]/);
-  assert.match(app, /Connect Google Calendar to show meetings/);
+  assert.match(app, /calendarEvents,\s*setCalendarEvents\] = useState<GoogleCalendarEvent\[\]>\(\[\]\)/);
+  assert.match(app, /Connect Google Workspace to show calendar events/);
+  assert.match(app, /Link verifies Google Calendar and Contacts access/);
+  assert.match(app, /Add Event/);
+  assert.match(app, /calendar\.google\.com\/calendar\/u\/0\/r\/eventedit/);
+  assert.match(app, /Schedule Link training session with Pete/);
+  assert.match(app, /https:\/\/calendar\.app\.google\/ZW9BiqTwGaH4K62y8/);
+  assert.match(app, /Schedule session/);
   assert.match(app, /calendarLayout/);
   assert.match(app, /Calendar/);
   assert.match(app, /List/);
+  assert.match(app, /filtersOpen && \(\n\s*<div className="calendarFilterPanel">/);
+  assert.match(app, /className=\{calendarLayout === "calendar" \? "calendarEventGrid calendarMode" : "calendarEventGrid listMode"\}/);
+  assert.match(app, /calendarSchedule/);
+  assert.match(app, /calendarDateRail/);
+  assert.match(app, /calendarEventCard/);
+  assert.match(app, /calendarEventInlineDetails/);
+  assert.match(app, /readFirstInstallDate/);
+  assert.match(app, /trainingSessionTimeFromInstall/);
+  assert.match(app, /calendarEventDateLabel/);
+  assert.match(app, /calendarEventTimeLabel/);
+  assert.match(app, /function isFutureCalendarEvent/);
+  assert.match(app, /const futureVisibleEvents = visibleEvents/);
+  assert.match(app, /title: "Future"/);
+  assert.match(app, /No future calendar events found/);
   assert.match(app, /Start meeting/);
   assert.match(app, /Start call/);
-  assert.match(app, /Notes and transcripts/);
+  assert.match(app, /Event description/);
+  assert.match(app, /With description/);
+  const calendarViewSource = app.slice(app.indexOf("function CalendarView"), app.indexOf("function PhoneView"));
+  assert.doesNotMatch(calendarViewSource, /title:\s*"Past"/);
+  assert.doesNotMatch(calendarViewSource, />Past events</);
+  assert.doesNotMatch(calendarViewSource, /event\.status === "past"/);
+  assert.doesNotMatch(app, /attach notes and transcripts/);
   assert.doesNotMatch(app, /Previous notes and transcripts/);
   assert.doesNotMatch(app, /Acme Messaging escalation/);
   assert.doesNotMatch(app, /Gemini transcript/);
@@ -1030,7 +2550,15 @@ test("calendar page uses Google Calendar meetings for calls and transcripts", as
   assert.match(main, /id:\s*"google-calendar"[\s\S]*?name:\s*"Google Calendar"[\s\S]*?category:\s*"Calendar"/);
   assert.match(styles, /\.calendarControls\s*{/);
   assert.match(styles, /\.calendarEventGrid\s*{/);
+  assert.match(styles, /\.calendarSchedule\s*{/);
+  assert.match(styles, /\.calendarView\s*\{[\s\S]*?overflow:\s*auto/);
+  assert.match(styles, /\.calendarEventShell\s*\{[\s\S]*?overflow:\s*visible/);
+  assert.match(styles, /\.calendarSchedule\s*\{[\s\S]*?overflow:\s*visible/);
+  assert.match(styles, /\.calendarDateRail\s*{/);
+  assert.match(styles, /\.calendarEventCard\s*{/);
+  assert.match(styles, /\.calendarEventInlineDetails\s*{/);
   assert.match(styles, /\.calendarEmptyState\s*{/);
+  assert.match(styles, /\.calendarEventCard\.sample\s*{/);
 });
 
 test("agents page includes search and squad filtering for discovered agents", async () => {
@@ -1040,45 +2568,116 @@ test("agents page includes search and squad filtering for discovered agents", as
   const styles = await readFile("src/renderer/styles.css", "utf8");
 
   assert.match(app, /squadFilter/);
-  assert.match(app, /pluginFilter/);
   assert.match(app, /sortMode/);
   assert.match(app, /useState<"az" \| "za" \| "status">\("az"\)/);
-  assert.match(app, /setTab\] = useState<"agents" \| "my-agents" \| "mcps">\("agents"\)/);
-  assert.match(app, /aria-label="Agent sections"/);
-  assert.match(app, /className="agentTabs"/);
-  assert.match(app, /\["agents", "Agents", Bot\]/);
-  assert.match(app, /\["my-agents", "My Agents", Users\]/);
-  assert.match(app, /\["mcps", "MCPs", Grid2X2\]/);
-  assert.match(app, /tab === "my-agents"/);
-  assert.match(app, /tab === "mcps"/);
+  assert.match(app, /sectionFilter/);
+  assert.match(app, /label="Agent sections"/);
+  assert.match(app, /className="pageSectionShell"/);
+  assert.match(app, /className="pageSectionSidebar"/);
+  assert.match(app, /className="pageSectionMain"/);
+  assert.match(styles, /\.agentsView \.pageSectionSidebar\s*\{[\s\S]*?display:\s*none/);
+  assert.doesNotMatch(app, /<PageSectionHeader parent="Agents"/);
+  assert.doesNotMatch(app, /\["mcps", "Plugins", Plug\]/);
+  assert.match(app, /tab === "skills"/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Users\} title="Personal" className="dojoSectionHeading" \/>/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Bot\} title="Squads" className="dojoSectionHeading" \/>/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Store\} title="Telnyx" className="dojoSectionHeading" \/>/);
   assert.match(app, /linkApi\.listHostedAgents/);
   assert.match(app, /filteredHostedAgents/);
   assert.match(app, /sortHostedAgents\(results, sortMode\)/);
-  assert.match(app, /Search my agents/);
+  assert.match(app, /Search agents/);
+  assert.match(app, /<h2>You<\/h2>/);
+  assert.match(app, /<h2>Team<\/h2>/);
+  assert.match(app, /All agents/);
+  assert.match(app, /className="agentCategoryBadge"/);
   assert.match(app, /All statuses/);
+  assert.match(app, /All teams/);
+  assert.match(app, /botSkillTeamFilter/);
+  assert.match(app, /botSkillTeams/);
+  assert.match(app, /squadKits/);
+  assert.match(app, /filteredSquadKits/);
+  assert.match(app, /toggleSquadKit/);
+  assert.match(app, /for \(const skill of kit\?\.skills \?\? \[\]\) void loadBotSkillMarkdown\(skill\.name\)/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Users\} title="My Skills" className="dojoSectionHeading" \/>/);
+  assert.match(app, /Active agent teams/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Zap\} title="Skills" className="dojoSectionHeading" \/>/);
   assert.match(app, /Add Agent/);
+  assert.match(app, /Create Skill/);
   assert.match(app, /openAddAgentFlow/);
-  assert.match(app, /linkApi\.openAgentControlPlaneSetup/);
+  assert.match(app, /openAgentSetupSettings/);
+  assert.match(app, /openAgentSetup/);
+  assert.doesNotMatch(app, /startAgentSetupChat/);
+  assert.match(app, /startSkillBuilderChat/);
+  assert.match(app, /agentControlPlaneLoadMessage/);
+  assert.match(app, /agentRecoveryBanner/);
+  assert.match(app, /Error invoking remote method 'link:list-hosted-agents'/);
+  assert.match(app, /readInstalledAgentSkillKeys/);
+  assert.match(app, /buildToolStudioManifest/);
+  assert.match(app, /buildToolStudioPrompt/);
+  assert.match(app, /linkApi\.publishToolManifest/);
+  assert.match(app, /telnyx-link-installed-agent-skills/);
+  assert.match(app, /agentAppearanceStorageKey = "telnyx-link-agent-appearances"/);
+  assert.match(app, /systemAgentEmojis/);
+  assert.match(app, /readAgentAppearances/);
+  assert.match(app, /function AgentAvatar/);
+  assert.match(app, /uploadAgentImage/);
+  assert.match(app, /accept="image\/\*"/);
+  assert.match(app, /agentEmojiPicker/);
+  assert.match(app, /resetAgentAppearance/);
+  assert.match(app, /Tool Studio session/);
+  assert.match(app, /Generated SKILL\.md/);
+  assert.match(app, /Publish Skill/);
+  assert.match(app, /Refine in Chat/);
+  assert.match(app, /Source of truth/);
+  assert.match(app, /Repeated checks/);
+  assert.match(app, /Human checkpoints/);
+  assert.match(app, /Test fixture/);
+  assert.match(app, /className="skillBuilderForm"/);
+  assert.match(app, /className="mySkillsList"/);
+  assert.match(app, /className="mySkillRow"/);
+  assert.match(app, /Wiki/);
+  assert.match(app, /<Zap size=\{24\} \/>[\s\S]*?<strong>No personal agents found<\/strong>/);
+  assert.doesNotMatch(app, /Use the \+ button on Wiki skills to add skills here/);
+  assert.match(app, /Agent Control Plane setup/);
+  assert.match(app, /agentSetupDraft/);
+  assert.match(app, /linkApi\.openAgentControlPlaneSetup\(\{ draft: agentSetupDraft \}\)/);
+  assert.match(app, /Continue in ACP/);
+  assert.match(app, /Create the agent with the selected runtime, squad, access, and safety settings/);
+  assert.doesNotMatch(app, /acpStatusStrip/);
+  assert.doesNotMatch(app, /acpReadyList/);
+  assert.doesNotMatch(app, /Deployment checklist/);
+  assert.doesNotMatch(app, /Default actor/);
+  assert.doesNotMatch(app, /Rev2 token/);
+  assert.doesNotMatch(app, /Create access/);
+  assert.doesNotMatch(app, /Ready to open the new-agent form/);
+  assert.doesNotMatch(app, /Open new-agent form/);
+  assert.doesNotMatch(app, /This setup does not read or modify existing agents/);
+  assert.doesNotMatch(app, /Deployment-ready summary/);
+  assert.doesNotMatch(app, /ACP base URL:/);
+  assert.doesNotMatch(app, /Connected sources:/);
+  assert.doesNotMatch(app, /Opened a guided agent setup chat in the right sidebar/);
   assert.match(app, /telnyx-link-active-agent/);
   assert.doesNotMatch(app, /<Panel title="Active agent">/);
   assert.doesNotMatch(app, /Swap agents by selecting another agent below/);
   assert.match(app, /Use agent/);
   assert.match(app, /setActiveAgent\(\{ id: agent\.id, displayName: agent\.displayName \}\)/);
-  assert.match(app, /<ConnectionsView[\s\S]*?connectors=\{filteredConnectors\}[\s\S]*?tools=\{filteredTools\}[\s\S]*?embedded/);
+  assert.match(app, /type SettingsTab = "auth" \| "plugins" \| "contacts" \| "assistants" \| "numbers" \| "agents" \| "speak" \| "dialer" \| "design"/);
+  assert.match(app, /tab=\{settingsTab\}/);
+  assert.doesNotMatch(app, /setSetupTab/);
+  assert.match(app, /\["plugins", "Plugins", Plug\]/);
+  assert.match(app, /<ConnectionsView[\s\S]*?connectors=\{connectors\}[\s\S]*?tools=\{tools\}[\s\S]*?embedded[\s\S]*?showHeader=\{false\}/);
   assert.match(app, /agentFilterButton/);
   assert.match(app, /SlidersHorizontal/);
-  assert.match(app, /Search agents, skills, tools, or squads/);
   assert.match(app, /All squads/);
-  assert.match(app, /All categories/);
-  assert.match(app, /Search MCPs, APIs, and plugins/);
-  assert.match(app, /className="mcpsPanel"/);
+  assert.match(app, /className="mcpsPanel pluginsSettingsPanel"/);
   assert.doesNotMatch(app, /<CredentialSection title="MCP Access"/);
   assert.doesNotMatch(app, /optionalCredentials/);
-  assert.match(app, /openSettings=\{\(\) => setTab\("mcps"\)\}/);
+  assert.match(app, /openSettings=\{\(\) => \{[\s\S]*?setTab\("auth"\);[\s\S]*?\}\}/);
   assert.match(app, /sortAgents\(results, sortMode\)/);
-  assert.match(app, /sortConnectors\(results, sortMode\)/);
-  assert.match(app, /sortTools\(results, sortMode\)/);
   assert.match(app, /sendAgentMessage/);
+  assert.match(app, /availableA2aAgents/);
+  assert.match(app, /chatAgentOptionLabel/);
+  assert.match(app, /agentSource: selectedChatAgent\.source/);
   assert.match(app, /Message \$\{agent\.displayName\}/);
   assert.match(app, /function toggleBookmark/);
   assert.match(app, /Bookmark agent/);
@@ -1091,10 +2690,16 @@ test("agents page includes search and squad filtering for discovered agents", as
   assert.match(app, /pluginRowConsole/);
   assert.match(app, /connectorRowSummary/);
   assert.match(app, /connectorRowDetails/);
-  assert.match(app, /<h1>MCPs<\/h1>/);
+  assert.doesNotMatch(app, /<TabPageHeading icon=\{Plug\} title="Plugins" \/>/);
   assert.match(styles, /\.pluginConsole\s*\{[\s\S]*?background:\s*var\(--surface\)/);
+  assert.match(styles, /\.mySkillRow\s*\{/);
+  assert.match(styles, /\.skillBuilderForm\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1\.05fr\) minmax\(320px,\s*0\.95fr\)/);
+  assert.match(styles, /\.skillBuilderSurvey\s*\{/);
+  assert.match(styles, /\.skillBuilderPreview pre\s*\{/);
   assert.match(styles, /\.pluginRowConsole\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
-  assert.match(styles, /\.connectorRowSummary\s*\{[\s\S]*?grid-template-columns:\s*20px 34px minmax\(0,\s*1fr\) auto/);
+  assert.match(styles, /\.connectorRowSummary\s*\{[\s\S]*?grid-template-columns:\s*34px minmax\(0,\s*1fr\) auto/);
+  assert.match(styles, /\.connectorSwitch\s*\{/);
+  assert.match(app, /connectorSwitch \$\{connected \? "enabled" : ""\}/);
   assert.match(app, /connectorInitials/);
   assert.match(app, /expandedConnectorIds/);
   assert.match(app, /agentTypeLabel\(agent\)/);
@@ -1111,6 +2716,13 @@ test("agents page includes search and squad filtering for discovered agents", as
   assert.doesNotMatch(api, /connector\("mcp-proxy", "Telnyx MCP Proxy", "MCP"/);
   assert.match(main, /id:\s*"mcp-proxy"[\s\S]*?name:\s*"Telnyx MCP Proxy"[\s\S]*?category:\s*"MCP"/);
   assert.match(main, /mcpProxyFallbackServers/);
+  assert.match(main, /team-telnyx\/telnyx-mcp-server/);
+  assert.match(main, /team-telnyx\/telnyx-debugging-mcp/);
+  assert.match(main, /team-telnyx\/noc-tools/);
+  assert.match(main, /team-telnyx\/rate-deck-mcp/);
+  assert.match(main, /team-telnyx\/infra-svc-minerva-mcp/);
+  assert.match(main, /team-telnyx\/mcp-apps/);
+  assert.match(main, /mergeMcpProxyServers\(mcpProxyFallbackServers, liveServers\)/);
   assert.match(main, /fetchMcpProxyServers/);
   assert.match(main, /\/mcp-registry\/servers/);
   assert.match(main, /\/mcp-registry\/tools/);
@@ -1128,7 +2740,13 @@ test("agents page includes search and squad filtering for discovered agents", as
   assert.match(main, /source:\s*"aida"/);
   assert.match(api, /source: "agent-control-plane" \| "a2a-discovery" \| "slack" \| "aida"/);
   assert.match(main, /displayName: "AIDA"/);
-  assert.match(styles, /\.agentTabs\s*\{[\s\S]*?width:\s*min\(1120px,\s*100%\)[\s\S]*?margin:\s*0 auto 8px/);
+  assert.match(styles, /\.phoneView,[\s\S]*?\.settingsView\s*\{[\s\S]*?padding:\s*0;/);
+  assert.match(styles, /\.pageSectionShell\s*\{[\s\S]*?grid-template-columns:\s*72px minmax\(0,\s*1fr\)[\s\S]*?border:\s*0/);
+  assert.match(app, /<Icon size=\{18\} \/>/);
+  assert.match(styles, /\.pageSectionSidebar button svg\s*\{[\s\S]*?width:\s*18px;[\s\S]*?height:\s*18px/);
+  assert.match(styles, /\.pageSectionSidebar\s*\{[\s\S]*?border-right:\s*1px solid var\(--border\)/);
+  assert.match(styles, /\.pageSectionSidebar button\.selected\s*\{[\s\S]*?border-color:\s*var\(--border\)/);
+  assert.match(styles, /\.pageSectionMain\s*\{[\s\S]*?overflow:\s*auto/);
   assert.match(styles, /\.agentControls\s*\{[\s\S]*?grid-template-columns:\s*44px minmax\(280px,\s*1fr\) 112px[\s\S]*?align-items:\s*center/);
   assert.match(app, /agentFilter agentSortFilter/);
   assert.match(styles, /\.agentGrid\s*\{[\s\S]*?grid-template-columns:\s*1fr/);
@@ -1138,7 +2756,13 @@ test("agents page includes search and squad filtering for discovered agents", as
   assert.match(styles, /\.mcpsPanel\s*{/);
   assert.doesNotMatch(app, /activeAgentPanel/);
   assert.match(styles, /\.myAgentRow\.selected\s*{/);
-  assert.match(styles, /\.desktop select\s*\{[\s\S]*?background-position:\s*right 14px center/);
+  assert.match(styles, /\.agentAvatar img\s*\{[\s\S]*?object-fit:\s*cover/);
+  assert.match(styles, /\.agentAvatar\.emojiAvatar\s*{/);
+  assert.match(styles, /\.agentAppearanceEditor\s*{/);
+  assert.match(styles, /\.agentImageUpload input\s*\{[\s\S]*?opacity:\s*0/);
+  assert.match(styles, /\.agentEmojiPicker\s*{/);
+  assert.match(styles, /\.agentEmojiPicker button\.selected\s*{/);
+  assert.match(styles, /\.desktop select\s*\{[\s\S]*?background-position:\s*right 9px center/);
 });
 
 test("local credentials stay out of source and Okta password storage is not supported", async () => {
