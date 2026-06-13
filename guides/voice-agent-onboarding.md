@@ -9,6 +9,8 @@
 - A real phone you can call from for the first bootstrap test
 - Basic familiarity with [AI assistants](/guides/ai-assistants.md), [voice call control](/guides/voice-call-control.md), and [webhooks](/guides/webhooks.md)
 
+If you are still deciding whether this native onboarding path is the right fit, read [Telnyx-Native Assistants Vs Third-Party Voice Orchestration](/guides/telnyx-native-vs-third-party-voice-orchestration.md) first.
+
 ## Quick Start
 
 The production-friendly bootstrap path is:
