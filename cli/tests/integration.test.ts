@@ -32,6 +32,8 @@ describe("telnyx-agent CLI", () => {
       assert.ok(output.includes("Voice"), "Should list Voice category");
       assert.ok(output.includes("AI"), "Should list AI category");
       assert.ok(output.includes("Governance: risk="), "Should surface governed execution metadata");
+      assert.ok(output.includes("path="), "Should surface approval path metadata");
+      assert.ok(output.includes("audit="), "Should surface audit identifier metadata");
     });
 
     it("outputs JSON capabilities", () => {
@@ -43,7 +45,11 @@ describe("telnyx-agent CLI", () => {
       assert.ok(data.total_tools >= 18, "Should have at least 18 tools");
       const firstCategory = Object.values(data.api_capabilities)[0] as Array<Record<string, unknown>>;
       assert.ok(firstCategory[0].governance, "Capability should have governance metadata");
+      assert.ok((firstCategory[0].governance as Record<string, unknown>).approval_path, "Capability should have approval path metadata");
+      assert.ok(Array.isArray((firstCategory[0].governance as Record<string, unknown>).audit_identifiers), "Capability should have audit identifiers metadata");
       assert.ok((data.composite_commands[0] as Record<string, unknown>).governance, "Composite command should have governance metadata");
+      assert.ok(((data.composite_commands[0] as Record<string, unknown>).governance as Record<string, unknown>).approval_path, "Composite command should have approval path metadata");
+      assert.ok(Array.isArray((((data.composite_commands[0] as Record<string, unknown>).governance as Record<string, unknown>).audit_identifiers)), "Composite command should have audit identifiers metadata");
     });
   });
 

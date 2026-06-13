@@ -4,7 +4,6 @@
   "description": "Programmable telecom platform — voice, messaging, IoT, AI, networking, storage.",
   "version": "1.0.0",
   "updated": "2026-03-23T00:00:00Z",
-
   "auth": {
     "type": "api_key",
     "header": "Authorization",
@@ -17,7 +16,6 @@
     "signup_manifest": "https://telnyx.com/.well-known/agent-access.json",
     "docs": "https://telnyx.com/auth.md"
   },
-
   "discovery": {
     "start_url": "https://telnyx.com/agents/start",
     "agent_manifest_url": "https://telnyx.com/.well-known/agent-card.json",
@@ -40,10 +38,16 @@
     "pricing_url": "https://telnyx.com/ai/pricing.json",
     "webhooks_guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks"
   },
-
   "governed_execution": {
-    "schema_version": "2026-05-29",
-    "fields": ["risk_class", "approval_expectation", "memory_scope", "model_behavior"],
+    "schema_version": "2026-06-13",
+    "fields": [
+      "risk_class",
+      "approval_expectation",
+      "approval_path",
+      "memory_scope",
+      "model_behavior",
+      "audit_identifiers"
+    ],
     "risk_classes": {
       "read_only": "Discovery or inspection only. No account mutation or external side effect is expected.",
       "guarded_write": "Billed execution or account-scoped mutation may occur. Confirm intent before mutating state.",
@@ -53,6 +57,11 @@
       "none": "No extra approval is expected beyond normal caller authorization.",
       "confirm_before_mutation": "Obtain human or policy confirmation before any state-changing or billed execution.",
       "confirm_before_external_effect": "Obtain explicit human or policy approval before sending traffic, spending funds, or provisioning live resources."
+    },
+    "approval_paths": {
+      "none_read_only": "Read-only discovery or inspection. Persist returned request identifiers for traceability when needed.",
+      "confirm_intent_then_mutate": "Capture user or policy confirmation and preserve request-scoped identifiers before any billed or state-changing execution.",
+      "explicit_approval_then_execute": "Require explicit operator approval, then retain the returned identifiers needed to review external effects, provisioning, or spend."
     },
     "memory_scopes": {
       "stateless": "The surface does not retain conversation state unless the caller supplies it.",
@@ -65,9 +74,16 @@
       "request_selected": "The caller chooses the model at request time.",
       "customer_configured": "The customer selects and configures the model during resource setup.",
       "app_defined": "Model behavior is constrained by the governed app or workflow surface."
+    },
+    "audit_identifier_legend": {
+      "request_id": "Request-scoped correlation identifier returned by the surface or retained in logs.",
+      "resource_id": "Identifier of the created or mutated Telnyx resource being acted on or reviewed later.",
+      "idempotency_key": "Caller-supplied key used to deduplicate retries or confirm operator intent.",
+      "model_id": "Model identifier selected or returned for AI inference and evaluation flows.",
+      "conversation_id": "Conversation or session identifier for assistant or workflow review.",
+      "webhook_delivery_id": "Webhook or event-delivery identifier used to reconcile downstream effects."
     }
   },
-
   "first_run_paths": [
     {
       "id": "host_authenticated_inference_demo",
@@ -82,7 +98,13 @@
         "risk_class": "guarded_write",
         "approval_expectation": "confirm_before_mutation",
         "memory_scope": "stateless",
-        "model_behavior": "request_selected"
+        "model_behavior": "request_selected",
+        "approval_path": "confirm_intent_then_mutate",
+        "audit_identifiers": [
+          "request_id",
+          "idempotency_key",
+          "model_id"
+        ]
       }
     },
     {
@@ -97,11 +119,14 @@
         "risk_class": "read_only",
         "approval_expectation": "none",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "none_read_only",
+        "audit_identifiers": [
+          "request_id"
+        ]
       }
     }
   ],
-
   "capabilities": [
     {
       "id": "messaging",
@@ -111,12 +136,22 @@
       "cli": "telnyx message send --from +15551234567 --to +15559876543 --text 'Hello'",
       "api": "POST /v2/messages",
       "docs": "https://developers.telnyx.com/docs/messaging",
-      "requires": ["messaging_profile", "phone_number", "10dlc_registration"],
+      "requires": [
+        "messaging_profile",
+        "phone_number",
+        "10dlc_registration"
+      ],
       "governance": {
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -127,12 +162,21 @@
       "cli": "telnyx call dial --from +15551234567 --to +15559876543",
       "api": "POST /v2/calls",
       "docs": "https://developers.telnyx.com/docs/voice",
-      "requires": ["voice_connection", "phone_number"],
+      "requires": [
+        "voice_connection",
+        "phone_number"
+      ],
       "governance": {
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -143,12 +187,21 @@
       "cli": "telnyx assistant create --name 'Support Bot'",
       "api": "POST /v2/ai/assistants",
       "docs": "https://developers.telnyx.com/docs/ai/assistants",
-      "requires": ["phone_number"],
+      "requires": [
+        "phone_number"
+      ],
       "governance": {
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "customer_configured",
-        "model_behavior": "customer_configured"
+        "model_behavior": "customer_configured",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "conversation_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -157,12 +210,22 @@
       "description": "Follow the paved-road first-evaluation flow for Telnyx voice agents, including assistant answer webhook wiring, conversation tracking, message history reuse, and Voice Monitor debugging.",
       "guide": "/guides/voice-agent-onboarding.md",
       "api": "POST /v2/ai/assistants",
-      "requires": ["ai_assistants", "voice", "webhooks"],
+      "requires": [
+        "ai_assistants",
+        "voice",
+        "webhooks"
+      ],
       "governance": {
         "risk_class": "guarded_write",
         "approval_expectation": "confirm_before_mutation",
         "memory_scope": "customer_configured",
-        "model_behavior": "customer_configured"
+        "model_behavior": "customer_configured",
+        "approval_path": "confirm_intent_then_mutate",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "conversation_id"
+        ]
       }
     },
     {
@@ -171,12 +234,21 @@
       "description": "Curated Telnyx package for external coding agents that need one bounded starting point for onboarding, voice AI, messaging, and focused MCP app selection.",
       "guide": "/guides/external-coding-agents.md",
       "docs": "https://telnyx.com/agents/start",
-      "requires": ["ai_assistants", "messaging", "webhooks"],
+      "requires": [
+        "ai_assistants",
+        "messaging",
+        "webhooks"
+      ],
       "governance": {
         "risk_class": "read_only",
         "approval_expectation": "none",
         "memory_scope": "app_scoped",
-        "model_behavior": "app_defined"
+        "model_behavior": "app_defined",
+        "approval_path": "none_read_only",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id"
+        ]
       }
     },
     {
@@ -186,12 +258,23 @@
       "guide": "/guides/ai-receptionist-missed-call.md",
       "api": "POST /v2/ai/assistants",
       "docs": "https://developers.telnyx.com/docs/ai/assistants",
-      "requires": ["ai_assistants", "voice", "messaging", "webhooks"],
+      "requires": [
+        "ai_assistants",
+        "voice",
+        "messaging",
+        "webhooks"
+      ],
       "governance": {
         "risk_class": "guarded_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "customer_configured",
-        "model_behavior": "customer_configured"
+        "model_behavior": "customer_configured",
+        "approval_path": "confirm_intent_then_mutate",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "conversation_id"
+        ]
       }
     },
     {
@@ -206,7 +289,13 @@
         "risk_class": "guarded_write",
         "approval_expectation": "confirm_before_mutation",
         "memory_scope": "stateless",
-        "model_behavior": "request_selected"
+        "model_behavior": "request_selected",
+        "approval_path": "confirm_intent_then_mutate",
+        "audit_identifiers": [
+          "request_id",
+          "idempotency_key",
+          "model_id"
+        ]
       }
     },
     {
@@ -222,7 +311,13 @@
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -233,12 +328,20 @@
       "cli": "telnyx verify send --phone-number +15551234567",
       "api": "POST /v2/verifications",
       "docs": "https://developers.telnyx.com/docs/verify",
-      "requires": ["verify_profile"],
+      "requires": [
+        "verify_profile"
+      ],
       "governance": {
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -248,12 +351,20 @@
       "cli": "telnyx fax send --to +15551234567 --media-url https://example.com/doc.pdf",
       "api": "POST /v2/faxes",
       "docs": "https://developers.telnyx.com/docs/fax",
-      "requires": ["phone_number"],
+      "requires": [
+        "phone_number"
+      ],
       "governance": {
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -268,7 +379,12 @@
         "risk_class": "guarded_write",
         "approval_expectation": "confirm_before_mutation",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "confirm_intent_then_mutate",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id"
+        ]
       }
     },
     {
@@ -283,7 +399,13 @@
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -298,7 +420,13 @@
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -308,12 +436,19 @@
       "guide": "/tools/mcp-apps/README.md",
       "api": "GET https://developers.telnyx.com/.well-known/mcp-app-registry.json",
       "docs": "https://developers.telnyx.com/apps",
-      "requires": ["api_key"],
+      "requires": [
+        "api_key"
+      ],
       "governance": {
         "risk_class": "read_only",
         "approval_expectation": "none",
         "memory_scope": "app_scoped",
-        "model_behavior": "app_defined"
+        "model_behavior": "app_defined",
+        "approval_path": "none_read_only",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id"
+        ]
       }
     },
     {
@@ -328,7 +463,13 @@
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -343,7 +484,12 @@
         "risk_class": "guarded_write",
         "approval_expectation": "confirm_before_mutation",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "confirm_intent_then_mutate",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id"
+        ]
       }
     },
     {
@@ -359,7 +505,13 @@
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -374,7 +526,13 @@
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     },
     {
@@ -390,42 +548,190 @@
         "risk_class": "live_write",
         "approval_expectation": "confirm_before_external_effect",
         "memory_scope": "host_controlled",
-        "model_behavior": "host_controlled"
+        "model_behavior": "host_controlled",
+        "approval_path": "explicit_approval_then_execute",
+        "audit_identifiers": [
+          "request_id",
+          "resource_id",
+          "webhook_delivery_id"
+        ]
       }
     }
   ],
-
   "cli": {
     "package": "@telnyx/api-cli",
     "version": "1.1.0",
     "install": "npm install -g @telnyx/api-cli",
-    "global_flags": ["--json", "-o table|json|csv|tsv|ids", "-v", "-p <profile>"],
+    "global_flags": [
+      "--json",
+      "-o table|json|csv|tsv|ids",
+      "-v",
+      "-p <profile>"
+    ],
     "topics": {
-      "10dlc": ["brand list", "brand get", "brand create", "brand delete", "campaign list", "campaign get", "campaign create", "campaign delete", "campaign submit", "assign", "usecases", "verticals", "wizard"],
-      "ai": ["chat", "embed", "models"],
-      "assistant": ["create", "delete", "get", "list", "call"],
-      "auth": ["setup", "status", "whoami"],
-      "billing": ["balance", "group list", "group get", "group create", "group delete"],
-      "call": ["dial", "hangup", "list", "speak", "transfer"],
-      "connection": ["create", "delete", "get", "list"],
-      "debugger": ["get", "list"],
-      "e911": ["address list", "address get", "address create", "address delete", "assign"],
-      "fax": ["send", "get", "list", "delete"],
-      "lookup": ["number"],
-      "message": ["send", "get", "list"],
-      "messaging-profile": ["create", "delete", "get", "list"],
-      "number": ["search", "order", "get", "list", "update", "delete"],
-      "porting": ["check", "order list", "order get", "order create", "order update", "order delete", "order submit", "order cancel", "order activate", "phone-numbers", "comments", "documents", "events", "requirements"],
-      "profile": ["list", "use", "delete"],
-      "sim": ["enable", "disable", "get", "list"],
-      "storage": ["bucket list", "bucket get", "bucket create", "bucket delete", "object list", "object get", "object put", "object delete", "presign"],
-      "usage": ["report", "options"],
-      "verify": ["send", "check", "profile list", "profile get", "profile create", "profile delete", "template list", "template get", "template create"],
-      "video": ["room list", "room get", "room create", "room delete", "session list", "session get", "recording list", "recording get", "recording delete"],
-      "voice-profile": ["create", "delete", "get", "list"]
+      "10dlc": [
+        "brand list",
+        "brand get",
+        "brand create",
+        "brand delete",
+        "campaign list",
+        "campaign get",
+        "campaign create",
+        "campaign delete",
+        "campaign submit",
+        "assign",
+        "usecases",
+        "verticals",
+        "wizard"
+      ],
+      "ai": [
+        "chat",
+        "embed",
+        "models"
+      ],
+      "assistant": [
+        "create",
+        "delete",
+        "get",
+        "list",
+        "call"
+      ],
+      "auth": [
+        "setup",
+        "status",
+        "whoami"
+      ],
+      "billing": [
+        "balance",
+        "group list",
+        "group get",
+        "group create",
+        "group delete"
+      ],
+      "call": [
+        "dial",
+        "hangup",
+        "list",
+        "speak",
+        "transfer"
+      ],
+      "connection": [
+        "create",
+        "delete",
+        "get",
+        "list"
+      ],
+      "debugger": [
+        "get",
+        "list"
+      ],
+      "e911": [
+        "address list",
+        "address get",
+        "address create",
+        "address delete",
+        "assign"
+      ],
+      "fax": [
+        "send",
+        "get",
+        "list",
+        "delete"
+      ],
+      "lookup": [
+        "number"
+      ],
+      "message": [
+        "send",
+        "get",
+        "list"
+      ],
+      "messaging-profile": [
+        "create",
+        "delete",
+        "get",
+        "list"
+      ],
+      "number": [
+        "search",
+        "order",
+        "get",
+        "list",
+        "update",
+        "delete"
+      ],
+      "porting": [
+        "check",
+        "order list",
+        "order get",
+        "order create",
+        "order update",
+        "order delete",
+        "order submit",
+        "order cancel",
+        "order activate",
+        "phone-numbers",
+        "comments",
+        "documents",
+        "events",
+        "requirements"
+      ],
+      "profile": [
+        "list",
+        "use",
+        "delete"
+      ],
+      "sim": [
+        "enable",
+        "disable",
+        "get",
+        "list"
+      ],
+      "storage": [
+        "bucket list",
+        "bucket get",
+        "bucket create",
+        "bucket delete",
+        "object list",
+        "object get",
+        "object put",
+        "object delete",
+        "presign"
+      ],
+      "usage": [
+        "report",
+        "options"
+      ],
+      "verify": [
+        "send",
+        "check",
+        "profile list",
+        "profile get",
+        "profile create",
+        "profile delete",
+        "template list",
+        "template get",
+        "template create"
+      ],
+      "video": [
+        "room list",
+        "room get",
+        "room create",
+        "room delete",
+        "session list",
+        "session get",
+        "recording list",
+        "recording get",
+        "recording delete"
+      ],
+      "voice-profile": [
+        "create",
+        "delete",
+        "get",
+        "list"
+      ]
     }
   },
-
   "quickstart": {
     "first_run": {
       "entry": "curl -s https://telnyx.com/.well-known/agent-access.json | jq '.fast_path.primary_path'",
@@ -473,7 +779,6 @@
       }
     ]
   },
-
   "sdks": {
     "cli": {
       "name": "@telnyx/api-cli",
@@ -506,7 +811,6 @@
       "docs": "https://github.com/team-telnyx/telnyx-go"
     }
   },
-
   "links": {
     "api_reference": "https://developers.telnyx.com/docs/api/v2",
     "portal": "https://portal.telnyx.com",

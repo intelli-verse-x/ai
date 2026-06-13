@@ -58,7 +58,114 @@
       "voice_ai_agents_guide": "https://telnyx.com/guides/ai-assistants.md",
       "voice_agent_onboarding_guide": "https://telnyx.com/guides/voice-agent-onboarding.md",
       "x402_payments_guide": "https://telnyx.com/guides/x402-payments.md",
-      "zero_signup_first_run": "https://telnyx.com/api/inference"
+      "zero_signup_first_run": "https://telnyx.com/api/inference",
+      "governed_surfaces": {
+        "agent_manifest": {
+          "risk_class": "read_only",
+          "approval_expectation": "none",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "none_read_only",
+          "audit_identifiers": [
+            "request_id"
+          ]
+        },
+        "agent_access": {
+          "risk_class": "read_only",
+          "approval_expectation": "none",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "none_read_only",
+          "audit_identifiers": [
+            "request_id"
+          ]
+        },
+        "ai_capabilities": {
+          "risk_class": "read_only",
+          "approval_expectation": "none",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "none_read_only",
+          "audit_identifiers": [
+            "request_id"
+          ]
+        },
+        "llms_txt": {
+          "risk_class": "read_only",
+          "approval_expectation": "none",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "none_read_only",
+          "audit_identifiers": [
+            "request_id"
+          ]
+        },
+        "agents_start": {
+          "risk_class": "read_only",
+          "approval_expectation": "none",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "none_read_only",
+          "audit_identifiers": [
+            "request_id"
+          ]
+        },
+        "openapi": {
+          "risk_class": "read_only",
+          "approval_expectation": "none",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "none_read_only",
+          "audit_identifiers": [
+            "request_id"
+          ]
+        },
+        "pricing": {
+          "risk_class": "read_only",
+          "approval_expectation": "none",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "none_read_only",
+          "audit_identifiers": [
+            "request_id"
+          ]
+        },
+        "zero_signup_first_run": {
+          "risk_class": "guarded_write",
+          "approval_expectation": "confirm_before_mutation",
+          "memory_scope": "stateless",
+          "model_behavior": "request_selected",
+          "approval_path": "confirm_intent_then_mutate",
+          "audit_identifiers": [
+            "request_id",
+            "idempotency_key",
+            "model_id"
+          ]
+        },
+        "mcp": {
+          "risk_class": "live_write",
+          "approval_expectation": "confirm_before_external_effect",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "explicit_approval_then_execute",
+          "audit_identifiers": [
+            "request_id",
+            "resource_id",
+            "webhook_delivery_id"
+          ]
+        },
+        "mcp_apps_catalog": {
+          "risk_class": "read_only",
+          "approval_expectation": "none",
+          "memory_scope": "app_scoped",
+          "model_behavior": "app_defined",
+          "approval_path": "none_read_only",
+          "audit_identifiers": [
+            "request_id",
+            "resource_id"
+          ]
+        }
+      }
     },
     "constraints": {
       "grpc_supported": false,
@@ -71,6 +178,52 @@
       "data_handling": "https://telnyx.com/ai/data-handling.json",
       "regional_resilience": "https://telnyx.com/ai/resilience.json",
       "selection_methodology": "https://telnyx.com/benchmarks/methodology"
+    },
+    "governed_execution": {
+      "schema_version": "2026-06-13",
+      "fields": [
+        "risk_class",
+        "approval_expectation",
+        "approval_path",
+        "memory_scope",
+        "model_behavior",
+        "audit_identifiers"
+      ],
+      "risk_classes": {
+        "read_only": "Discovery or inspection only. No account mutation or external side effect is expected.",
+        "guarded_write": "Billed execution or account-scoped mutation may occur. Confirm intent before mutating state.",
+        "live_write": "Can send traffic, move money, provision resources, or change regulated production state. Explicit approval is expected before execution."
+      },
+      "approval_expectations": {
+        "none": "No extra approval is expected beyond normal caller authorization.",
+        "confirm_before_mutation": "Obtain human or policy confirmation before any state-changing or billed execution.",
+        "confirm_before_external_effect": "Obtain explicit human or policy approval before sending traffic, spending funds, or provisioning live resources."
+      },
+      "approval_paths": {
+        "none_read_only": "Read-only discovery or inspection. Persist returned request identifiers for traceability when needed.",
+        "confirm_intent_then_mutate": "Capture user or policy confirmation and preserve request-scoped identifiers before any billed or state-changing execution.",
+        "explicit_approval_then_execute": "Require explicit operator approval, then retain the returned identifiers needed to review external effects, provisioning, or spend."
+      },
+      "memory_scopes": {
+        "stateless": "The surface does not retain conversation state unless the caller supplies it.",
+        "host_controlled": "Persistence, if any, is owned by Telnyx or the host system rather than the model runtime.",
+        "customer_configured": "The customer configures the memory or conversation-retention behavior for this capability.",
+        "app_scoped": "State is bounded to the MCP app or workflow contract rather than the full Telnyx account surface."
+      },
+      "model_behaviors": {
+        "host_controlled": "No model behavior is exposed at this discovery layer, or execution is not model-driven.",
+        "request_selected": "The caller chooses the model at request time.",
+        "customer_configured": "The customer selects and configures the model during resource setup.",
+        "app_defined": "Model behavior is constrained by the governed app or workflow surface."
+      },
+      "audit_identifier_legend": {
+        "request_id": "Request-scoped correlation identifier returned by the surface or retained in logs.",
+        "resource_id": "Identifier of the created or mutated Telnyx resource being acted on or reviewed later.",
+        "idempotency_key": "Caller-supplied key used to deduplicate retries or confirm operator intent.",
+        "model_id": "Model identifier selected or returned for AI inference and evaluation flows.",
+        "conversation_id": "Conversation or session identifier for assistant or workflow review.",
+        "webhook_delivery_id": "Webhook or event-delivery identifier used to reconcile downstream effects."
+      }
     }
   }
 }

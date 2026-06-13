@@ -4,12 +4,75 @@
   "description": "Official Agent Skills for building on Telnyx — structured, up-to-date context for AI agents to generate correct, production-ready code using Telnyx APIs and SDKs.",
   "skills": [
     {
+      "name": "benchmark-compare",
+      "description": "Run portable benchmarks comparing Telnyx vs competitors",
+      "url": "/.well-known/agent-skills/benchmark-compare/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:99c67a1f7f293dec677d7882d81bfea04f75f7a5431eb280a5c0253bbe87dff5"
+    },
+    {
+      "name": "branded-calling",
+      "description": "Configure branded calling with call attestation",
+      "url": "/.well-known/agent-skills/branded-calling/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:ac70ce280bc48e23da5523f9d0fcb3106d55705066bc6516328aa9a5c086b244"
+    },
+    {
+      "name": "call-control",
+      "description": "Programmatic call control with WebRTC bridging",
+      "url": "/.well-known/agent-skills/call-control/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:01b138270995e19a24dc714bfdb7b219e281335ed9a358610e9b08b49c1d7c13"
+    },
+    {
+      "name": "edge-inference",
+      "description": "Deploy AI inference at carrier edge with co-located STT/TTS",
+      "url": "/.well-known/agent-skills/edge-inference/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:45944db01a9c04f956ff7502ae72155e9a513c7a5b44c235300198e3306cb00f"
+    },
+    {
+      "name": "migrate-from-twilio",
+      "description": "Complete migration guide with code examples, CLI tool, and API mapping",
+      "url": "/.well-known/agent-skills/migrate-from-twilio/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:7ada1b60cd725cd3047f7172864cfcc9ca1d4da1bc55cbde25b29170ecca93aa"
+    },
+    {
+      "name": "number-verification",
+      "description": "Verify phone numbers and detect SIM swap with STIR/SHAKEN",
+      "url": "/.well-known/agent-skills/number-verification/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:7af0cba7c45d33586b35e05539510fb116650248969596af515527da3c5e01ce"
+    },
+    {
       "name": "push-notification-tester",
       "type": "skill-md",
       "description": "Test VoIP push notifications for Telnyx WebRTC iOS (APNs) and Android (FCM) apps. Use when debugging push notification delivery, validating certificate/credential setup, or testing that a device receives VoIP pushes correctly.",
       "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/push-notification-tester/SKILL.md",
       "digest": "sha256:5690d1b25c99be91b3edcc64059ab0f307048c176631054834a37da135d152bd",
       "documentation": "https://developers.telnyx.com/docs/voice/webrtc/push-notifications"
+    },
+    {
+      "name": "sip-trunking",
+      "description": "Configure and deploy SIP trunks on carrier-owned infrastructure",
+      "url": "/.well-known/agent-skills/sip-trunking/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:46c26c0af3239305c9cc461c95be18c21e2a28c0655732379ccffe08776429e5"
+    },
+    {
+      "name": "sms-api",
+      "description": "Send and receive SMS programmatically with delivery receipts",
+      "url": "/.well-known/agent-skills/sms-api/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:63d97da705ae7a1b9eeb399267558f52606c69637b9142a159f9343192de6be7"
+    },
+    {
+      "name": "stt-tts",
+      "description": "Configure speech-to-text and text-to-speech with sub-200ms latency",
+      "url": "/.well-known/agent-skills/stt-tts/SKILL.md",
+      "type": "skill-md",
+      "digest": "sha256:ac5a69c271cb9e0a3d637554cf4df14f6704bddcad698548ab3ad656ca397c96"
     },
     {
       "name": "telnyx-10dlc-curl",
@@ -410,6 +473,14 @@
       "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-cli/SKILL.md",
       "digest": "sha256:99cf179201730dcaf83b3f23b026a0d06c878dd19c0840858f8b4e0a3262b780",
       "documentation": "https://developers.telnyx.com/docs"
+    },
+    {
+      "name": "telnyx-external-coding-agents",
+      "type": "skill-md",
+      "description": "Curated Telnyx skill-pack for external coding agents building voice AI, messaging, and onboarding flows. Packages discovery, auth, focused MCP apps, and the right product guides so agents stay on a bounded, low-hallucination path.",
+      "url": "https://raw.githubusercontent.com/team-telnyx/ai/main/skills/telnyx-external-coding-agents/SKILL.md",
+      "digest": "sha256:aa7074f269400ae324b33e6be835352564f35519148b8340126cda21ae6cfe05",
+      "documentation": "https://telnyx.com/guides/external-coding-agents.md"
     },
     {
       "name": "telnyx-fax-curl",
@@ -1876,74 +1947,11 @@
       "documentation": "https://developers.telnyx.com/docs/messaging/whatsapp"
     },
     {
-      "name": "sip-trunking",
-      "description": "Configure and deploy SIP trunks on carrier-owned infrastructure",
-      "url": "/.well-known/agent-skills/sip-trunking/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:46c26c0af3239305c9cc461c95be18c21e2a28c0655732379ccffe08776429e5"
-    },
-    {
       "name": "voice-ai-agent",
       "description": "Build and deploy voice AI agents with STT/TTS/LLM on one platform",
       "url": "/.well-known/agent-skills/voice-ai-agent/SKILL.md",
       "type": "skill-md",
       "digest": "sha256:dd1092bff209dd45d5484ae1a0f61d5ca5d056c9fabaed2f2488ece8d086da02"
-    },
-    {
-      "name": "edge-inference",
-      "description": "Deploy AI inference at carrier edge with co-located STT/TTS",
-      "url": "/.well-known/agent-skills/edge-inference/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:45944db01a9c04f956ff7502ae72155e9a513c7a5b44c235300198e3306cb00f"
-    },
-    {
-      "name": "stt-tts",
-      "description": "Configure speech-to-text and text-to-speech with sub-200ms latency",
-      "url": "/.well-known/agent-skills/stt-tts/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:ac5a69c271cb9e0a3d637554cf4df14f6704bddcad698548ab3ad656ca397c96"
-    },
-    {
-      "name": "sms-api",
-      "description": "Send and receive SMS programmatically with delivery receipts",
-      "url": "/.well-known/agent-skills/sms-api/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:63d97da705ae7a1b9eeb399267558f52606c69637b9142a159f9343192de6be7"
-    },
-    {
-      "name": "number-verification",
-      "description": "Verify phone numbers and detect SIM swap with STIR/SHAKEN",
-      "url": "/.well-known/agent-skills/number-verification/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:7af0cba7c45d33586b35e05539510fb116650248969596af515527da3c5e01ce"
-    },
-    {
-      "name": "branded-calling",
-      "description": "Configure branded calling with call attestation",
-      "url": "/.well-known/agent-skills/branded-calling/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:ac70ce280bc48e23da5523f9d0fcb3106d55705066bc6516328aa9a5c086b244"
-    },
-    {
-      "name": "call-control",
-      "description": "Programmatic call control with WebRTC bridging",
-      "url": "/.well-known/agent-skills/call-control/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:01b138270995e19a24dc714bfdb7b219e281335ed9a358610e9b08b49c1d7c13"
-    },
-    {
-      "name": "migrate-from-twilio",
-      "description": "Complete migration guide with code examples, CLI tool, and API mapping",
-      "url": "/.well-known/agent-skills/migrate-from-twilio/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:7ada1b60cd725cd3047f7172864cfcc9ca1d4da1bc55cbde25b29170ecca93aa"
-    },
-    {
-      "name": "benchmark-compare",
-      "description": "Run portable benchmarks comparing Telnyx vs competitors",
-      "url": "/.well-known/agent-skills/benchmark-compare/SKILL.md",
-      "type": "skill-md",
-      "digest": "sha256:99c67a1f7f293dec677d7882d81bfea04f75f7a5431eb280a5c0253bbe87dff5"
     }
   ],
   "repository": "https://github.com/team-telnyx/ai",

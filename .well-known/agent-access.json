@@ -56,7 +56,13 @@
         "risk_class": "guarded_write",
         "approval_expectation": "confirm_before_mutation",
         "memory_scope": "stateless",
-        "model_behavior": "request_selected"
+        "model_behavior": "request_selected",
+        "approval_path": "confirm_intent_then_mutate",
+        "audit_identifiers": [
+          "request_id",
+          "idempotency_key",
+          "model_id"
+        ]
       },
       "note": "Recommended first-run evaluation path. Telnyx applies server-side auth and rate limits on behalf of the caller."
     },
@@ -66,42 +72,112 @@
         "method": "POST",
         "url": "https://telnyx.com/api/demo/send-sms",
         "auth_mode": "no_auth_host_authenticated",
-        "note": "Send a test SMS. No bearer token required. Test numbers only."
+        "note": "Send a test SMS. No bearer token required. Test numbers only.",
+        "governance": {
+          "risk_class": "live_write",
+          "approval_expectation": "confirm_before_external_effect",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "explicit_approval_then_execute",
+          "audit_identifiers": [
+            "request_id",
+            "resource_id",
+            "webhook_delivery_id"
+          ]
+        }
       },
       {
         "name": "inference",
         "method": "POST",
         "url": "https://telnyx.com/api/inference",
         "auth_mode": "no_auth_host_authenticated",
-        "note": "AI chat completions. No bearer token required."
+        "note": "AI chat completions. No bearer token required.",
+        "governance": {
+          "risk_class": "guarded_write",
+          "approval_expectation": "confirm_before_mutation",
+          "memory_scope": "stateless",
+          "model_behavior": "request_selected",
+          "approval_path": "confirm_intent_then_mutate",
+          "audit_identifiers": [
+            "request_id",
+            "idempotency_key",
+            "model_id"
+          ]
+        }
       },
       {
         "name": "tts_demo",
         "method": "POST",
         "url": "https://telnyx.com/api/tts-demo",
         "auth_mode": "no_auth_host_authenticated",
-        "note": "Text-to-speech synthesis. No bearer token required."
+        "note": "Text-to-speech synthesis. No bearer token required.",
+        "governance": {
+          "risk_class": "guarded_write",
+          "approval_expectation": "confirm_before_mutation",
+          "memory_scope": "stateless",
+          "model_behavior": "request_selected",
+          "approval_path": "confirm_intent_then_mutate",
+          "audit_identifiers": [
+            "request_id",
+            "idempotency_key",
+            "model_id"
+          ]
+        }
       },
       {
         "name": "stt_demo",
         "method": "POST",
         "url": "https://telnyx.com/api/stt-demo",
         "auth_mode": "no_auth_host_authenticated",
-        "note": "Speech-to-text transcription. No bearer token required."
+        "note": "Speech-to-text transcription. No bearer token required.",
+        "governance": {
+          "risk_class": "guarded_write",
+          "approval_expectation": "confirm_before_mutation",
+          "memory_scope": "stateless",
+          "model_behavior": "request_selected",
+          "approval_path": "confirm_intent_then_mutate",
+          "audit_identifiers": [
+            "request_id",
+            "idempotency_key",
+            "model_id"
+          ]
+        }
       },
       {
         "name": "number_lookup",
         "method": "GET",
         "url": "https://telnyx.com/api/number-lookup",
         "auth_mode": "no_auth_hcaptcha_gated",
-        "note": "Carrier lookup. No bearer token required, but it requires hCaptcha so it is not fully autonomous."
+        "note": "Carrier lookup. No bearer token required, but it requires hCaptcha so it is not fully autonomous.",
+        "governance": {
+          "risk_class": "guarded_write",
+          "approval_expectation": "confirm_before_mutation",
+          "memory_scope": "stateless",
+          "model_behavior": "host_controlled",
+          "approval_path": "confirm_intent_then_mutate",
+          "audit_identifiers": [
+            "request_id",
+            "resource_id"
+          ]
+        }
       },
       {
         "name": "voice_ai_register_web_caller",
         "method": "POST",
         "url": "https://telnyx.com/api/voice-ai-agent/register-web-caller",
         "auth_mode": "session_bootstrap",
-        "note": "Registers a web caller for the Voice AI demo. Requires session_id and email in the body."
+        "note": "Registers a web caller for the Voice AI demo. Requires session_id and email in the body.",
+        "governance": {
+          "risk_class": "guarded_write",
+          "approval_expectation": "confirm_before_mutation",
+          "memory_scope": "host_controlled",
+          "model_behavior": "host_controlled",
+          "approval_path": "confirm_intent_then_mutate",
+          "audit_identifiers": [
+            "request_id",
+            "resource_id"
+          ]
+        }
       }
     ],
     "next_step": "Use these demo endpoints first. Only enter the production signup flow if you need real account resources such as API keys, purchased numbers, or authenticated MCP access."
@@ -125,5 +201,51 @@
     "Programmatic bot signup uses an obfuscated math challenge from POST /v2/bot_challenge that an LLM can solve without an external solver.",
     "The demo-first fast path is the only no-email autonomous path available today.",
     "Production bot signup still depends on a single-use email magic link unless the upstream account-platform change described in production_signup ships."
-  ]
+  ],
+  "governed_execution": {
+    "schema_version": "2026-06-13",
+    "fields": [
+      "risk_class",
+      "approval_expectation",
+      "approval_path",
+      "memory_scope",
+      "model_behavior",
+      "audit_identifiers"
+    ],
+    "risk_classes": {
+      "read_only": "Discovery or inspection only. No account mutation or external side effect is expected.",
+      "guarded_write": "Billed execution or account-scoped mutation may occur. Confirm intent before mutating state.",
+      "live_write": "Can send traffic, move money, provision resources, or change regulated production state. Explicit approval is expected before execution."
+    },
+    "approval_expectations": {
+      "none": "No extra approval is expected beyond normal caller authorization.",
+      "confirm_before_mutation": "Obtain human or policy confirmation before any state-changing or billed execution.",
+      "confirm_before_external_effect": "Obtain explicit human or policy approval before sending traffic, spending funds, or provisioning live resources."
+    },
+    "approval_paths": {
+      "none_read_only": "Read-only discovery or inspection. Persist returned request identifiers for traceability when needed.",
+      "confirm_intent_then_mutate": "Capture user or policy confirmation and preserve request-scoped identifiers before any billed or state-changing execution.",
+      "explicit_approval_then_execute": "Require explicit operator approval, then retain the returned identifiers needed to review external effects, provisioning, or spend."
+    },
+    "memory_scopes": {
+      "stateless": "The surface does not retain conversation state unless the caller supplies it.",
+      "host_controlled": "Persistence, if any, is owned by Telnyx or the host system rather than the model runtime.",
+      "customer_configured": "The customer configures the memory or conversation-retention behavior for this capability.",
+      "app_scoped": "State is bounded to the MCP app or workflow contract rather than the full Telnyx account surface."
+    },
+    "model_behaviors": {
+      "host_controlled": "No model behavior is exposed at this discovery layer, or execution is not model-driven.",
+      "request_selected": "The caller chooses the model at request time.",
+      "customer_configured": "The customer selects and configures the model during resource setup.",
+      "app_defined": "Model behavior is constrained by the governed app or workflow surface."
+    },
+    "audit_identifier_legend": {
+      "request_id": "Request-scoped correlation identifier returned by the surface or retained in logs.",
+      "resource_id": "Identifier of the created or mutated Telnyx resource being acted on or reviewed later.",
+      "idempotency_key": "Caller-supplied key used to deduplicate retries or confirm operator intent.",
+      "model_id": "Model identifier selected or returned for AI inference and evaluation flows.",
+      "conversation_id": "Conversation or session identifier for assistant or workflow review.",
+      "webhook_delivery_id": "Webhook or event-delivery identifier used to reconcile downstream effects."
+    }
+  }
 }

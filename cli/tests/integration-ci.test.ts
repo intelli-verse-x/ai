@@ -156,16 +156,22 @@ describe("CLI — capabilities", () => {
       for (const cap of caps) {
         assert.ok(cap.governance.risk_class);
         assert.ok(cap.governance.approval_expectation);
+        assert.ok(cap.governance.approval_path);
         assert.ok(cap.governance.memory_scope);
         assert.ok(cap.governance.model_behavior);
+        assert.ok(Array.isArray(cap.governance.audit_identifiers));
+        assert.ok(cap.governance.audit_identifiers.length > 0);
       }
     }
 
     for (const command of data.composite_commands) {
       assert.ok(command.governance.risk_class);
       assert.ok(command.governance.approval_expectation);
+      assert.ok(command.governance.approval_path);
       assert.ok(command.governance.memory_scope);
       assert.ok(command.governance.model_behavior);
+      assert.ok(Array.isArray(command.governance.audit_identifiers));
+      assert.ok(command.governance.audit_identifiers.length > 0);
     }
   });
 
@@ -192,6 +198,8 @@ describe("CLI — capabilities", () => {
       "Missing voice category"
     );
     assert.ok(out.includes("Governance: risk="), "Missing governance legend in human output");
+    assert.ok(out.includes("path="), "Missing approval path in human output");
+    assert.ok(out.includes("audit="), "Missing audit identifiers in human output");
   });
 });
 

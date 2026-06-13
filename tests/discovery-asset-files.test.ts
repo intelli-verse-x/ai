@@ -42,6 +42,7 @@ describe("source-controlled discovery assets", () => {
     assert.equal(agentCard.discovery.agent_skills, agentJson.discovery.agent_skills_index_url);
     assert.equal(agentCard.discovery.llms_txt, agentJson.discovery.llms_txt_url);
     assert.equal(agentCard.mcp.url, agentJson.discovery.mcp_server_card_url);
+    assert.deepEqual(agentCard.governed_execution.fields, agentJson.governed_execution.fields);
   });
 
   it("keeps the capability and pricing mirrors aligned with their canonical URLs", () => {
@@ -50,6 +51,8 @@ describe("source-controlled discovery assets", () => {
     assert.equal(capabilitiesAlias.canonical_url, capabilities.canonical_url);
     assert.equal(capabilitiesAlias.provider, capabilities.provider);
     assert.equal(capabilitiesAlias.content.category, capabilities.content.category);
+    assert.deepEqual(capabilities.content.governed_execution.fields, agentJson.governed_execution.fields);
+    assert.deepEqual(capabilitiesAlias.content.governed_execution.fields, capabilities.content.governed_execution.fields);
   });
 
   it("publishes a skill index that covers the checked-in canonical skill set", () => {

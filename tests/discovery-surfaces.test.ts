@@ -16,6 +16,8 @@ const AGENTS = read("AGENTS.md");
 const AGENTS_START = read("agents/start.md");
 const LLMS = read("llms.txt");
 const agentJson = JSON.parse(read("agent.json"));
+const agentCard = JSON.parse(read(".well-known/agent-card.json"));
+const agentAccess = JSON.parse(read(".well-known/agent-access.json"));
 const capabilitiesJson = JSON.parse(read("ai/capabilities.json"));
 const pricingJson = JSON.parse(read("ai/pricing.json"));
 
@@ -47,13 +49,20 @@ describe("agent discovery surfaces", () => {
     assert.deepEqual(agentJson.governed_execution.fields, [
       "risk_class",
       "approval_expectation",
+      "approval_path",
       "memory_scope",
-      "model_behavior"
+      "model_behavior",
+      "audit_identifiers"
     ]);
     assert.deepEqual(Object.keys(agentJson.governed_execution.risk_classes), [
       "read_only",
       "guarded_write",
       "live_write"
+    ]);
+    assert.deepEqual(Object.keys(agentJson.governed_execution.approval_paths), [
+      "none_read_only",
+      "confirm_intent_then_mutate",
+      "explicit_approval_then_execute"
     ]);
   });
 
@@ -62,8 +71,25 @@ describe("agent discovery surfaces", () => {
       assert.ok(capability.governance, `${capability.id} missing governance`);
       assert.match(capability.governance.risk_class, /^(read_only|guarded_write|live_write)$/);
       assert.match(capability.governance.approval_expectation, /^(none|confirm_before_mutation|confirm_before_external_effect)$/);
+      assert.match(capability.governance.approval_path, /^(none_read_only|confirm_intent_then_mutate|explicit_approval_then_execute)$/);
       assert.match(capability.governance.memory_scope, /^(stateless|host_controlled|customer_configured|app_scoped)$/);
       assert.match(capability.governance.model_behavior, /^(host_controlled|request_selected|customer_configured|app_defined)$/);
+      assert.ok(Array.isArray(capability.governance.audit_identifiers), `${capability.id} missing audit_identifiers`);
+      assert.ok(capability.governance.audit_identifiers.length > 0, `${capability.id} has empty audit_identifiers`);
+    }
+  });
+
+  it("public discovery JSON mirrors expose the same governed-execution contract", () => {
+    assert.deepEqual(agentCard.governed_execution.fields, agentJson.governed_execution.fields);
+    assert.deepEqual(agentAccess.governed_execution.fields, agentJson.governed_execution.fields);
+    assert.deepEqual(capabilitiesJson.content.governed_execution.fields, agentJson.governed_execution.fields);
+
+    for (const surface of Object.values(agentCard.discovery_governance) as Array<Record<string, unknown>>) {
+      assert.match(surface.risk_class as string, /^(read_only|guarded_write|live_write)$/);
+      assert.match(surface.approval_expectation as string, /^(none|confirm_before_mutation|confirm_before_external_effect)$/);
+      assert.match(surface.approval_path as string, /^(none_read_only|confirm_intent_then_mutate|explicit_approval_then_execute)$/);
+      assert.ok(Array.isArray(surface.audit_identifiers));
+      assert.ok((surface.audit_identifiers as unknown[]).length > 0);
     }
   });
 
@@ -156,8 +182,10 @@ describe("agent discovery surfaces", () => {
       "Governed execution metadata",
       "risk_class",
       "approval_expectation",
+      "approval_path",
       "memory_scope",
       "model_behavior",
+      "audit_identifiers",
       "read_only",
       "guarded_write",
       "live_write",
@@ -200,6 +228,8 @@ describe("agent discovery surfaces", () => {
       "What an agent should learn first",
       "How to choose a surface",
       "Governed examples",
+      "approval_path",
+      "audit_identifiers",
       "without JavaScript",
       "openai/gpt-5.4",
       "Telnyx Voice AI Agents",

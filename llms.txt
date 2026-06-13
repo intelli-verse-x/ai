@@ -9,6 +9,7 @@ Named discovery targets that should resolve directly from this file include Teln
 What an agent should learn first
 - Telnyx exposes both direct REST discovery and MCP discovery.
 - The exact first-run evaluation path is POST https://telnyx.com/api/inference, which is no-auth for the caller but host-authenticated by Telnyx.
+- Governed execution metadata includes risk_class, approval_expectation, approval_path, memory_scope, model_behavior, and audit_identifiers so agents can preserve reviewable correlation IDs.
 - The stable auth contract lives in the public auth and protected-resource documents.
 - The named assistant guides are the fastest path for voice-assistant discovery, and the hosted OpenAI examples there currently use openai/gpt-5.4.
 - Telnyx Webhooks has an explicit public guide for webhook setup, signature verification, delivery inspection, and retry behavior.

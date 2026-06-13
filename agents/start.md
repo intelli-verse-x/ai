@@ -8,7 +8,7 @@ Named retrieval targets on this page include Telnyx Auth, Telnyx MCP, Telnyx Ope
 
 If you only read one page before deciding whether Telnyx fits your agent workflow, read this one and follow the links below. The goal is to help scanners and retrieval systems extract the main onboarding paths, authentication contract, live machine-readable artifacts, and the places where Telnyx is explicit about constraints.
 
-The exact first-run evaluation route today is `POST https://telnyx.com/api/inference`. Treat it as `no-auth, host-authenticated`: you do not send a bearer token, Telnyx applies server-side auth and rate limits, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `stateless`, `request_selected`.
+The exact first-run evaluation route today is `POST https://telnyx.com/api/inference`. Treat it as `no-auth, host-authenticated`: you do not send a bearer token, Telnyx applies server-side auth and rate limits, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `confirm_intent_then_mutate`, `stateless`, `request_selected`, with audit identifiers such as `request_id`, `idempotency_key`, and `model_id`.
 
 ## What agents can do with Telnyx
 
@@ -66,11 +66,14 @@ Start with `POST https://telnyx.com/api/inference` when the goal is first-run ev
 
 ## Governed execution metadata
 
-The canonical manifest exposes four per-capability governance fields so agents can reason about execution safety before they call anything: `risk_class`, `approval_expectation`, `memory_scope`, and `model_behavior`.
+The canonical manifest exposes six per-capability governance fields so agents can reason about execution safety before they call anything: `risk_class`, `approval_expectation`, `approval_path`, `memory_scope`, `model_behavior`, and `audit_identifiers`.
 
 - `read_only` means discovery or inspection only.
 - `guarded_write` means billed execution or account mutation can happen and intent should be confirmed first.
 - `live_write` means traffic, money movement, regulated changes, or live resource provisioning can happen and explicit approval is expected first.
+- `none_read_only` means the surface is discovery-only and should only emit correlation IDs such as `request_id`.
+- `confirm_intent_then_mutate` means collect or preserve confirmation plus request-scoped identifiers before any billed or state-changing action.
+- `explicit_approval_then_execute` means capture explicit operator approval and keep the returned audit identifiers for later review.
 
 When a capability is not model-driven, `model_behavior` is `host_controlled`. When no conversation retention is implied by the surface itself, `memory_scope` is `stateless` or `host_controlled`.
 
