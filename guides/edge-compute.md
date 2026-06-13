@@ -86,11 +86,13 @@ telnyx-edge status
 telnyx-edge list
 telnyx-edge delete-func
 telnyx-edge secrets list
-telnyx-edge bindings create <your-telnyx-api-key>
+telnyx-edge bindings create
 telnyx-edge bindings validate
 telnyx-edge bindings get
 telnyx-edge storage kv create --name session-cache
 telnyx-edge storage kv key put <kv-id> prompt/system "edge-ready"
+telnyx-edge revisions list my-mcp-server
+telnyx-edge rollback my-mcp-server <revision-id>
 ```
 
 | Command | Purpose |
@@ -103,20 +105,33 @@ telnyx-edge storage kv key put <kv-id> prompt/system "edge-ready"
 | `telnyx-edge list` | List deployed functions |
 | `telnyx-edge delete-func` | Delete a deployed function by name |
 | `telnyx-edge secrets` | Manage runtime secrets |
-| `telnyx-edge bindings` | Manage Telnyx API key bindings |
+| `telnyx-edge bindings` | Manage Telnyx API bindings for Edge functions |
 | `telnyx-edge storage` | Manage KV namespaces and keys via the dedicated Edge CLI |
+| `telnyx-edge revisions` | Inspect deploy history for a function |
+| `telnyx-edge rollback` | Switch traffic back to a previous successful revision |
 
 ### Binding handoff
 
 When your function needs Telnyx API access, the upstream flow is:
 
 ```bash
-telnyx-edge bindings create <your-telnyx-api-key>
+telnyx-edge bindings create
 telnyx-edge bindings validate
 telnyx-edge bindings get
 ```
 
-That keeps API-key injection owned by `telnyx-edge` instead of inventing a parallel `team-telnyx/ai` credential path.
+That keeps binding management owned by `telnyx-edge` instead of inventing a parallel `team-telnyx/ai` credential path.
+
+### Revisions and rollback
+
+Current upstream docs also expose immutable revisions and traffic rollback:
+
+```bash
+telnyx-edge revisions list my-function
+telnyx-edge rollback my-function <revision-id>
+```
+
+This repo should mention that lifecycle surface so the bridge stays honest, but the actions themselves still belong to `telnyx-edge`.
 
 ## Storage / KV scope decision
 

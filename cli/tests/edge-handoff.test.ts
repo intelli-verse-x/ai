@@ -102,10 +102,13 @@ describe("CLI — Edge Compute handoff", () => {
     assert.equal(data.api_key_auth_supported, true);
     assert.ok(Array.isArray(data.next_steps));
     assert.ok(data.next_steps.some((s: string) => s.includes("SHARED_SECRET")));
+    assert.ok(data.next_steps.some((s: string) => s.includes("bindings create")));
     assert.ok(data.next_steps.some((s: string) => s.includes("bindings validate")));
     assert.ok(data.next_steps.some((s: string) => s.includes("bindings get")));
     assert.ok(data.next_steps.some((s: string) => s.includes("storage kv key put")));
     assert.ok(data.next_steps.some((s: string) => s.includes("telnyx-edge status")));
+    assert.ok(data.next_steps.some((s: string) => s.includes("revisions list")));
+    assert.ok(data.next_steps.some((s: string) => s.includes("rollback")));
     assert.ok(data.next_steps.some((s: string) => s.includes("call-event-router")));
     assert.ok(data.next_steps.some((s: string) => s.includes("--language=js|ts|python|go|quarkus")));
   });
@@ -146,6 +149,7 @@ describe("CLI — Edge Compute handoff", () => {
     assert.ok(data.deploy_command.includes("demo-mcp"));
     assert.ok(data.scaffold_commands.some((command: string) => command.includes("--language=ts")));
     assert.ok(data.secret_commands.some((command: string) => command.includes("SHARED_SECRET")));
+    assert.ok(data.validation_commands.some((command: string) => command === "telnyx-edge bindings create"));
     assert.ok(data.validation_commands.some((command: string) => command.includes("bindings validate")));
     assert.ok(data.validation_commands.some((command: string) => command.includes("bindings get")));
   });
@@ -159,10 +163,11 @@ describe("CLI — Edge Compute handoff", () => {
     assert.equal(data.example, "examples/js/webhook-receiver");
     assert.ok(data.deploy_command.includes("demo-webhook"));
     assert.ok(data.scaffold_commands.some((command: string) => command.includes("--language=js")));
-    assert.ok(data.validation_commands.some((command: string) => command.includes("bindings create")));
+    assert.ok(data.validation_commands.some((command: string) => command === "telnyx-edge bindings create"));
     assert.ok(data.validation_commands.some((command: string) => command.includes("bindings get")));
     assert.ok(data.kv_handoff_commands.some((command: string) => command.includes("storage kv key put")));
     assert.ok(data.notes.some((note: string) => note.includes("call-event-router")));
+    assert.ok(data.notes.some((note: string) => note.includes("rollback")));
   });
 
   it("edge guide documents the current upstream handoff contract", () => {
@@ -173,6 +178,8 @@ describe("CLI — Edge Compute handoff", () => {
     assert.ok(guide.includes("telnyx-edge bindings create"));
     assert.ok(guide.includes("telnyx-edge bindings validate"));
     assert.ok(guide.includes("telnyx-edge bindings get"));
+    assert.ok(guide.includes("telnyx-edge revisions list"));
+    assert.ok(guide.includes("telnyx-edge rollback"));
     assert.ok(guide.includes("SHARED_SECRET"));
     assert.ok(guide.includes("--language=js"));
     assert.ok(guide.includes("--language=ts"));

@@ -108,7 +108,7 @@ If you want the current Telnyx-hosted OpenAI assistant example path, use [`/guid
 ### Edge Compute handoff commands
 
 These are **thin executable bridges**, not native Edge lifecycle support.
-They make Edge Compute usable from `telnyx-agent` while keeping real deploy/auth/secrets/bindings ownership in `telnyx-edge`. They only suggest API-key auth when the installed Edge CLI actually exposes it; the current public upstream release is `v0.2.0`, and the docs still lead with `telnyx-edge auth login`.
+They make Edge Compute usable from `telnyx-agent` while keeping real deploy/auth/secrets/bindings/revisions ownership in `telnyx-edge`. They only suggest API-key auth when the installed Edge CLI actually exposes it; the current public upstream release is `v0.2.0`, and the docs still lead with `telnyx-edge auth login`.
 
 ```bash
 telnyx-agent edge-doctor --json
@@ -122,7 +122,7 @@ What they do:
 - use `telnyx-edge auth login` as the safe default when capability detection is unavailable
 - prefer `telnyx-edge auth api-key set <your-api-key>` for agents only when the installed CLI supports it
 - point you at a real Edge example or the upstream `new-func --language=js|ts|python|go|quarkus` scaffold paths
-- surface readiness and discovery commands such as `telnyx-edge status` and `telnyx-edge bindings get`
+- surface readiness and discovery commands such as `telnyx-edge status`, `telnyx-edge bindings get`, and `telnyx-edge revisions list`
 - give you the concrete next deploy command
 - preserve an honest handoff instead of pretending `telnyx-agent` owns Edge lifecycle
 

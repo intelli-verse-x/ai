@@ -52,7 +52,7 @@ export async function setupEdgeWebhookCommand(flags: Record<string, string | boo
     validation_commands: [
       "telnyx-edge auth status",
       "telnyx-edge status",
-      "telnyx-edge bindings create <your-telnyx-api-key>",
+      "telnyx-edge bindings create",
       "telnyx-edge bindings validate",
       "telnyx-edge bindings get",
     ],
@@ -67,7 +67,7 @@ export async function setupEdgeWebhookCommand(flags: Record<string, string | boo
     ],
     notes: [
       "Use this when your AI workflow needs an HTTP ingress point at the edge.",
-      "The deployed function lifecycle, bindings, and KV/storage resources are still owned by telnyx-edge.",
+      "The deployed function lifecycle, including revisions and rollback, plus bindings and KV/storage resources are still owned by telnyx-edge.",
       "For a typed TypeScript webhook/event dispatcher, prefer the upstream examples/ts/call-event-router template.",
       "After deploy, point your webhook-producing system at the Edge endpoint and let team-telnyx/ai handle orchestration guidance.",
     ],

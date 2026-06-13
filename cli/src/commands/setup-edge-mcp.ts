@@ -56,7 +56,7 @@ export async function setupEdgeMcpCommand(flags: Record<string, string | boolean
     validation_commands: [
       "telnyx-edge auth status",
       "telnyx-edge status",
-      "telnyx-edge bindings create <your-telnyx-api-key>",
+      "telnyx-edge bindings create",
       "telnyx-edge bindings validate",
       "telnyx-edge bindings get",
     ],
@@ -67,7 +67,7 @@ export async function setupEdgeMcpCommand(flags: Record<string, string | boolean
     ],
     notes: [
       "team-telnyx/ai provides the integration pattern, not the Edge lifecycle.",
-      "Use telnyx-edge for auth, status, deploy, delete, secrets, bindings, and lifecycle management.",
+      "Use telnyx-edge for auth, status, deploy, revisions, rollback, delete, secrets, bindings, and lifecycle management.",
       "The upstream MCP example currently expects both TELNYX_API_KEY and SHARED_SECRET before telnyx-edge ship.",
       "Bindings create and validate live upstream as telnyx-edge commands; this helper only points to them.",
       "KV/storage commands live in telnyx-edge as well, but this bridge does not wrap them directly today.",
