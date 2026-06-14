@@ -11,8 +11,6 @@ dist/
 .eggs/
 .venv/
 venv/
-.env
-.env.*
 !.env.example
 
 # Node
@@ -49,3 +47,4 @@ Thumbs.db
 
 # MCP configuration with secrets
 .mcp.json
+config.bat
