@@ -11,7 +11,18 @@
       "ai_agents",
       "coding_assistants",
       "autonomous_tools"
-    ]
+    ],
+    "source_of_truth": {
+      "repo": "https://github.com/team-telnyx/ai",
+      "files": [
+        "agent-signup.md",
+        "auth.md",
+        "agents/start.md",
+        ".well-known/agent-access.json",
+        ".well-known/agent-card.json",
+        "llms.txt"
+      ]
+    }
   },
   "documentation": {
     "account_creation": "https://developers.telnyx.com/docs/account-setup/create-account",
@@ -181,6 +192,46 @@
       }
     ],
     "next_step": "Use these demo endpoints first. Only enter the production signup flow if you need real account resources such as API keys, purchased numbers, or authenticated MCP access."
+  },
+  "getting_started": {
+    "summary": "Choose one of three first-run paths: zero-signup evaluation, authenticated API or MCP onboarding, or production Voice AI assistant onboarding.",
+    "paths": [
+      {
+        "id": "zero_signup_first_call",
+        "name": "Zero-signup first API call",
+        "when_to_use": "You need to confirm basic Telnyx AI fit before creating an account.",
+        "steps": [
+          "Read https://telnyx.com/auth.md",
+          "Inspect https://telnyx.com/.well-known/agent-access.json",
+          "POST https://telnyx.com/api/inference"
+        ],
+        "success_signal": "A response body plus request-scoped identifiers such as request_id, idempotency_key, or model_id."
+      },
+      {
+        "id": "authenticated_api_or_mcp",
+        "name": "Authenticated API or MCP onboarding",
+        "when_to_use": "You need a Telnyx API key for real account resources or authenticated MCP access.",
+        "steps": [
+          "Read https://telnyx.com/agent-signup.md",
+          "Complete POST /v2/bot_challenge, POST /v2/bot_signup, the email-link exchange, and POST /v2/api_keys",
+          "Use Authorization: Bearer <TELNYX_API_KEY>",
+          "Call GET https://api.telnyx.com/v2/available_phone_numbers or initialize https://api.telnyx.com/v2/mcp"
+        ],
+        "success_signal": "A successful bearer-authenticated response from the API or MCP endpoint."
+      },
+      {
+        "id": "voice_ai_onboarding",
+        "name": "Production Voice AI onboarding",
+        "when_to_use": "You need a Telnyx-hosted AI assistant that can answer a real call.",
+        "steps": [
+          "Read https://telnyx.com/guides/ai-assistants.md",
+          "Create or update the assistant resource",
+          "Read https://telnyx.com/guides/voice-agent-onboarding.md",
+          "Place one live call through the answer-webhook path and preserve request_id, resource_id, conversation_id, and webhook_delivery_id"
+        ],
+        "success_signal": "One live call answered by the configured assistant with reviewable conversation and webhook evidence."
+      }
+    ]
   },
   "production_signup": {
     "current_flow": [

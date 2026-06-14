@@ -2,7 +2,20 @@
 
 Telnyx uses bearer API keys for agent access. The resource server is `https://api.telnyx.com`. The public discovery host is `https://telnyx.com`. Read this file top to bottom before you attempt unauthenticated probes, programmatic signup, or MCP initialization.
 
-## 1. Discover
+## 1. Quickstart Paths
+
+Choose the shortest path that proves the integration:
+
+1. Zero-signup evaluation
+Read `https://telnyx.com/.well-known/agent-access.json`, then send `POST https://telnyx.com/api/inference`.
+
+2. Authenticated API or MCP onboarding
+Read `https://telnyx.com/agent-signup.md`, create or obtain an API key, then call `https://api.telnyx.com/v2/available_phone_numbers` or initialize `https://api.telnyx.com/v2/mcp`.
+
+3. Production Voice AI onboarding
+Read [`/guides/ai-assistants.md`](/guides/ai-assistants.md), then [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) once a key and account resources exist.
+
+## 2. Discover
 
 Start with the protected resource metadata for the surface you want to call.
 
@@ -51,7 +64,7 @@ Then fetch the authorization-server metadata from `authorization_servers[0] + "/
 
 `agent_auth` is the machine-readable summary of Telnyx's current agent registration path. Today it advertises the live bot-signup endpoints (`register_uri`, `claim_uri`, `challenge_uri`) plus the human-readable `skill` and `signup_guide_uri` documents that explain the full sequence. Telnyx does not currently expose the full WorkOS-style `/agent/auth`, `/agent/auth/claim`, or `/agent/auth/revoke` endpoint family, so treat the published `agent_auth` block as an onboarding map for the current API-key flow rather than as a claim that those protocol routes exist.
 
-## 2. Pick a Credential Path
+## 3. Pick a Credential Path
 
 Choose one of these paths:
 
@@ -68,7 +81,7 @@ Follow the programmatic bot-signup flow at `https://telnyx.com/agent-signup.md`.
 4. You need a new key and a human can use the portal.
 Use `https://portal.telnyx.com` to create or rotate a key interactively.
 
-## 3. Register or Obtain a Key
+## 4. Register or Obtain a Key
 
 The canonical machine-readable onboarding surface is `https://telnyx.com/.well-known/agent-access.json`. The canonical human-readable walkthrough is `https://telnyx.com/agent-signup.md`.
 
@@ -100,7 +113,7 @@ Accept: application/json, text/event-stream
 MCP-Protocol-Version: 2025-06-18
 ```
 
-## 4. Use the Credential
+## 5. Use the Credential
 
 Use the same bearer presentation for REST and MCP:
 
@@ -117,7 +130,20 @@ For MCP:
 
 If a previously-working key starts returning `401`, discard it and restart at discovery. Keys are bearer credentials; do not retry a revoked or expired credential indefinitely.
 
-## 5. Errors
+Minimal authenticated check:
+
+```bash
+curl -s https://api.telnyx.com/v2/available_phone_numbers \
+  -H "Authorization: Bearer TELNYX_API_KEY"
+```
+
+Minimal CLI check after key creation:
+
+```bash
+telnyx-agent status --json
+```
+
+## 6. Errors
 
 | Condition | Where you see it | What to do |
 | --- | --- | --- |
@@ -126,7 +152,7 @@ If a previously-working key starts returning `401`, discard it and restart at di
 | Email loop unavailable | Bot signup reaches the sign-in link step | Use the demo-first path for no-auth evaluation, or hand off to a human mailbox owner for production signup |
 | Rate limiting | Demo or signup surfaces throttle | Back off and retry later; do not spam challenge endpoints |
 
-## 6. Revocation and Rotation
+## 7. Revocation and Rotation
 
 Telnyx API keys are managed by the account owner. Agents do not have a separate revocation endpoint today.
 

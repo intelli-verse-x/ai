@@ -2,9 +2,16 @@ Telnyx AI
 Primary agent entrypoint: https://telnyx.com/agents/start
 
 Summary
-Telnyx is a communications and AI infrastructure platform for agents that need programmable voice, messaging, phone numbers, SIP trunking, inference, webhook delivery, and MCP access. This file is the text-first retrieval index for the stable agent-consumption artifacts that should be visible without JavaScript.
+Telnyx is a communications and AI infrastructure platform for agents that need programmable voice, AI assistants, messaging, phone numbers, SIP trunking, inference, webhook delivery, and MCP access. This file is the text-first retrieval index for the stable agent-consumption artifacts that should be visible without JavaScript.
 
 Named discovery targets that should resolve directly from this file include Telnyx Auth, Telnyx MCP, Telnyx OpenAPI, Telnyx Agent Skills, Telnyx Webhooks, Telnyx Voice AI Agents, and Telnyx x402 Payments.
+
+Getting started
+- Zero-signup evaluation path: read https://telnyx.com/auth.md, inspect https://telnyx.com/.well-known/agent-access.json, then call POST https://telnyx.com/api/inference
+- Account-creation path: read https://telnyx.com/agent-signup.md, complete the bot-signup plus email-link flow, then use Authorization: Bearer <TELNYX_API_KEY>
+- First authenticated API check: call https://api.telnyx.com/v2/available_phone_numbers with the bearer key, or initialize https://api.telnyx.com/v2/mcp
+- First Voice AI onboarding path: start with https://telnyx.com/guides/ai-assistants.md and continue with https://telnyx.com/guides/voice-agent-onboarding.md
+- CLI bootstrap after key creation: run telnyx-agent status --json
 
 What an agent should learn first
 - Telnyx exposes both direct REST discovery and MCP discovery.
@@ -41,6 +48,11 @@ Core discovery surfaces
 - Telnyx x402 Payments guide: https://telnyx.com/guides/x402-payments.md
 - Signup guide: https://telnyx.com/agent-signup.md
 
+Source of truth
+- Repo-owned source mirrors: https://github.com/team-telnyx/ai/blob/main/agents/start.md, https://github.com/team-telnyx/ai/blob/main/auth.md, https://github.com/team-telnyx/ai/blob/main/agent-signup.md, https://github.com/team-telnyx/ai/blob/main/llms.txt, https://github.com/team-telnyx/ai/blob/main/.well-known/agent-access.json, https://github.com/team-telnyx/ai/blob/main/.well-known/agent-card.json, https://github.com/team-telnyx/ai/blob/main/ai/capabilities.json, and https://github.com/team-telnyx/ai/blob/main/ai/pricing.json
+- Docs-hosted live webhooks guide: https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks
+- Docs-hosted live MCP Apps discovery: https://developers.telnyx.com/apps and https://developers.telnyx.com/.well-known/mcp-app-registry.json
+
 How to choose a surface
 - Use POST https://telnyx.com/api/inference when the goal is first-run evaluation without creating an account first.
 - Use https://api.telnyx.com/v2/mcp when the agent already speaks MCP and should discover tools dynamically.
@@ -61,6 +73,7 @@ Recommended path
 1. Start at https://telnyx.com/agents/start
 2. Read https://telnyx.com/auth.md
 3. Use https://telnyx.com/.well-known/agent-access.json for the demo-first path and current signup contract
-4. Use https://api.telnyx.com/v2/mcp for MCP or https://telnyx.com/.well-known/openapi.json for REST discovery
-5. Read the Telnyx Webhooks guide at https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks before implementing inbound webhook handlers
-6. Review https://github.com/team-telnyx/ai/tree/main/tools/python/examples when you need governed examples instead of broad raw-tool access
+4. Decide between POST https://telnyx.com/api/inference for a zero-signup first call or https://telnyx.com/agent-signup.md for authenticated account creation
+5. Use https://api.telnyx.com/v2/mcp for MCP or https://telnyx.com/.well-known/openapi.json for REST discovery after auth is in place
+6. Read the Telnyx Webhooks guide at https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks before implementing inbound webhook handlers
+7. Review https://github.com/team-telnyx/ai/tree/main/tools/python/examples when you need governed examples instead of broad raw-tool access
