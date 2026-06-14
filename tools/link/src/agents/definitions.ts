@@ -134,7 +134,7 @@ export const specialistAgents: SpecialistAgentDefinition[] = [
     allowedToolCategories: ["skills"],
     riskLevel: "low",
     customerSafeRules: ["Do not imply that a skill has used real production data in the MVP."],
-    handoffKeywords: ["skill", "workflow", "playbook", "armory", "dojo", "temple"],
+    handoffKeywords: ["skill", "workflow", "playbook", "wiki", "guide", "catalog"],
   },
 ];
 

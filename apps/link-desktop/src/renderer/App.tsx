@@ -16,6 +16,7 @@ import {
   FileText,
   Flag,
   FolderOpen,
+  Github as GithubIcon,
   Grid2X2,
   Grid2X2Plus,
   Home,
@@ -30,9 +31,11 @@ import {
   Mic,
   MonitorPlay,
   Moon,
+  MoreHorizontal,
   Pencil,
   Phone,
   PhoneCall,
+  Pin,
   Play,
   Plug,
   Plus,
@@ -73,7 +76,7 @@ import {
   YAxis,
 } from "recharts";
 import type { ComponentType, CSSProperties, DragEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ActiveWorkItem,
   AgentControlPlaneAuthStatus,
@@ -85,8 +88,8 @@ import type {
   ChatSession,
   ConnectorStatus,
   CredentialGroupStatus,
-  DojoKit,
-  DojoState,
+  WikiKit,
+  WikiState,
   ExplorerResult,
   GoogleCalendarEvent,
   GoogleContact,
@@ -95,7 +98,11 @@ import type {
   GoogleInboxThreadSummary,
   HostedAgentSummary,
   KnowledgeAgentAskResponse,
+  AiModelRoute,
+  LiteLlmRuntimeStatus,
   EdgeSlugAvailability,
+  ArtifactDeploymentRecord,
+  ArtifactDeploymentTarget,
   LinkLocalEdgeDraftApp,
   LinkLocalEdgeImportScope,
   LinkLocalAppInspection,
@@ -118,11 +125,20 @@ import type {
   MeetingInvite,
   MemoryBank,
   MemoryRecallResult,
+  OkfBundlePreview,
+  OkfConceptPreview,
   OnboardingState,
   PhoneAssistantOption,
+  PhoneCallHistoryRow,
   PhoneNumberOption,
   SkillMarkdownResult,
   SkillMetadata,
+  ScribesArtifactKind,
+  ScribesCleanupProfile,
+  ScribesModel,
+  ScribesSession,
+  ScribesStatus,
+  ScribesWorkspaceSettings,
   SpeakSettings,
   TelnyxTtsVoice,
   TerminalStatus,
@@ -134,6 +150,9 @@ import type {
   WhisperStatus,
   WidgetCatalogItem,
   WidgetDataResult,
+  WikiDocumentationSource,
+  WikiDocumentationSourceInput,
+  WikiDocumentationSourceType,
   WorkboardCard,
   WorkboardProvider,
   WorkboardSnapshot,
@@ -146,41 +165,98 @@ import { createDefaultDialerConfig, type DialerConfig } from "./phone/dialer-con
 import { LinkSoftphone } from "./phone/softphone.js";
 
 type AppIcon = ComponentType<{ size?: number; className?: string }>;
+function ScribesWaveformIcon({ size = 24, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path d="M4 10v4" />
+      <path d="M8 7v10" />
+      <path d="M12 4v16" />
+      <path d="M16 7v10" />
+      <path d="M20 10v4" />
+    </svg>
+  );
+}
 type SkillMarkdownLoadState =
   | { status: "loading" }
   | { status: "ready"; result: SkillMarkdownResult }
   | { status: "error"; message: string };
 type PhoneViewTab = "numbers" | "calls" | "contacts" | "assistants" | "inbox";
-type SettingsTab = "auth" | "plugins" | "contacts" | "assistants" | "numbers" | "agents" | "speak" | "dialer" | "design";
+type SettingsTab = "auth" | "plugins" | "contacts" | "assistants" | "numbers" | "agents" | "speak" | "dialer" | "design" | "wiki";
+type WikiSourceDraft = {
+  id: string;
+  type: WikiDocumentationSourceType;
+  label: string;
+  iconName: string;
+  target: string;
+  description: string;
+  branch: string;
+  path: string;
+  enabled: boolean;
+};
 type PageSectionTab<T extends string> = readonly [T, string, AppIcon];
+type PageSectionTabGroup<T extends string> = {
+  title: string;
+  tabs: readonly PageSectionTab<T>[];
+};
 
 function PageSectionSidebar<T extends string>({
   tabs,
+  groups,
+  heading,
+  headingIcon: HeadingIcon,
   activeTab,
   onSelect,
   label,
 }: {
-  tabs: readonly PageSectionTab<T>[];
+  tabs?: readonly PageSectionTab<T>[];
+  groups?: readonly PageSectionTabGroup<T>[];
+  heading?: string;
+  headingIcon?: AppIcon;
   activeTab: T;
   onSelect: (tab: T) => void;
   label: string;
 }) {
+  const renderTabButton = ([id, tabLabel, Icon]: PageSectionTab<T>) => (
+    <button
+      key={id}
+      className={activeTab === id ? "selected" : ""}
+      onClick={() => onSelect(id)}
+      role="tab"
+      aria-selected={activeTab === id}
+    >
+      <Icon size={18} />
+      <span>{tabLabel}</span>
+    </button>
+  );
+
   return (
     <aside className="pageSectionSidebar" role="tablist" aria-label={label}>
-      {tabs.map(([id, tabLabel, Icon]) => {
-        return (
-          <button
-            key={id}
-            className={activeTab === id ? "selected" : ""}
-            onClick={() => onSelect(id)}
-            role="tab"
-            aria-selected={activeTab === id}
-          >
-            <Icon size={18} />
-            <span>{tabLabel}</span>
-          </button>
-        );
-      })}
+      {heading && (
+        <div className="pageSectionSidebarHeading">
+          {HeadingIcon && <HeadingIcon size={18} />}
+          <span>{heading}</span>
+        </div>
+      )}
+      {groups
+        ? groups.map((group) => (
+          <div className="pageSectionSidebarGroup" key={group.title}>
+            <div className="pageSectionSidebarGroupTitle">{group.title}</div>
+            {group.tabs.map(renderTabButton)}
+          </div>
+        ))
+        : tabs?.map(renderTabButton)}
     </aside>
   );
 }
@@ -194,11 +270,16 @@ function PageSectionHeader({
   title: string;
   action?: ReactNode;
 }) {
+  const showParent = Boolean(parent.trim()) && parent.trim().toLowerCase() !== "link";
   return (
     <header className="pageSectionHeader">
       <h1 className="pageSectionBreadcrumb">
-        <span className="pageSectionBreadcrumbParent">{parent}</span>
-        <span className="pageSectionBreadcrumbSeparator">/</span>
+        {showParent && (
+          <>
+            <span className="pageSectionBreadcrumbParent">{parent}</span>
+            <span className="pageSectionBreadcrumbSeparator">/</span>
+          </>
+        )}
         <span className="pageSectionBreadcrumbCurrent">{title}</span>
       </h1>
       {action && <div className="pageSectionHeaderActions">{action}</div>}
@@ -207,24 +288,6 @@ function PageSectionHeader({
 }
 
 const defaultPrimaryColor = "#00e3aa";
-
-function TriforceIcon({ size = 18, className }: { size?: number; className?: string }) {
-  return (
-    <svg
-      className={className}
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      role="img"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M12 2.6 6.75 11.7h10.5L12 2.6Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M6.35 12.35 1.1 21.4h10.5l-5.25-9.05Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-      <path d="M17.65 12.35 12.4 21.4h10.5l-5.25-9.05Z" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-    </svg>
-  );
-}
 
 interface ActiveAgentSelection {
   id: string;
@@ -241,6 +304,14 @@ function readStoredIdList(storageKey: string) {
   } catch {
     return [];
   }
+}
+
+function sortChatSessions(sessions: ChatSession[]) {
+  return [...sessions].sort((left, right) => {
+    const pinnedCompare = Number(Boolean(right.pinnedAt)) - Number(Boolean(left.pinnedAt));
+    if (pinnedCompare !== 0) return pinnedCompare;
+    return Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || "");
+  });
 }
 
 function TableRowLifecycleActions({
@@ -329,6 +400,29 @@ function BulkSelectCell({
   );
 }
 
+function TableRefreshButton({
+  onClick,
+  disabled = false,
+  label = "Refresh table",
+}: {
+  onClick: () => void | Promise<void>;
+  disabled?: boolean;
+  label?: string;
+}) {
+  return (
+    <button
+      className="iconButton agentFilterButton tableRefreshButton"
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={() => void onClick()}
+      disabled={disabled}
+    >
+      <RefreshCw size={16} />
+    </button>
+  );
+}
+
 type ChatAgentSource = AgentSummary["source"] | "link" | "voice-assistant";
 
 type NewChatSessionDraft = {
@@ -338,6 +432,7 @@ type NewChatSessionDraft = {
   agentType?: string;
   agentSource?: ChatAgentSource;
   approvalMode?: "auto" | "review" | "manual";
+  modelMode?: string;
 };
 
 type ChatAgentOption = {
@@ -431,12 +526,11 @@ const navItems: { id: ViewId; label: string; icon: AppIcon }[] = [
   { id: "phone", label: "Calls", icon: Phone },
   { id: "inbox", label: "Inbox", icon: Inbox },
   { id: "workboard", label: "Taskbox", icon: SquareCheck },
-  { id: "drive", label: "Drive", icon: FolderOpen },
   { id: "calendar", label: "Calendar", icon: CalendarDays },
   { id: "agents", label: "Agents", icon: Bot },
   { id: "skills", label: "Skills", icon: Zap },
   { id: "apps", label: "Apps", icon: Grid2X2Plus },
-  { id: "dojo", label: "Wiki", icon: TriforceIcon },
+  { id: "wiki", label: "Wiki", icon: BookOpen },
 ];
 
 const linkGettingStartedAgentId = "c4de5f6a-e2e9-4568-9611-80cd35b483f7";
@@ -444,7 +538,7 @@ const linkGettingStartedAgentName = "Link";
 
 const viewMeta: Record<ViewId, { label: string; icon: AppIcon }> = {
   workspaces: { label: "Workspaces", icon: Grid2X2 },
-  onboarding: { label: "Onboarding", icon: Flag },
+  onboarding: { label: "Get Started", icon: Flag },
   widgets: { label: "Widgets", icon: LayoutDashboard },
   explorer: { label: "Library", icon: BookOpen },
   chats: { label: "Chat", icon: MessageSquare },
@@ -454,11 +548,12 @@ const viewMeta: Record<ViewId, { label: string; icon: AppIcon }> = {
   inbox: { label: "Inbox", icon: Inbox },
   agents: { label: "Agents", icon: Bot },
   workboard: { label: "Taskbox", icon: SquareCheck },
+  scribes: { label: "Scribes", icon: ScribesWaveformIcon },
   drive: { label: "Drive", icon: FolderOpen },
   phone: { label: "Calls", icon: Phone },
   calendar: { label: "Calendar", icon: CalendarDays },
   memory: { label: "Archive", icon: ArchiveIcon },
-  dojo: { label: "Wiki", icon: TriforceIcon },
+  wiki: { label: "Wiki", icon: BookOpen },
   settings: { label: "Settings", icon: Settings },
 };
 
@@ -479,6 +574,7 @@ interface PublishAppDraft {
   envSchema: string;
   reviewers: string;
   riskLevel: LinkPublishedAppRisk;
+  deploymentTarget: ArtifactDeploymentTarget;
 }
 
 interface MarketplaceApp {
@@ -526,17 +622,6 @@ type EdgePreviewSurface = {
   directory?: string;
 };
 
-type PhoneCallHistoryRow = {
-  id: string;
-  contact: string;
-  number: string;
-  agentId: string;
-  agentName: string;
-  direction: "inbound" | "outbound";
-  status: "answered" | "missed" | "voicemail" | "failed";
-  time: string;
-};
-
 export function App() {
   const [view, setView] = useState<ViewId>("chats");
   const [skills, setSkills] = useState<SkillMetadata[]>([]);
@@ -551,7 +636,7 @@ export function App() {
   const [changeRequests, setChangeRequests] = useState<LinkChangeRequest[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [memoryBanks, setMemoryBanks] = useState<MemoryBank[]>([]);
-  const [dojoState, setDojoState] = useState<DojoState | null>(null);
+  const [wikiState, setWikiState] = useState<WikiState | null>(null);
   const [publishedApps, setPublishedApps] = useState<LinkPublishedApp[]>([]);
   const [publisherReadiness, setPublisherReadiness] = useState<LinkAppPublisherReadiness | null>(null);
   const [gatewayReadiness, setGatewayReadiness] = useState<MessageGatewayReadiness | null>(null);
@@ -581,6 +666,11 @@ export function App() {
   const [activeDialerConfig, setActiveDialerConfig] = useState<DialerConfig>(() => createDefaultDialerConfig());
   const [telnyxCredentialReady, setTelnyxCredentialReady] = useState(false);
   const [liteLlmCredentialReady, setLiteLlmCredentialReady] = useState(false);
+  const [liteLlmRuntime, setLiteLlmRuntime] = useState<LiteLlmRuntimeStatus | null>(null);
+  const [chatModelMode, setChatModelMode] = useState(() => {
+    if (typeof window === "undefined") return "auto/ask-before-cloud";
+    return window.localStorage.getItem("telnyx-link-chat-model-route") ?? "auto/ask-before-cloud";
+  });
   const [activeAgent, setActiveAgent] = useState<ActiveAgentSelection | null>(() => {
     if (typeof window === "undefined") return null;
     try {
@@ -646,6 +736,10 @@ export function App() {
     if (selectedChatAgentId) window.localStorage.setItem("telnyx-link-selected-chat-agent", selectedChatAgentId);
   }, [selectedChatAgentId]);
 
+  useEffect(() => {
+    window.localStorage.setItem("telnyx-link-chat-model-route", chatModelMode);
+  }, [chatModelMode]);
+
   async function refresh() {
     const [
       skillList,
@@ -658,7 +752,7 @@ export function App() {
       changeList,
       agentList,
       bankList,
-      dojo,
+      wiki,
       publisherStatus,
       gatewayStatus,
       gatewayList,
@@ -666,6 +760,7 @@ export function App() {
       onboardingState,
       authStatus,
       credentialList,
+      runtimeStatus,
       dialerConfig,
     ] = await Promise.all([
       linkApi.listSkills(),
@@ -678,7 +773,7 @@ export function App() {
       linkApi.listChangeRequests(),
       linkApi.listAgents(),
       linkApi.listMemoryBanks(),
-      linkApi.listDojoState(),
+      linkApi.listWikiState(),
       linkApi.getPublisherReadiness(),
       linkApi.getMessageGatewayReadiness(),
       linkApi.listGatewayMessages(),
@@ -686,6 +781,7 @@ export function App() {
       linkApi.listOnboarding(),
       linkApi.getAgentControlPlaneAuthStatus(),
       linkApi.listCredentials(),
+      linkApi.getLiteLlmRuntimeStatus(),
       linkApi.getActiveDialerConfig(),
     ]);
     setSkills(skillList);
@@ -698,7 +794,7 @@ export function App() {
     setChangeRequests(changeList);
     setAgents(agentList);
     setMemoryBanks(bankList);
-    setDojoState(dojo);
+    setWikiState(wiki);
     setPublisherReadiness(publisherStatus);
     setGatewayReadiness(gatewayStatus);
     setGatewayMessages(gatewayList.messages);
@@ -707,13 +803,19 @@ export function App() {
     setPublishedApps(appList);
     setOnboarding(onboardingState);
     setAccountStatus(authStatus);
+    setLiteLlmRuntime(runtimeStatus);
     setActiveDialerConfig(dialerConfig);
     setTelnyxCredentialReady(Boolean(credentialList.find((group) => group.id === "telnyx")?.fields.some((field) => field.name === "TELNYX_API_KEY" && field.configured)));
-    setLiteLlmCredentialReady(Boolean(credentialList.find((group) => group.id === "litellm")?.fields.some((field) => field.name === "LITELLM_API_KEY" && field.configured)));
+    setLiteLlmCredentialReady(Boolean(runtimeStatus.installed || runtimeStatus.telnyx.apiKeyConfigured || runtimeStatus.managedGateway.configured || runtimeStatus.frontier.anthropicConfigured));
     setSignedOutLocally(false);
     setSelectedWorkspaceId((current) => current || workspaceList[0]?.id || "");
     setSelectedSessionId((current) => current || chatList[0]?.id || "");
     setSelectedWorkId((current) => current || workList[0]?.id || "");
+  }
+
+  async function refreshSessionTablesThenAll() {
+    setChatSessions(await linkApi.listChatSessions());
+    await refresh();
   }
 
   useEffect(() => {
@@ -795,7 +897,7 @@ export function App() {
       agentType: agent.type,
       title: draft.title,
       approvalMode: draft.approvalMode ?? "auto",
-      modelMode: "auto-agent-runtime",
+      modelMode: draft.modelMode ?? chatModelMode,
       contextScope: "workspace",
     });
     setChatSessions((current) => [session, ...current.filter((item) => item.id !== session.id)]);
@@ -803,6 +905,16 @@ export function App() {
     setNewSessionDraftOpen(false);
     setView("chats");
     await refresh();
+  }
+
+  async function updateChatSession(input: { sessionId: string; title?: string; pinned?: boolean; archived?: boolean }) {
+    const session = await linkApi.updateChatSession(input);
+    setChatSessions((current) => sortChatSessions([session, ...current.filter((item) => item.id !== session.id)]));
+    if (input.archived && selectedSessionId === input.sessionId) {
+      setSelectedSessionId("");
+      setNewSessionDraftOpen(false);
+    }
+    return session;
   }
 
   function openTaskMonitoringSession({
@@ -857,6 +969,13 @@ export function App() {
     setNewSessionDraftOpen(false);
     setView("chats");
     await refresh();
+  }
+
+  async function startEmailDraftChat(prompt: string) {
+    await startOnboardingPromptChat(
+      prompt,
+      "Email draft workflow",
+    );
   }
 
   async function startOnboardingSharedDraft() {
@@ -955,7 +1074,7 @@ export function App() {
     setView("settings");
   }
 
-  const signedIn = Boolean(accountStatus?.ready && !signedOutLocally);
+  const signedIn = Boolean(accountStatus?.signedIn && !signedOutLocally);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -1045,7 +1164,7 @@ export function App() {
             changeRequests={changeRequests}
             agents={agents}
             memoryBanks={memoryBanks}
-            dojoState={dojoState}
+            wikiState={wikiState}
             selectedWorkspaceId={selectedWorkspace?.id ?? ""}
             selectedSessionId={selectedSession?.id ?? ""}
             setSelectedWorkspaceId={setSelectedWorkspaceId}
@@ -1065,7 +1184,7 @@ export function App() {
                   memoryBanks={memoryBanks}
                   skills={skills}
                   agents={agents}
-                  dojoState={dojoState}
+                  wikiState={wikiState}
                   publisherReadiness={publisherReadiness}
                   telnyxCredentialReady={telnyxCredentialReady}
                   liteLlmReady={liteLlmCredentialReady}
@@ -1098,6 +1217,8 @@ export function App() {
 	                  onEdgePreviewReady={setEdgePreviewSurface}
 	                  edgePreviewSurface={edgePreviewSurface}
 	                  closeEdgePreview={() => setEdgePreviewSurface(null)}
+	                  updateChatSession={updateChatSession}
+	                  refreshTables={refreshSessionTablesThenAll}
 	                />
               )}
               {!selectedArtifact && view === "gateway" && (
@@ -1134,16 +1255,20 @@ export function App() {
                   openTaskMonitoringSession={openTaskMonitoringSession}
                 />
               )}
+              {!selectedArtifact && view === "scribes" && <ScribesView />}
               {!selectedArtifact && view === "drive" && (
                 <DriveView
                   sessions={chatSessions}
+                  publishedApps={publishedApps}
                   activeAgent={activeAgent}
                   openArtifact={setSelectedArtifact}
                   openSession={openChatSession}
+                  openScribes={() => setView("scribes")}
+                  refreshTables={refreshSessionTablesThenAll}
                 />
               )}
               {!selectedArtifact && view === "calendar" && (
-                <CalendarView connectors={connectors} linkedPhoneNumber={linkedPhoneNumber} setView={setView} />
+                <CalendarView connectors={connectors} linkedPhoneNumber={linkedPhoneNumber} setView={setView} refresh={refresh} />
               )}
               {!selectedArtifact && view === "inbox" && (
                 <PhoneView
@@ -1160,6 +1285,7 @@ export function App() {
                   }}
                   refresh={refresh}
                   startManagedSkillSetupChat={startManagedSkillSetupChat}
+                  startEmailDraftChat={startEmailDraftChat}
                   standaloneInbox
                   hideSectionSidebar
                 />
@@ -1174,15 +1300,20 @@ export function App() {
                   setTab={setPhoneTab}
                   refresh={refresh}
                   startManagedSkillSetupChat={startManagedSkillSetupChat}
+                  startEmailDraftChat={startEmailDraftChat}
+                  openNewCall={() => {
+                    setAssistantMode("phone");
+                    setAssistantCollapsed(false);
+                  }}
                   hideSectionSidebar
                   headerParent="Link"
                 />
               )}
               {!selectedArtifact && view === "memory" && <MemoryView banks={memoryBanks} openMemory={() => setMemoryOpen(true)} />}
-              {!selectedArtifact && (view === "apps" || view === "skills" || view === "dojo") && (
-                <DojoView
+              {!selectedArtifact && (view === "apps" || view === "skills" || view === "wiki") && (
+                <WikiView
                   initialTab={view === "apps" || view === "skills" ? view : undefined}
-                  dojoState={dojoState}
+                  wikiState={wikiState}
                   skills={skills}
                   selectedWorkspace={selectedWorkspace}
                   activeAgent={activeAgent}
@@ -1237,6 +1368,7 @@ export function App() {
               selectedSession={selectedSession}
               selectedWorkspace={selectedWorkspace}
               setChatSessions={setChatSessions}
+              updateChatSession={updateChatSession}
               selectSession={setSelectedSessionId}
               openArtifact={setSelectedArtifact}
               refresh={refresh}
@@ -1246,6 +1378,9 @@ export function App() {
                 setView("settings");
               }}
               liteLlmReady={liteLlmCredentialReady}
+              liteLlmRuntime={liteLlmRuntime}
+              chatModelMode={chatModelMode}
+              setChatModelMode={setChatModelMode}
               linkedPhoneNumber={linkedPhoneNumber}
               setLinkedPhoneNumber={setLinkedPhoneNumber}
               telnyxApiReady={telnyxCredentialReady || connectors.some((connector) => connector.id === "telnyx" && (connector.status === "connected" || connector.status === "signed_in"))}
@@ -1283,11 +1418,11 @@ function AuthGate({
     <main className="authGate">
       <section className="authGateCard" aria-label="Telnyx Okta sign in">
         <div className="authGateIcon">
-          <img src="./triforce-26.png" alt="" aria-hidden="true" />
+          <BookOpen size={34} strokeWidth={1.7} aria-hidden="true" />
         </div>
         <div>
           <h1>Telnyx Link</h1>
-          <p>Sign in with Telnyx Okta to bring your agents, tasks, calls, calendar, docs, and internal tools into one secure workspace.</p>
+          <p>Sign in to bring your agents, tasks, calls, calendar, docs, and internal tools into one secure workspace.</p>
         </div>
         <button className="button primary" onClick={onSignIn} disabled={busy}>
           {busy ? "Signing in" : "Sign in with Okta"}
@@ -1601,7 +1736,6 @@ function TitleBar({
 }) {
   return (
     <header className="titleBar">
-      <div className="windowTitle">Telnyx Link</div>
       {signedIn && (
         <div className="titleBarActions">
           <button
@@ -1882,7 +2016,7 @@ const internalTestingChecklistStorageKey = "telnyx-link-internal-testing-checkli
 const internalTestingChecklistItems = [
   { id: "chat", label: "Send one chat request", view: "chats" },
   { id: "plugin", label: "Connect or review one plugin", view: "settings" },
-  { id: "skill", label: "Run or inspect one skill", view: "dojo" },
+  { id: "skill", label: "Run or inspect one skill", view: "wiki" },
   { id: "widget", label: "Add or refresh one widget", view: "widgets" },
   { id: "approval", label: "Review one approval flow", view: "workspaces" },
   { id: "feedback", label: "File one feedback note", view: "chats" },
@@ -1905,7 +2039,7 @@ function OnboardingView({
   memoryBanks,
   skills,
   agents,
-  dojoState,
+  wikiState,
   publisherReadiness,
   telnyxCredentialReady,
   liteLlmReady,
@@ -1922,7 +2056,7 @@ function OnboardingView({
   memoryBanks: MemoryBank[];
   skills: SkillMetadata[];
   agents: AgentSummary[];
-  dojoState: DojoState | null;
+  wikiState: WikiState | null;
   publisherReadiness: LinkAppPublisherReadiness | null;
   telnyxCredentialReady: boolean;
   liteLlmReady: boolean;
@@ -1963,9 +2097,9 @@ function OnboardingView({
     },
     {
       id: "litellm",
-      label: "LiteLLM",
+      label: "Model gateway",
       ready: liteLlmReady || connectorReady("litellm"),
-      detail: liteLlmReady || connectorReady("litellm") ? "Model routing credential is configured." : "Save LiteLLM credentials before relying on live agent chat.",
+      detail: liteLlmReady || connectorReady("litellm") ? "Local or cloud model routing is available." : "Install LiteLLM for local chat or save optional cloud gateway credentials.",
       action: "Settings",
       view: "settings" as ViewId,
     },
@@ -2015,14 +2149,14 @@ function OnboardingView({
       ready: Boolean(publisherReadiness?.ready),
       detail: publisherReadiness?.message ?? "Publisher readiness has not loaded yet.",
       action: "Wiki",
-      view: "dojo" as ViewId,
+      view: "wiki" as ViewId,
     },
   ];
   const readyCount = readinessItems.filter((item) => item.ready).length;
   const checklistCompleteCount = testingChecklist.length;
   const testerContext = [
     `Okta: ${oktaComplete ? "ready" : "not ready"}`,
-    `LiteLLM: ${liteLlmReady || connectorReady("litellm") ? "ready" : "missing"}`,
+    `Model gateway: ${liteLlmReady || connectorReady("litellm") ? "ready" : "missing"}`,
     `Google Workspace: ${connectorReady("google-drive") || connectorReady("google-calendar") ? "ready" : "missing"}`,
     `GitHub: ${connectorReady("github") ? "ready" : "missing"}`,
     `Telnyx API: ${telnyxCredentialReady || connectorReady("telnyx") ? "ready" : "missing"}`,
@@ -2119,7 +2253,7 @@ function OnboardingView({
       body: "Jump into Wiki to inspect or install squad-standard skills.",
       icon: Tags,
       action: () => {
-        setView("dojo");
+        setView("wiki");
         return Promise.resolve();
       },
     },
@@ -2178,7 +2312,7 @@ function OnboardingView({
       meta: `${skills.length} skills, ${agents.length} agents, ${rescueComplete ? "bot-troubleshooting available" : "rescue bot unavailable"}.`,
       action: (
         <div className="onboardingActions">
-          <button className="button secondary" onClick={() => setView("dojo")}>Open Wiki</button>
+          <button className="button secondary" onClick={() => setView("wiki")}>Open Wiki</button>
           <button className="button ghost" onClick={() => setView("agents")}>Open Agents</button>
           <button className="button ghost" onClick={() => void markStep("squad-tools")}>Mark reviewed</button>
         </div>
@@ -2206,27 +2340,25 @@ function OnboardingView({
     <section className="content onboardingView">
       <header className="pageHeader">
         <div>
-          <h1>User onboarding</h1>
+          <h1>Get Started</h1>
         </div>
         <div className="headerActions">
-          <button className="button primary" onClick={() => void finishOnboarding()} disabled={!requiredComplete}>Finish onboarding</button>
+          <button className="button primary" onClick={() => void finishOnboarding()} disabled={!requiredComplete}>Finish setup</button>
         </div>
       </header>
       <div className="onboardingHero">
         <div>
-          <strong>Personal setup, squad defaults, and internal testing readiness in one place.</strong>
-          <p>Use this page to confirm live access, start the first useful workflows, and leave a comparable dogfood signal before Link moves deeper into internal testing.</p>
+          <strong>Connect the basics and start using Link.</strong>
         </div>
         <div className="onboardingHeroBadges">
           <Badge tone={requiredComplete ? "success" : "warning"}>{steps.filter((step) => step.complete).length}/{steps.length} setup</Badge>
           <Badge tone={readyCount >= 6 ? "success" : "warning"}>{readyCount}/{readinessItems.length} ready</Badge>
         </div>
       </div>
-      <section className="startReadinessPanel" aria-label="Internal testing readiness">
+      <section className="startReadinessPanel" aria-label="Setup status">
         <div className="startSectionHeader">
           <div>
-            <strong>Internal testing readiness</strong>
-            <small>Each row links to the surface most likely to fix or verify the signal.</small>
+            <strong>Setup status</strong>
           </div>
           <button className="button secondary" onClick={() => void refresh()}>
             <RefreshCw size={15} />
@@ -2239,95 +2371,34 @@ function OnboardingView({
               <span className="startReadinessIcon">{item.ready ? <Check size={15} /> : <Info size={15} />}</span>
               <span>
                 <strong>{item.label}</strong>
-                <small>{item.detail}</small>
               </span>
               <em>{item.action}</em>
             </button>
           ))}
         </div>
       </section>
-      <section className="startFirstUsePanel" aria-label="First useful actions">
+      <section className="startTestingPanel" aria-label="Checklist">
         <div className="startSectionHeader">
           <div>
-            <strong>First useful actions</strong>
-            <small>These create real sessions or route to the surface testers should exercise next.</small>
+            <strong>Checklist</strong>
+            <small>{checklistCompleteCount}/{internalTestingChecklistItems.length} done</small>
           </div>
         </div>
-        <div className="startActionGrid">
-          {firstUseActions.map((item) => {
-            const ActionIcon = item.icon;
+        <div className="testerChecklist">
+          {internalTestingChecklistItems.map((item) => {
+            const checked = testingChecklist.includes(item.id);
             return (
-              <button className="startActionCard" key={item.id} onClick={() => void item.action()}>
-                <ActionIcon size={18} />
-                <span>
-                  <strong>{item.title}</strong>
-                  <small>{item.body}</small>
-                </span>
-              </button>
+              <label className={`testerChecklistItem ${checked ? "checked" : ""}`} key={item.id}>
+                <input type="checkbox" checked={checked} onChange={() => toggleTestingChecklistItem(item.id)} />
+                <span>{item.label}</span>
+                <button type="button" className="iconButton" title={`Open ${viewMeta[item.view].label}`} aria-label={`Open ${viewMeta[item.view].label}`} onClick={() => setView(item.view)}>
+                  <ArrowRight size={14} />
+                </button>
+              </label>
             );
           })}
         </div>
       </section>
-      <div className="startTestingGrid">
-        <section className="startTestingPanel" aria-label="Tester mission checklist">
-          <div className="startSectionHeader">
-            <div>
-              <strong>Tester mission checklist</strong>
-              <small>{checklistCompleteCount}/{internalTestingChecklistItems.length} completed on this device.</small>
-            </div>
-          </div>
-          <div className="testerChecklist">
-            {internalTestingChecklistItems.map((item) => {
-              const checked = testingChecklist.includes(item.id);
-              return (
-                <label className={`testerChecklistItem ${checked ? "checked" : ""}`} key={item.id}>
-                  <input type="checkbox" checked={checked} onChange={() => toggleTestingChecklistItem(item.id)} />
-                  <span>{item.label}</span>
-                  <button type="button" className="iconButton" title={`Open ${viewMeta[item.view].label}`} aria-label={`Open ${viewMeta[item.view].label}`} onClick={() => setView(item.view)}>
-                    <ArrowRight size={14} />
-                  </button>
-                </label>
-              );
-            })}
-          </div>
-        </section>
-        <section className="startTestingPanel" aria-label="Feedback and expected behavior">
-          <div className="startSectionHeader">
-            <div>
-              <strong>Feedback bundle</strong>
-              <small>Starts a report with current readiness context attached.</small>
-            </div>
-          </div>
-          <button className="button primary startFeedbackButton" onClick={() => void startFeedbackReport()}>
-            <Pencil size={15} />
-            Report feedback
-          </button>
-          <div className="startLimitations">
-            <strong>Expected during testing</strong>
-            <span>{publisherReadiness?.ready ? "Publisher is production-ready when VPN/auth checks pass." : "Publisher and app publishing can be VPN-only or local-fallback depending on readiness."}</span>
-            <span>{connectedConnectors.length > 0 ? "Connected plugins can return live data; missing plugins use deterministic fallback or show access guidance." : "Most plugin-backed surfaces will show mocked or access-needed states until credentials are saved."}</span>
-            <span>Customer-visible actions should land in review before anything external happens.</span>
-          </div>
-        </section>
-      </div>
-      <div className="onboardingGrid">
-        {steps.map((step) => {
-          const StepIcon = step.icon;
-          return (
-            <article className={`onboardingStep ${step.complete ? "complete" : ""}`} key={step.id}>
-              <div className="stepIcon" aria-hidden="true"><StepIcon size={20} strokeWidth={2.4} /></div>
-              <div className="stepBody">
-                <div className="connectorTitle">
-                  <strong>{step.title}</strong>
-                  <Badge tone={step.complete ? "success" : step.required ? "warning" : "default"}>{step.complete ? "complete" : step.required ? "required" : "optional"}</Badge>
-                </div>
-                <p>{step.body}</p>
-                {!step.complete && step.action}
-              </div>
-            </article>
-          );
-        })}
-      </div>
     </section>
   );
 }
@@ -2360,7 +2431,7 @@ function Rail({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const showOnboarding = onboarding && !onboarding.dismissed && !onboarding.completed;
-  const signedIn = Boolean(accountStatus?.ready && !signedOutLocally);
+  const signedIn = Boolean(accountStatus?.signedIn && !signedOutLocally);
   const accountIdentity = accountStatus?.userName || accountStatus?.actor || accountStatus?.userId || "";
   const accountLabel = accountIdentity || (signedIn ? "Telnyx Okta" : "Not signed in");
   const accountInitials = accountIdentity ? initialsFromIdentity(accountIdentity) : "TL";
@@ -2437,6 +2508,8 @@ function Rail({
           </button>
         </div>
       )}
+      {renderRailButton({ id: "scribes", label: "Scribes", icon: ScribesWaveformIcon })}
+      {renderRailButton({ id: "drive", label: "Drive", icon: FolderOpen })}
       {renderRailButton({ id: "settings", label: "Settings", icon: Settings })}
       <div className="accountMenuWrap" ref={accountMenuRef}>
         <button
@@ -2489,7 +2562,7 @@ function Sidebar({
   changeRequests,
   agents,
   memoryBanks,
-  dojoState,
+  wikiState,
   selectedWorkspaceId,
   selectedSessionId,
   setSelectedWorkspaceId,
@@ -2506,7 +2579,7 @@ function Sidebar({
   changeRequests: LinkChangeRequest[];
   agents: AgentSummary[];
   memoryBanks: MemoryBank[];
-  dojoState: DojoState | null;
+  wikiState: WikiState | null;
   selectedWorkspaceId: string;
   selectedSessionId: string;
   setSelectedWorkspaceId: (id: string) => void;
@@ -2576,12 +2649,13 @@ function Sidebar({
         ))}
       </SidebarSection>
       <SidebarSection title="Taskbox" count={0} icon={<SquareCheck size={13} />} compact active={view === "workboard"} />
+      <SidebarSection title="Scribes" count={0} icon={<ScribesWaveformIcon size={13} />} compact active={view === "scribes"} />
       <SidebarSection title="Drive" count={chatSessions.reduce((count, session) => count + session.messages.reduce((messageCount, message) => messageCount + (message.role === "assistant" ? (message.artifacts?.length ?? 0) : 0), 0), 0)} icon={<FolderOpen size={13} />} compact active={view === "drive"} />
       <SidebarSection title="Phone" count={1} icon={<Phone size={13} />} compact active={view === "phone"} />
       <SidebarSection title="Calendar" count={3} icon={<CalendarDays size={13} />} compact active={view === "calendar"} />
       <SidebarSection title="Agents" count={agents.length} icon={<Bot size={13} />} compact active={view === "agents"} />
       <SidebarSection title="Archive" count={memoryBanks.length} icon={<ArchiveIcon size={13} />} compact active={view === "memory"} />
-      <SidebarSection title="Wiki" count={dojoState?.profile.masteredSkills ?? 0} icon={<TriforceIcon size={13} />} compact active={view === "dojo"} />
+      <SidebarSection title="Wiki" count={wikiState?.profile.masteredSkills ?? 0} icon={<BookOpen size={13} />} compact active={view === "wiki"} />
     </aside>
   );
 }
@@ -3199,10 +3273,10 @@ function RechartsWidgetChart({ widget, data, error }: { widget: WidgetCatalogIte
   );
 }
 
-type ExplorerSourceTab = "support" | "developers" | "wiki" | "pylon" | "local";
-type WikiSourceTab = Exclude<ExplorerSourceTab, "local">;
-type DojoTab = "apps" | "skills" | WikiSourceTab;
-type DojoPage = "apps" | "skills" | "wiki";
+type ExplorerSourceTab = "support" | "developers" | "wiki" | "pylon" | "custom" | "local";
+type WikiSourceTab = string;
+type WikiTab = "apps" | "skills" | WikiSourceTab;
+type WikiPage = "apps" | "skills" | "wiki";
 
 type ExplorerSourceConfig = {
   id: ExplorerSourceTab;
@@ -3214,7 +3288,68 @@ type ExplorerSourceConfig = {
   sources: ExplorerResult["source"][];
 };
 
-type WikiSourceConfig = ExplorerSourceConfig & { id: WikiSourceTab };
+type WikiSourceConfig = Omit<ExplorerSourceConfig, "id"> & { id: WikiSourceTab; externalSource: ExplorerSourceTab };
+
+const wikiIconOptions = [
+  { id: "book", label: "Book", icon: BookOpen },
+  { id: "file", label: "File", icon: FileText },
+  { id: "plug", label: "Plug", icon: Plug },
+  { id: "folder", label: "Folder", icon: FolderOpen },
+  { id: "github", label: "GitHub", icon: GithubIcon },
+  { id: "bot", label: "Bot", icon: Bot },
+  { id: "shield", label: "Shield", icon: ShieldCheck },
+  { id: "star", label: "Star", icon: Star },
+  { id: "tag", label: "Tag", icon: Tags },
+  { id: "zap", label: "Zap", icon: Zap },
+] as const satisfies readonly { id: string; label: string; icon: AppIcon }[];
+
+function wikiIconForName(name?: unknown): AppIcon {
+  const iconName = typeof name === "string" ? name : "";
+  return wikiIconOptions.find((option) => option.id === iconName)?.icon ?? BookOpen;
+}
+
+function defaultWikiSourceIconName(type: WikiDocumentationSourceType) {
+  if (type === "telnyx_developers" || type === "pylon") return "file";
+  if (type === "github") return "github";
+  if (type === "mcp") return "plug";
+  if (type === "okf") return "folder";
+  return "book";
+}
+
+function wikiSourceIconName(source: WikiDocumentationSource) {
+  const iconName = source.metadata?.icon;
+  return typeof iconName === "string" && wikiIconOptions.some((option) => option.id === iconName)
+    ? iconName
+    : defaultWikiSourceIconName(source.type);
+}
+
+function wikiSourceExternalTab(source: WikiDocumentationSource): ExplorerSourceTab {
+  if (source.type === "telnyx_support") return "support";
+  if (source.type === "telnyx_developers") return "developers";
+  if (source.type === "guru") return "wiki";
+  if (source.type === "pylon") return "pylon";
+  return "custom";
+}
+
+function wikiSourceTabId(source: WikiDocumentationSource): WikiSourceTab {
+  const tabId = source.metadata?.wikiTab;
+  return typeof tabId === "string" && tabId.trim() ? tabId : source.id;
+}
+
+function wikiConfigFromDocumentationSource(source: WikiDocumentationSource): WikiSourceConfig {
+  const externalSource = wikiSourceExternalTab(source);
+  const baseSource = explorerSourceTabs.find((tab) => tab.id === externalSource) ?? explorerSourceTabs[0]!;
+  return {
+    ...baseSource,
+    id: wikiSourceTabId(source),
+    label: source.label,
+    icon: wikiIconForName(wikiSourceIconName(source)),
+    title: source.label,
+    body: source.description,
+    setup: `No matching ${source.label} results found.`,
+    externalSource,
+  };
+}
 
 const explorerSourceTabs: ExplorerSourceConfig[] = [
   {
@@ -3254,6 +3389,15 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
     sources: ["pylon"],
   },
   {
+    id: "custom",
+    label: "Sources",
+    icon: Plug,
+    title: "Configured sources",
+    body: "GitHub, MCP, and OKF sources configured for the internal Wiki.",
+    setup: "No configured Wiki sources match this search.",
+    sources: ["github", "mcp", "okf"],
+  },
+  {
     id: "local",
     label: "Local",
     icon: FolderOpen,
@@ -3264,7 +3408,9 @@ const explorerSourceTabs: ExplorerSourceConfig[] = [
   },
 ];
 
-const wikiSourceTabs = explorerSourceTabs.filter((source): source is WikiSourceConfig => source.id !== "local");
+const wikiSourceTabs: WikiSourceConfig[] = explorerSourceTabs
+  .filter((source) => source.id !== "local" && source.id !== "custom")
+  .map((source) => ({ ...source, externalSource: source.id }));
 
 function ExplorerView({
   selectedWorkspace,
@@ -3325,7 +3471,7 @@ function ExplorerView({
 
   useEffect(() => {
     void search();
-  }, [selectedWorkspace?.id, externalQuery]);
+  }, [selectedWorkspace?.id, externalQuery, externalSource]);
 
   useEffect(() => {
     if (!availableSourceTabs.some((tab) => tab.id === sourceTab)) {
@@ -3413,7 +3559,7 @@ const helpCenterQuestionExamples = [
   "How do I troubleshoot failed outbound SMS?",
   "What are the requirements for 10DLC registration?",
   "How do I configure inbound call screening?",
-  "How do I attach a Telnyx AI Assistant to a voice call?",
+  "How do I attach an AI Assistant to a voice call?",
 ];
 
 function HelpCenterConsole({
@@ -3477,7 +3623,7 @@ function HelpCenterConsole({
   async function askQuestion(nextQuestion = question) {
     const prompt = nextQuestion.trim();
     if (!prompt) {
-      setAnswerError("Ask a general Telnyx documentation question first.");
+      setAnswerError("Ask a general documentation question first.");
       return;
     }
     setAnswerBusy(true);
@@ -3487,7 +3633,7 @@ function HelpCenterConsole({
       setAnswer(await linkApi.askKnowledgeAgent({ question: prompt }));
     } catch (error) {
       setAnswer(null);
-      setAnswerError(error instanceof Error ? error.message : "Telnyx Knowledge Agent could not answer right now.");
+      setAnswerError(error instanceof Error ? error.message : "Knowledge Agent could not answer right now.");
     } finally {
       setAnswerBusy(false);
     }
@@ -3497,7 +3643,7 @@ function HelpCenterConsole({
     if (!answer) return;
     const sourceLines = sourceUrls.length
       ? sourceUrls.map((url) => `- ${url}`).join("\n")
-      : "- No citations returned; verify against related Telnyx docs before customer-visible use.";
+      : "- No citations returned; verify against related docs before customer-visible use.";
     const text = [
       `Question: ${trimmedQuestion}`,
       "",
@@ -3506,7 +3652,7 @@ function HelpCenterConsole({
       "Sources:",
       sourceLines,
       "",
-      "Safety: This answer is for general Telnyx documentation questions only. Do not include secrets, private customer data, call logs, billing records, or account-specific identifiers.",
+      "Safety: This answer is for general documentation questions only. Do not include secrets, private customer data, call logs, billing records, or account-specific identifiers.",
     ].join("\n");
     try {
       await navigator.clipboard.writeText(text);
@@ -3523,16 +3669,13 @@ function HelpCenterConsole({
 
   return (
     <div className="helpCenterConsole embeddedExplorerView">
-      <section className="helpCenterAskPanel" aria-label="Ask Telnyx Knowledge Agent">
-        <p className="helpCenterGuardrail">
-          Ask general Telnyx support and developer documentation questions only. Do not send secrets, private customer data, call logs, billing details, or account-specific identifiers.
-        </p>
+      <section className="helpCenterAskPanel" aria-label="Ask Knowledge Agent">
         <label className="helpCenterQuestionComposer">
           <span>Question</span>
           <textarea
             value={question}
             rows={3}
-            placeholder="Ask a general Telnyx docs or support question..."
+            placeholder="Ask a general docs or support question..."
             onChange={(event) => setQuestion(event.target.value)}
             onKeyDown={(event) => {
               if (!shouldSubmitComposer(event)) return;
@@ -3541,6 +3684,9 @@ function HelpCenterConsole({
             }}
           />
         </label>
+        <p className="helpCenterGuardrail">
+          <strong>Note:</strong> Ask general support and developer documentation questions only. Do not send secrets, private customer data, call logs, billing details, or account-specific identifiers.
+        </p>
         <div className="helpCenterExamples" aria-label="Example questions">
           {helpCenterQuestionExamples.map((example) => (
             <button
@@ -3594,7 +3740,7 @@ function HelpCenterConsole({
         )}
         {!answerBusy && !answerError && !answer && (
           <div className="helpCenterEmpty">
-            Ask a concise natural-language question to get a bot-ready answer from Telnyx public documentation.
+            Ask a concise natural-language question to get a bot-ready answer from public documentation.
           </div>
         )}
         {answer && (
@@ -3620,7 +3766,7 @@ function HelpCenterConsole({
         )}
       </section>
 
-      <section className="helpCenterSourcesPanel" aria-label="Related Telnyx sources">
+      <section className="helpCenterSourcesPanel" aria-label="Related sources">
         <div className="explorerSourceHeader">
           {sourcesBusy && <span>Searching docs...</span>}
         </div>
@@ -3650,7 +3796,7 @@ function HelpCenterConsole({
               <div className="connectorIcon">HC</div>
               <div>
                 <h3>No related sources yet</h3>
-                <p>Enter a Help Center question to search Telnyx support and developer documentation alongside the Knowledge Agent answer.</p>
+                <p>Enter a Help Center question to search support and developer documentation alongside the Knowledge Agent answer.</p>
                 <small>Related sources stay visible because Knowledge Agent citations may be empty.</small>
               </div>
             </section>
@@ -3763,6 +3909,8 @@ function ChatsView({
   onEdgePreviewReady,
   edgePreviewSurface,
   closeEdgePreview,
+  updateChatSession,
+  refreshTables,
 }: {
   sessions: ChatSession[];
   workspaces: WorkspaceSummary[];
@@ -3778,10 +3926,14 @@ function ChatsView({
   onEdgePreviewReady: (preview: EdgePreviewSurface) => void;
   edgePreviewSurface: EdgePreviewSurface | null;
   closeEdgePreview: () => void;
+  updateChatSession: (input: { sessionId: string; title?: string; pinned?: boolean; archived?: boolean }) => Promise<ChatSession>;
+  refreshTables: () => Promise<void>;
 }) {
   const [reviewTab, setReviewTab] = useState<"chat" | "actions" | "sources" | "archive">("chat");
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [agentFilter, setAgentFilter] = useState("all");
+  const [sessionTypeFilter, setSessionTypeFilter] = useState("all");
   const [detailSessionId, setDetailSessionId] = useState("");
   const [edgePreviewFrameLoaded, setEdgePreviewFrameLoaded] = useState(false);
   const [hiddenSessionIds, setHiddenSessionIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-chat-session-ids"));
@@ -3842,15 +3994,45 @@ function ChatsView({
       messageCount: messages.length,
     };
   };
+  const chatAgentFilterOptions = useMemo(() => {
+    const names = new Set<string>();
+    sessions.forEach((session) => {
+      if (hiddenSessionIds.includes(session.id)) return;
+      if (session.archivedAt) return;
+      const workspace = workspaceById.get(session.workspaceId);
+      names.add(getSessionMeta(session, workspace).agentName);
+    });
+    return [...names].sort((a, b) => a.localeCompare(b));
+  }, [hiddenSessionIds, sessions, workspaceById]);
+  const chatSessionTypeFilterOptions = useMemo(() => {
+    const types = new Map<string, string>();
+    sessions.forEach((session) => {
+      if (hiddenSessionIds.includes(session.id)) return;
+      if (session.archivedAt) return;
+      const type = classifyChatSessionType(session);
+      types.set(type.id, type.label);
+    });
+    return [...types.entries()]
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => chatSessionTypeSortRank(a.id) - chatSessionTypeSortRank(b.id) || a.label.localeCompare(b.label));
+  }, [hiddenSessionIds, sessions]);
+  const chatFiltersActive = agentFilter !== "all" || sessionTypeFilter !== "all";
   const filteredSessions = useMemo(() => {
     const term = query.trim().toLowerCase();
     const hidden = new Set(hiddenSessionIds);
-    return sessions.filter((session) => {
+    return sortChatSessions(sessions).filter((session) => {
       if (hidden.has(session.id)) return false;
+      if (session.archivedAt) return false;
       const workspace = workspaceById.get(session.workspaceId);
+      const sessionMeta = getSessionMeta(session, workspace);
+      const sessionType = classifyChatSessionType(session);
+      if (agentFilter !== "all" && sessionMeta.agentName !== agentFilter) return false;
+      if (sessionTypeFilter !== "all" && sessionType.id !== sessionTypeFilter) return false;
       if (!term) return true;
       const searchable = [
         session.title,
+        sessionMeta.agentName,
+        sessionType.label,
         workspace?.name,
         ...session.messages.flatMap((message) => [
           message.content,
@@ -3860,7 +4042,7 @@ function ChatsView({
       ].filter(Boolean).join(" ").toLowerCase();
       return searchable.includes(term);
     });
-  }, [hiddenSessionIds, query, sessions, workspaceById]);
+  }, [agentFilter, hiddenSessionIds, query, sessions, sessionTypeFilter, workspaceById]);
   const detailSession = detailSessionId ? filteredSessions.find((session) => session.id === detailSessionId) ?? sessions.find((session) => session.id === detailSessionId) : null;
   const detailWorkspace = detailSession ? workspaceById.get(detailSession.workspaceId) : undefined;
 	  const [edgeDeployBusy, setEdgeDeployBusy] = useState(false);
@@ -4244,7 +4426,12 @@ function ChatsView({
     newSession();
   }
 
-  function hideSessionRow(session: ChatSession, action: TableRowLifecycleAction) {
+  async function hideSessionRow(session: ChatSession, action: TableRowLifecycleAction) {
+    if (action === "archive") {
+      await updateChatSession({ sessionId: session.id, archived: true });
+      if (detailSessionId === session.id) setDetailSessionId("");
+      return;
+    }
     setHiddenSessionIds((current) => {
       const next = current.includes(session.id) ? current : [...current, session.id];
       window.localStorage.setItem("telnyx-link-hidden-chat-session-ids", JSON.stringify(next));
@@ -4263,9 +4450,9 @@ function ChatsView({
     setSelectedSessionRowIds([]);
   }
 
-  function hideSelectedSessionRows(action: TableRowLifecycleAction) {
+  async function hideSelectedSessionRows(action: TableRowLifecycleAction) {
     const selectedIds = new Set(selectedSessionRowIds);
-    filteredSessions.filter((session) => selectedIds.has(session.id)).forEach((session) => hideSessionRow(session, action));
+    await Promise.all(filteredSessions.filter((session) => selectedIds.has(session.id)).map((session) => hideSessionRow(session, action)));
     setSelectedSessionRowIds([]);
     setSessionBulkEdit(false);
   }
@@ -4280,7 +4467,19 @@ function ChatsView({
     const workspace = workspaceById.get(session.workspaceId);
     const sessionMeta = getSessionMeta(session, workspace);
     return (
-      <div className="chatResultRow" role="row" key={session.id}>
+      <div
+        className="chatResultRow"
+        role="row"
+        key={session.id}
+        tabIndex={0}
+        onClick={() => openSessionDetails(session.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openSessionDetails(session.id);
+          }
+        }}
+      >
         <BulkSelectCell
           active={sessionBulkEdit}
           checked={selectedSessionRowIds.includes(session.id)}
@@ -4288,14 +4487,20 @@ function ChatsView({
           onChange={(checked) => setSessionRowSelected(session.id, checked)}
         />
         <div className="chatSessionNameCell" role="cell">
-          <strong title={session.title}>{session.title}</strong>
+          <strong title={session.title}>
+            {session.pinnedAt && <Pin size={13} aria-label="Pinned chat" />}
+            {session.title}
+          </strong>
         </div>
         <span role="cell">{sessionMeta.agentName}</span>
         <span role="cell">{compactRelativeTime(sessionMeta.lastMessageAt)}</span>
         <button
           className="chatSessionOpenButton"
           type="button"
-          onClick={() => openSessionDetails(session.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            openSessionDetails(session.id);
+          }}
           aria-label={`Open ${session.title} details`}
           title="Open details"
         >
@@ -4310,20 +4515,19 @@ function ChatsView({
     return (
       <section className="content chatView canonicalChat chatDetailView">
         <header className="pageHeader">
-          <div>
-            <h1>Chat / {detailSession.title}</h1>
+          <div className="chatDetailTitleGroup">
+            <button className="iconButton chatDetailBackButton" type="button" onClick={() => setDetailSessionId("")} aria-label="Back to sessions" title="Back to sessions">
+              <ArrowLeft size={18} />
+            </button>
+            <h1>{detailSession.title}</h1>
             <p>{sessionMeta.messageCount} messages · {sessionMeta.agentName}</p>
           </div>
           <div className="headerActions">
             <TableRowLifecycleActions
               label={detailSession.title}
-              onArchive={() => hideSessionRow(detailSession, "archive")}
-              onDelete={() => hideSessionRow(detailSession, "delete")}
+              onArchive={() => void hideSessionRow(detailSession, "archive")}
+              onDelete={() => void hideSessionRow(detailSession, "delete")}
             />
-            <button className="button secondary" type="button" onClick={() => setDetailSessionId("")}>
-              <ArrowLeft size={15} />
-              Sessions
-            </button>
           </div>
         </header>
         <div className="chatDetailSurface">
@@ -4334,7 +4538,7 @@ function ChatsView({
   }
 
   return (
-    <section className="content chatView canonicalChat">
+    <section className="content chatView canonicalChat chatListView">
       <header className="pageHeader">
         <div>
           <h1>Chat</h1>
@@ -4348,7 +4552,7 @@ function ChatsView({
       </header>
       <div className="chatSearchRow">
         <button
-          className={`iconButton agentFilterButton ${filtersOpen ? "selected" : ""}`}
+          className={`iconButton agentFilterButton ${filtersOpen || chatFiltersActive ? "selected" : ""}`}
           aria-label={filtersOpen ? "Hide chat filters" : "Show chat filters"}
           title={filtersOpen ? "Hide chat filters" : "Show chat filters"}
           onClick={() => setFiltersOpen((open) => !open)}
@@ -4367,19 +4571,38 @@ function ChatsView({
         >
           <Pencil size={16} />
         </button>
+        <TableRefreshButton onClick={refreshTables} label="Refresh chats" />
       </div>
       {sessionBulkEdit && (
         <BulkEditControls
           active={sessionBulkEdit}
           selectedCount={selectedSessionRowIds.length}
           onToggle={toggleSessionBulkEdit}
-          onArchive={() => hideSelectedSessionRows("archive")}
-          onDelete={() => hideSelectedSessionRows("delete")}
+          onArchive={() => void hideSelectedSessionRows("archive")}
+          onDelete={() => void hideSelectedSessionRows("delete")}
         />
       )}
       {filtersOpen && (
         <div className="chatFilterBar" role="group" aria-label="Chat filters">
           <span className="chatFilterCount">{filteredSessions.length} chats</span>
+          <label className="chatFilterField">
+            <span>Agent</span>
+            <select value={agentFilter} onChange={(event) => setAgentFilter(event.target.value)} aria-label="Filter chats by agent">
+              <option value="all">All agents</option>
+              {chatAgentFilterOptions.map((agentName) => (
+                <option key={agentName} value={agentName}>{agentName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="chatFilterField">
+            <span>Type</span>
+            <select value={sessionTypeFilter} onChange={(event) => setSessionTypeFilter(event.target.value)} aria-label="Filter chats by session type">
+              <option value="all">All types</option>
+              {chatSessionTypeFilterOptions.map((type) => (
+                <option key={type.id} value={type.id}>{type.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
       )}
       <div className={`chatSessionRows ${sessionBulkEdit ? "bulkEditing" : ""}`} role="table" aria-label="Chat sessions">
@@ -4401,6 +4624,7 @@ function ChatsView({
 
 type DriveFileRow = {
   id: string;
+  kind: "artifact";
   artifact: ChatArtifact;
   sessionId: string;
   sessionTitle: string;
@@ -4408,23 +4632,118 @@ type DriveFileRow = {
   createdAt: string;
 };
 
+type DriveArchivedSessionRow = {
+  id: string;
+  kind: "archived-session";
+  sessionId: string;
+  sessionTitle: string;
+  agentName: string;
+  messageCount: number;
+  archivedAt: string;
+};
+
+type DriveFolderRow = {
+  id: string;
+  kind: "folder";
+  path: string;
+  owner: string;
+  contents: string;
+  updated: string;
+};
+
+type DriveScribesSessionRow = {
+  id: string;
+  kind: "scribes-session";
+  session: ScribesSession;
+  path: string;
+};
+
+type DriveScribesArtifactRow = {
+  id: string;
+  kind: "scribes-artifact";
+  session: ScribesSession;
+  artifact: ScribesSession["artifacts"][number];
+};
+
+type DriveRow = DriveFileRow | DriveArchivedSessionRow | DriveFolderRow | DriveScribesSessionRow | DriveScribesArtifactRow;
+
+function driveSafeSlug(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "untitled";
+}
+
 function DriveView({
   sessions,
+  publishedApps,
   activeAgent,
   openArtifact,
   openSession,
+  openScribes,
+  refreshTables,
 }: {
   sessions: ChatSession[];
+  publishedApps: LinkPublishedApp[];
   activeAgent: ActiveAgentSelection | null;
   openArtifact: (artifact: ChatArtifact) => void;
   openSession: (sessionId: string) => void;
+  openScribes: () => void;
+  refreshTables: () => Promise<void>;
 }) {
   const [hiddenDriveRowIds, setHiddenDriveRowIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-drive-row-ids"));
   const [driveBulkEdit, setDriveBulkEdit] = useState(false);
   const [selectedDriveRowIds, setSelectedDriveRowIds] = useState<string[]>([]);
   const [driveQuery, setDriveQuery] = useState("");
   const [driveFiltersOpen, setDriveFiltersOpen] = useState(false);
-  const rows = useMemo<DriveFileRow[]>(() => {
+  const [scribesSessions, setScribesSessions] = useState<ScribesSession[]>([]);
+
+  async function refreshScribesDriveRows() {
+    const nextSessions = await linkApi.listScribesSessions();
+    setScribesSessions(nextSessions);
+  }
+
+  async function refreshDriveRows() {
+    await Promise.all([refreshTables(), refreshScribesDriveRows()]);
+  }
+
+  useEffect(() => {
+    void refreshScribesDriveRows().catch(() => undefined);
+  }, []);
+
+  const folderRows = useMemo<DriveFolderRow[]>(() => {
+    const appCount = publishedApps.filter(isEdgeHostedPublishedApp).length;
+    const appLabel = `${appCount} ${appCount === 1 ? "app" : "apps"}`;
+    const archivedCount = sessions.filter((session) => session.archivedAt).length;
+    const archivedLabel = `${archivedCount} archived ${archivedCount === 1 ? "session" : "sessions"}`;
+    const scribesLabel = `${scribesSessions.length} ${scribesSessions.length === 1 ? "transcript" : "transcripts"}`;
+    return [
+      { id: "folder:workspace", kind: "folder", path: "~/Link/", owner: "You", contents: "Per-user Link workspace", updated: "Internal" },
+      { id: "folder:apps", kind: "folder", path: "~/Link/apps/", owner: "Link App Publisher", contents: `${appLabel}, manifests, previews, and publish records`, updated: "Managed" },
+      { id: "folder:apps-personal", kind: "folder", path: "~/Link/apps/personal/", owner: "You", contents: "Imported personal app drafts", updated: "Local" },
+      { id: "folder:apps-team", kind: "folder", path: "~/Link/apps/team/", owner: "Team", contents: "Team app drafts and publisher handoffs", updated: "Shared" },
+      { id: "folder:apps-publish-intents", kind: "folder", path: "~/Link/apps/publish-intents/", owner: "Link App Publisher", contents: "Review, version, rollback, and deployment records", updated: "Managed" },
+      { id: "folder:agents", kind: "folder", path: "~/Link/agents/", owner: "Agent Control Plane", contents: "Active agents, saved agents, and setup context", updated: "Synced" },
+      { id: "folder:chats", kind: "folder", path: "~/Link/chats/", owner: "Link", contents: `${sessions.length} ${sessions.length === 1 ? "session" : "sessions"} and generated outputs`, updated: "Local" },
+      { id: "folder:artifacts", kind: "folder", path: "~/Link/drive/artifacts/", owner: "Agents", contents: "Files generated from assistant sessions", updated: "Local" },
+      { id: "folder:scribes", kind: "folder", path: "~/Link/scribes/", owner: "Scribes", contents: `${scribesLabel}, models, and generated notes`, updated: "Local" },
+      { id: "folder:scribes-transcripts", kind: "folder", path: "~/Link/scribes/transcripts/", owner: "Scribes", contents: "Dictation and meeting transcripts", updated: "Local" },
+      { id: "folder:scribes-summaries", kind: "folder", path: "~/Link/scribes/summaries/", owner: "Scribes", contents: "Generated summaries and meeting notes", updated: "Local" },
+      { id: "folder:scribes-audio", kind: "folder", path: "~/Link/scribes/audio/", owner: "Scribes", contents: "Retained audio references when enabled", updated: "Local" },
+      { id: "folder:archive", kind: "folder", path: "~/Link/archive/", owner: "Link", contents: "Hidden rows, dismissed items, and archived references", updated: "Local" },
+      { id: "folder:archive-chats", kind: "folder", path: "~/Link/archive/chats/", owner: "Link", contents: archivedLabel, updated: "Local" },
+    ];
+  }, [publishedApps, scribesSessions.length, sessions]);
+  const archivedSessionRows = useMemo<DriveArchivedSessionRow[]>(() => sessions
+    .filter((session) => session.archivedAt)
+    .map((session) => ({
+      id: `archived-session:${session.id}`,
+      kind: "archived-session" as const,
+      sessionId: session.id,
+      sessionTitle: session.title,
+      agentName: formatChatAgentName(sessionSelectedAgentName(session) || activeAgent?.displayName || "Link"),
+      messageCount: session.messages.length,
+      archivedAt: session.archivedAt || session.updatedAt,
+    }))
+    .sort((left, right) => String(right.archivedAt).localeCompare(String(left.archivedAt))), [activeAgent?.displayName, sessions]);
+  const artifactRows = useMemo<DriveFileRow[]>(() => {
     const hidden = new Set(hiddenDriveRowIds);
     return sessions
       .flatMap((session) => {
@@ -4433,6 +4752,7 @@ function DriveView({
           .filter((message) => message.role === "assistant")
           .flatMap((message) => (message.artifacts ?? []).map((artifact) => ({
             id: `${session.id}:${message.id}:${artifact.id}`,
+            kind: "artifact" as const,
             artifact,
             sessionId: session.id,
             sessionTitle: session.title,
@@ -4443,11 +4763,74 @@ function DriveView({
       .filter((row) => !hidden.has(row.id))
       .sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)));
   }, [activeAgent?.displayName, hiddenDriveRowIds, sessions]);
+  const scribesRows = useMemo<Array<DriveScribesSessionRow | DriveScribesArtifactRow>>(() => {
+    const sessionRows = scribesSessions.map((session) => ({
+      id: `scribes-session:${session.id}`,
+      kind: "scribes-session" as const,
+      session,
+      path: session.artifacts.find((artifact) => artifact.kind === "transcript" || artifact.kind === "meeting-notes")?.path || `~/Link/scribes/transcripts/${driveSafeSlug(session.title)}.md`,
+    }));
+    const artifactRows = scribesSessions.flatMap((session) =>
+      session.artifacts.map((artifact) => ({
+        id: `scribes-artifact:${session.id}:${artifact.id}`,
+        kind: "scribes-artifact" as const,
+        session,
+        artifact,
+      })),
+    );
+    return [...sessionRows, ...artifactRows].sort((left, right) => {
+      const leftUpdated = left.kind === "scribes-session" ? left.session.updatedAt : left.artifact.updatedAt;
+      const rightUpdated = right.kind === "scribes-session" ? right.session.updatedAt : right.artifact.updatedAt;
+      return String(rightUpdated).localeCompare(String(leftUpdated));
+    });
+  }, [scribesSessions]);
+  const rows: DriveRow[] = [...folderRows, ...archivedSessionRows, ...artifactRows, ...scribesRows];
   const filteredRows = rows.filter((row) => {
     const term = driveQuery.trim().toLowerCase();
     if (!term) return true;
+    if (row.kind === "folder") return `${row.path} ${row.owner} ${row.contents} ${row.updated}`.toLowerCase().includes(term);
+    if (row.kind === "archived-session") return `~/Link/archive/chats/ ${row.sessionTitle} ${row.agentName} archived chat session ${row.messageCount} messages`.toLowerCase().includes(term);
+    if (row.kind === "scribes-session") return `${row.path} ${row.session.title} ${row.session.transcriptText} ${row.session.provider} Scribes transcript`.toLowerCase().includes(term);
+    if (row.kind === "scribes-artifact") return `${row.artifact.path} ${row.artifact.title} ${row.artifact.kind} ${row.session.title} Scribes artifact`.toLowerCase().includes(term);
     return `${row.artifact.filename} ${row.agentName} ${row.sessionTitle}`.toLowerCase().includes(term);
   });
+
+  function openDriveRow(row: DriveRow) {
+    if (row.kind === "folder") setDriveQuery(row.path);
+    else if (row.kind === "archived-session") openSession(row.sessionId);
+    else if (row.kind === "scribes-session" || row.kind === "scribes-artifact") openScribes();
+    else openArtifact(row.artifact);
+  }
+
+  function driveRowName(row: DriveRow) {
+    if (row.kind === "folder") return row.path;
+    if (row.kind === "archived-session") return `~/Link/archive/chats/${row.sessionTitle}`;
+    if (row.kind === "scribes-session") return row.path;
+    if (row.kind === "scribes-artifact") return row.artifact.path;
+    return row.artifact.filename;
+  }
+
+  function driveRowOwner(row: DriveRow) {
+    if (row.kind === "folder") return row.owner;
+    if (row.kind === "scribes-session" || row.kind === "scribes-artifact") return "Scribes";
+    return row.agentName;
+  }
+
+  function driveRowContents(row: DriveRow) {
+    if (row.kind === "folder") return row.contents;
+    if (row.kind === "archived-session") return `${row.messageCount} ${row.messageCount === 1 ? "message" : "messages"} in archived chat`;
+    if (row.kind === "scribes-session") return `${row.session.sessionType} transcript · ${sttProviderLabel(row.session.provider)}`;
+    if (row.kind === "scribes-artifact") return `${formatScribesArtifactKind(row.artifact.kind)} · ${row.session.title}`;
+    return row.sessionTitle;
+  }
+
+  function driveRowUpdated(row: DriveRow) {
+    if (row.kind === "folder") return row.updated;
+    if (row.kind === "archived-session") return compactRelativeTime(row.archivedAt);
+    if (row.kind === "scribes-session") return compactRelativeTime(row.session.updatedAt);
+    if (row.kind === "scribes-artifact") return compactRelativeTime(row.artifact.updatedAt);
+    return compactRelativeTime(row.createdAt);
+  }
 
   function hideDriveRow(row: DriveFileRow) {
     setHiddenDriveRowIds((current) => {
@@ -4468,7 +4851,7 @@ function DriveView({
 
   function hideSelectedDriveRows() {
     const selectedIds = new Set(selectedDriveRowIds);
-    filteredRows.filter((row) => selectedIds.has(row.id)).forEach(hideDriveRow);
+    filteredRows.filter((row): row is DriveFileRow => row.kind === "artifact" && selectedIds.has(row.id)).forEach(hideDriveRow);
     setSelectedDriveRowIds([]);
     setDriveBulkEdit(false);
   }
@@ -4478,15 +4861,6 @@ function DriveView({
       <header className="pageHeader">
         <div>
           <h1>Drive</h1>
-        </div>
-        <div className="headerActions">
-          <BulkEditControls
-            active={driveBulkEdit}
-            selectedCount={selectedDriveRowIds.length}
-            onToggle={toggleDriveBulkEdit}
-            onArchive={hideSelectedDriveRows}
-            onDelete={hideSelectedDriveRows}
-          />
         </div>
       </header>
       <div className="chatSearchRow">
@@ -4502,45 +4876,104 @@ function DriveView({
           <Search size={16} />
           <input value={driveQuery} onChange={(event) => setDriveQuery(event.target.value)} placeholder="Search files, agents, sessions, or archive" />
         </div>
+        <button
+          className={`iconButton agentFilterButton ${driveBulkEdit ? "selected" : ""}`}
+          aria-label={driveBulkEdit ? "Exit bulk edit" : "Edit files"}
+          title={driveBulkEdit ? "Exit bulk edit" : "Edit files"}
+          onClick={toggleDriveBulkEdit}
+        >
+          <Pencil size={16} />
+        </button>
+        <TableRefreshButton onClick={refreshDriveRows} label="Refresh files" />
       </div>
+      {driveBulkEdit && (
+        <BulkEditControls
+          active={driveBulkEdit}
+          selectedCount={selectedDriveRowIds.length}
+          onToggle={toggleDriveBulkEdit}
+          onArchive={hideSelectedDriveRows}
+          onDelete={hideSelectedDriveRows}
+        />
+      )}
       {driveFiltersOpen && (
         <div className="chatFilterBar" role="group" aria-label="File filters">
-          <span className="chatFilterCount">{filteredRows.length} files</span>
+          <span className="chatFilterCount">{filteredRows.length} items</span>
         </div>
       )}
-      <div className={`chatSessionRows driveFileRows ${driveBulkEdit ? "bulkEditing" : ""}`} role="table" aria-label="Agent files">
+      <div className={`chatSessionRows driveFileRows ${driveBulkEdit ? "bulkEditing" : ""}`} role="table" aria-label="Link workspace files and folders">
         <div className="chatResultRow driveResultRow chatResultRowHead" role="row">
           <span className="bulkSelectCell" role="columnheader" aria-label="Select files" />
-          <span role="columnheader">File</span>
-          <span role="columnheader">Agent</span>
-          <span role="columnheader">Session</span>
-          <span role="columnheader">Created</span>
-          <span role="columnheader" aria-label="Open file" />
+          <span className="driveFileHeaderCell" role="columnheader">Path</span>
+          <span className="driveAgentHeaderCell" role="columnheader">Owner</span>
+          <span className="driveSessionHeaderCell" role="columnheader">Contents</span>
+          <span className="driveCreatedHeaderCell" role="columnheader">Updated</span>
+          <span className="driveOpenHeaderCell" role="columnheader" aria-label="Open file" />
         </div>
         <div className="chatResultRows" role="rowgroup">
           {filteredRows.map((row) => (
-            <div className="chatResultRow driveResultRow" role="row" key={row.id}>
-              <BulkSelectCell
-                active={driveBulkEdit}
-                checked={selectedDriveRowIds.includes(row.id)}
-                label={`Select ${row.artifact.filename}`}
-                onChange={(checked) => setDriveRowSelected(row.id, checked)}
-              />
-              <button className="driveFileNameCell" role="cell" type="button" onClick={() => openArtifact(row.artifact)} title={row.artifact.filename}>
-                <FileText size={15} />
-                <span>{row.artifact.filename}</span>
+            <div
+              className={`chatResultRow driveResultRow ${row.kind === "folder" ? "driveFolderRow" : ""}`}
+              role="row"
+              key={row.id}
+              tabIndex={0}
+              onClick={() => openDriveRow(row)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openDriveRow(row);
+                }
+              }}
+            >
+              {row.kind === "artifact" ? (
+                <BulkSelectCell
+                  active={driveBulkEdit}
+                  checked={selectedDriveRowIds.includes(row.id)}
+                  label={`Select ${row.artifact.filename}`}
+                  onChange={(checked) => setDriveRowSelected(row.id, checked)}
+                />
+              ) : (
+                <span className="bulkSelectCell" role="cell" aria-hidden="true" />
+              )}
+              <button
+                className="driveFileNameCell"
+                role="cell"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openDriveRow(row);
+                }}
+                title={driveRowName(row)}
+              >
+                {row.kind === "folder" ? <FolderOpen size={15} /> : <FileText size={15} />}
+                <span>{driveRowName(row)}</span>
               </button>
-              <span role="cell">{row.agentName}</span>
-              <button className="driveSessionCell" role="cell" type="button" onClick={() => openSession(row.sessionId)} title={row.sessionTitle}>
-                {row.sessionTitle}
-              </button>
-              <span role="cell">{compactRelativeTime(row.createdAt)}</span>
+              <span role="cell">{driveRowOwner(row)}</span>
+              {row.kind === "artifact" ? (
+                <button
+                  className="driveSessionCell"
+                  role="cell"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openSession(row.sessionId);
+                  }}
+                  title={row.sessionTitle}
+                >
+                  {row.sessionTitle}
+                </button>
+              ) : (
+                <span role="cell">{driveRowContents(row)}</span>
+              )}
+              <span role="cell">{driveRowUpdated(row)}</span>
               <button
                 className="chatSessionOpenButton"
                 type="button"
-                onClick={() => openArtifact(row.artifact)}
-                aria-label={`Open ${row.artifact.filename}`}
-                title="Open file"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openDriveRow(row);
+                }}
+                aria-label={row.kind === "folder" ? `Show ${row.path}` : `Open ${driveRowName(row)}`}
+                title={row.kind === "folder" ? "Show folder" : row.kind === "archived-session" ? "Open archived session" : "Open file"}
               >
                 <ArrowRight size={16} />
               </button>
@@ -4548,11 +4981,13 @@ function DriveView({
           ))}
         </div>
         {filteredRows.length === 0 && (
-          <EmptyState
-            title={driveQuery.trim() ? "No files found" : "No files yet"}
-            body={driveQuery.trim() ? "Try another search term or filter." : "Files created by your agents will appear here."}
-            icon={FolderOpen}
-          />
+          <div className="tableEmptyState" role="row">
+            <EmptyState
+              title="No Drive items found"
+              body="Try another search term or filter."
+              icon={FolderOpen}
+            />
+          </div>
         )}
       </div>
     </section>
@@ -4642,12 +5077,16 @@ function AssistantPanel({
   selectedSession,
   selectedWorkspace,
   setChatSessions,
+  updateChatSession,
   selectSession,
   openArtifact,
   refresh,
   setView,
   openPhoneContacts,
   liteLlmReady,
+  liteLlmRuntime,
+  chatModelMode,
+  setChatModelMode,
   linkedPhoneNumber,
   setLinkedPhoneNumber,
   telnyxApiReady,
@@ -4675,12 +5114,16 @@ function AssistantPanel({
   selectedSession?: ChatSession;
   selectedWorkspace?: WorkspaceSummary;
   setChatSessions: (updater: (current: ChatSession[]) => ChatSession[]) => void;
+  updateChatSession: (input: { sessionId: string; title?: string; pinned?: boolean; archived?: boolean }) => Promise<ChatSession>;
   selectSession: (id: string) => void;
   openArtifact: (artifact: ChatArtifact) => void;
   refresh: () => Promise<void>;
   setView: (view: ViewId) => void;
   openPhoneContacts: () => void;
   liteLlmReady: boolean;
+  liteLlmRuntime: LiteLlmRuntimeStatus | null;
+  chatModelMode: string;
+  setChatModelMode: (mode: string) => void;
   linkedPhoneNumber: string;
   setLinkedPhoneNumber: (phoneNumber: string) => void;
   telnyxApiReady: boolean;
@@ -4696,6 +5139,9 @@ function AssistantPanel({
   const [chatAttachments, setChatAttachments] = useState<ChatAttachment[]>([]);
   const [busy, setBusy] = useState(false);
   const [assistantAttachMenuOpen, setAssistantAttachMenuOpen] = useState(false);
+  const [assistantRuntimeMenuOpen, setAssistantRuntimeMenuOpen] = useState(false);
+  const [assistantSessionMenuOpen, setAssistantSessionMenuOpen] = useState(false);
+  const [sessionActionBusy, setSessionActionBusy] = useState("");
   const [assistantSkillPickerOpen, setAssistantSkillPickerOpen] = useState(false);
   const [assistantSkillPickerQuery, setAssistantSkillPickerQuery] = useState("");
   const [newSessionBotPickerOpen, setNewSessionBotPickerOpen] = useState(false);
@@ -4720,15 +5166,17 @@ function AssistantPanel({
   const [edgeDeployStartedAt, setEdgeDeployStartedAt] = useState(0);
   const [edgeDeployTick, setEdgeDeployTick] = useState(0);
   const [archivingMessageId, setArchivingMessageId] = useState("");
-  const [sessionNameDraft, setSessionNameDraft] = useState("");
   const [newSessionTitleDraft, setNewSessionTitleDraft] = useState("");
   const [creatingNewSession, setCreatingNewSession] = useState(false);
   const [refreshingNewSessionBots, setRefreshingNewSessionBots] = useState(false);
+  const [refreshingModelCatalog, setRefreshingModelCatalog] = useState(false);
   const [phoneAssistants, setPhoneAssistants] = useState<PhoneAssistantOption[]>([]);
   const [phoneDialTarget, setPhoneDialTarget] = useState("");
   const [installedSkillKeys, setInstalledSkillKeys] = useState<string[]>(() => readInstalledAgentSkillKeys());
   const [sessionSkillSelections, setSessionSkillSelections] = useState<Record<string, string>>({});
   const assistantAttachMenuRef = useRef<HTMLDivElement | null>(null);
+  const assistantRuntimeMenuRef = useRef<HTMLDivElement | null>(null);
+  const assistantSessionMenuRef = useRef<HTMLDivElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const edgeDeploySlugInputRef = useRef<HTMLInputElement | null>(null);
   const assistantLogRef = useRef<HTMLDivElement | null>(null);
@@ -4740,18 +5188,20 @@ function AssistantPanel({
   const voiceStreamRef = useRef<MediaStream | null>(null);
   const voiceChunksRef = useRef<Blob[]>([]);
   const [acceptMode, setAcceptMode] = useState<"auto" | "review" | "manual">("auto");
-  const modelMode = "auto-agent-runtime";
+  const aiModelRoutes = liteLlmRuntime?.routes?.length ? liteLlmRuntime.routes : fallbackAiModelRoutes();
+  const selectedModelRoute = aiModelRoutes.find((route) => route.id === chatModelMode) ?? aiModelRoutes.find((route) => route.default) ?? aiModelRoutes[0];
+  const modelMode = selectedModelRoute?.id ?? "auto/ask-before-cloud";
   const bookmarkedAgentIdSet = useMemo(() => new Set(bookmarkedAgentIds), [bookmarkedAgentIds]);
   const chatAgents = useMemo(() => {
     const defaultRuntimeAgent: ChatAgentOption = {
       id: "link-default-runtime",
       displayName: "Link",
-      description: liteLlmReady
-        ? "Default runtime route using your configured LiteLLM key."
-        : "Default runtime route. Add LiteLLM or select a connected ACP agent for live responses.",
+      description: selectedModelRoute
+        ? `Default runtime route: ${selectedModelRoute.label}. ${selectedModelRoute.description}`
+        : "Default local-first runtime route. Install LiteLLM and Ollama locally, or select an explicit cloud route.",
       source: "link",
-      type: liteLlmReady ? "litellm" : "default",
-      status: liteLlmReady ? "connected" : "needs_access",
+      type: selectedModelRoute?.provider === "telnyx" ? "telnyx" : selectedModelRoute?.provider === "anthropic" ? "frontier" : "local",
+      status: selectedModelRoute?.available === false ? "needs_access" : liteLlmReady ? "connected" : "available",
       squad: "default",
     };
     const gettingStartedAgent: ChatAgentOption = {
@@ -4778,30 +5228,35 @@ function AssistantPanel({
     const availableA2aAgents = agents
       .filter((agent) => agent.source === "a2a-discovery" && agent.available !== false)
       .map(toChatAgent);
-    const voiceAssistantAgents = phoneAssistants
-      .filter((assistant) => assistant.status !== "disabled")
-      .map((assistant): ChatAgentOption => ({
+	    const voiceAssistantAgents = phoneAssistants
+	      .filter((assistant) => assistant.status !== "disabled")
+	      .map((assistant): ChatAgentOption => ({
         id: `voice-assistant-${assistant.id}`,
         displayName: assistant.name,
         description: assistant.description || "Telnyx Voice AI assistant. Text chat routes through Link while voice calling uses the phone assistant.",
         source: "voice-assistant",
         type: "voice-assistant",
-        status: assistant.status || "available",
-        squad: "telnyx-voice-ai",
-      }));
-    const bookmarkedAgents = agents
-      .filter((agent) => bookmarkedAgentIdSet.has(agent.id) && agent.source !== "slack" && agent.type !== "slack")
-      .filter((agent) => agent.id !== "slack-bot-troubleshooting" && agent.name !== "bot-troubleshooting")
-      .map(toChatAgent);
+	        status: assistant.status || "available",
+	        squad: "telnyx-voice-ai",
+	      }));
+	    const availableDirectoryAgents = agents
+	      .filter((agent) => agent.available !== false)
+	      .filter((agent) => agent.source !== "slack" && agent.type !== "slack")
+	      .filter((agent) => agent.id !== "slack-bot-troubleshooting" && agent.name !== "bot-troubleshooting")
+	      .map(toChatAgent);
+	    const bookmarkedAgents = agents
+	      .filter((agent) => bookmarkedAgentIdSet.has(agent.id) && agent.source !== "slack" && agent.type !== "slack")
+	      .filter((agent) => agent.id !== "slack-bot-troubleshooting" && agent.name !== "bot-troubleshooting")
+	      .map(toChatAgent);
 
-    const uniqueAgents = (items: ChatAgentOption[]) => [...new Map(items.map((agent) => [agent.id, agent])).values()];
-    if (!activeAgent) return uniqueAgents([defaultRuntimeAgent, ...availableHostedAgents, gettingStartedAgent, ...voiceAssistantAgents, ...availableA2aAgents, ...bookmarkedAgents]);
+	    const uniqueAgents = (items: ChatAgentOption[]) => [...new Map(items.map((agent) => [agent.id, agent])).values()];
+	    if (!activeAgent) return uniqueAgents([defaultRuntimeAgent, ...availableHostedAgents, gettingStartedAgent, ...voiceAssistantAgents, ...availableA2aAgents, ...availableDirectoryAgents, ...bookmarkedAgents]);
 
     const activeDirectoryAgent = agents.find((agent) => agent.id === activeAgent.id);
     const activeChatAgent = activeDirectoryAgent ? toChatAgent(activeDirectoryAgent) : null;
 
-    return uniqueAgents([defaultRuntimeAgent, ...availableHostedAgents, gettingStartedAgent, ...voiceAssistantAgents, ...availableA2aAgents, ...(activeChatAgent ? [activeChatAgent] : []), ...bookmarkedAgents]);
-  }, [activeAgent, agents, bookmarkedAgentIdSet, liteLlmReady, phoneAssistants]);
+	    return uniqueAgents([defaultRuntimeAgent, ...availableHostedAgents, gettingStartedAgent, ...voiceAssistantAgents, ...availableA2aAgents, ...availableDirectoryAgents, ...(activeChatAgent ? [activeChatAgent] : []), ...bookmarkedAgents]);
+	  }, [activeAgent, agents, bookmarkedAgentIdSet, liteLlmReady, phoneAssistants, selectedModelRoute]);
   const selectedChatAgent = chatAgents.find((agent) => agent.id === selectedChatAgentId) ?? chatAgents[0];
   const newSessionBotSearch = newSessionBotQuery.trim().toLowerCase();
   const newSessionBotMatches = chatAgents.filter((agent) =>
@@ -4813,18 +5268,20 @@ function AssistantPanel({
     agent.squad === "link" ||
     normalizeSearchText(agent.displayName) === "link";
   const myAgentOptions = newSessionBotMatches.filter((agent) =>
-    agent.source !== "a2a-discovery" && agent.source !== "voice-assistant" && !isLinkChatAgent(agent),
+    agent.source !== "a2a-discovery" && agent.source !== "voice-assistant" && agent.source !== "self-hosted" && !isLinkChatAgent(agent),
   );
+  const selfHostedAgentOptions = newSessionBotMatches.filter((agent) => agent.source === "self-hosted");
   const telnyxLinkAppOptions = newSessionBotMatches.filter(isLinkChatAgent);
   const voiceAssistantOptions = newSessionBotMatches.filter((agent) => agent.source === "voice-assistant");
   const a2aBotOptions = newSessionBotMatches.filter((agent) => agent.source === "a2a-discovery" && agent.status !== "unavailable");
   const chatAgentOptionLabel = (agent: ChatAgentOption) => {
     if (agent.source === "a2a-discovery") return `${agent.displayName} (A2A)`;
     if (agent.source === "agent-control-plane") return `${agent.displayName} (ACP)`;
+    if (agent.source === "self-hosted") return `${agent.displayName} (Local)`;
     if (agent.source === "voice-assistant") return `${agent.displayName} (Voice)`;
     return agent.displayName;
   };
-  const newSessionDefaultTitle = `New ${selectedChatAgent?.source === "a2a-discovery" ? "A2A" : selectedChatAgent?.source === "voice-assistant" ? "Voice Assistant" : selectedChatAgent?.type === "hermes" ? "Hermes" : selectedChatAgent?.type === "litellm" ? "Link" : "OpenClaw"} session`;
+  const newSessionDefaultTitle = `New ${selectedChatAgent?.source === "a2a-discovery" ? "A2A" : selectedChatAgent?.source === "voice-assistant" ? "Voice Assistant" : selectedChatAgent?.source === "self-hosted" ? "Self-hosted" : selectedChatAgent?.type === "hermes" ? "Hermes" : selectedChatAgent?.type === "litellm" ? "Link" : "OpenClaw"} session`;
   const visibleSessionMessages = useMemo(
     () => (selectedSession?.messages ?? []).filter((message) => message.role !== "system"),
     [selectedSession?.messages],
@@ -4891,10 +5348,6 @@ function AssistantPanel({
       stopVoiceStream();
     };
   }, []);
-
-  useEffect(() => {
-    setSessionNameDraft(selectedSession?.title ?? "");
-  }, [selectedSession?.id, selectedSession?.title]);
 
   useEffect(() => {
     let cancelled = false;
@@ -4968,7 +5421,7 @@ function AssistantPanel({
   }, [edgeDeployBusy]);
 
   useEffect(() => {
-    if (!assistantAttachMenuOpen && !newSessionBotPickerOpen) return;
+    if (!assistantAttachMenuOpen && !assistantRuntimeMenuOpen && !newSessionBotPickerOpen && !assistantSessionMenuOpen) return;
 
     function eventPathContains(event: PointerEvent, element: HTMLElement | null) {
       if (!element) return false;
@@ -4982,19 +5435,27 @@ function AssistantPanel({
         setAssistantSkillPickerOpen(false);
         setAssistantSkillPickerQuery("");
       }
+      if (assistantRuntimeMenuOpen && !eventPathContains(event, assistantRuntimeMenuRef.current)) {
+        setAssistantRuntimeMenuOpen(false);
+      }
       if (newSessionBotPickerOpen && !eventPathContains(event, newSessionBotPickerRef.current)) {
         setNewSessionBotPickerOpen(false);
         setNewSessionBotQuery("");
+      }
+      if (assistantSessionMenuOpen && !eventPathContains(event, assistantSessionMenuRef.current)) {
+        setAssistantSessionMenuOpen(false);
       }
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       setAssistantAttachMenuOpen(false);
+      setAssistantRuntimeMenuOpen(false);
       setAssistantSkillPickerOpen(false);
       setAssistantSkillPickerQuery("");
       setNewSessionBotPickerOpen(false);
       setNewSessionBotQuery("");
+      setAssistantSessionMenuOpen(false);
     }
 
     window.addEventListener("pointerdown", handleOutsidePointerDown, true);
@@ -5003,7 +5464,7 @@ function AssistantPanel({
       window.removeEventListener("pointerdown", handleOutsidePointerDown, true);
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [assistantAttachMenuOpen, newSessionBotPickerOpen]);
+  }, [assistantAttachMenuOpen, assistantRuntimeMenuOpen, assistantSessionMenuOpen, newSessionBotPickerOpen]);
 
   useEffect(() => {
     function refreshInstalledSkillsFromStorage(event: StorageEvent) {
@@ -5193,18 +5654,6 @@ function AssistantPanel({
     setBusy(false);
   }
 
-  async function saveSessionName() {
-    if (!selectedSession) return;
-    const trimmed = sessionNameDraft.trim();
-    if (!trimmed) {
-      setSessionNameDraft(selectedSession.title);
-      return;
-    }
-    if (trimmed === selectedSession.title) return;
-    await linkApi.renameChatSession({ sessionId: selectedSession.id, title: trimmed });
-    await refresh();
-  }
-
   async function startDraftedSession() {
     if (creatingNewSession || !selectedChatAgent) return;
     setCreatingNewSession(true);
@@ -5216,6 +5665,7 @@ function AssistantPanel({
         agentType: selectedChatAgent.type,
         agentSource: selectedChatAgent.source,
         approvalMode: acceptMode,
+        modelMode,
       });
       setNewSessionTitleDraft("");
     } finally {
@@ -5235,6 +5685,16 @@ function AssistantPanel({
       await refresh();
     } finally {
       setRefreshingNewSessionBots(false);
+    }
+  }
+
+  async function refreshModelCatalog() {
+    setRefreshingModelCatalog(true);
+    try {
+      await linkApi.refreshTelnyxModelCatalog();
+      await refresh();
+    } finally {
+      setRefreshingModelCatalog(false);
     }
   }
 
@@ -5766,6 +6226,53 @@ function AssistantPanel({
     setView("settings");
   }
 
+  async function toggleSelectedSessionPin() {
+    if (!selectedSession || sessionActionBusy) return;
+    setSessionActionBusy("pin");
+    try {
+      await updateChatSession({ sessionId: selectedSession.id, pinned: !selectedSession.pinnedAt });
+      setAssistantSessionMenuOpen(false);
+    } finally {
+      setSessionActionBusy("");
+    }
+  }
+
+  async function renameSelectedSession() {
+    if (!selectedSession || sessionActionBusy) return;
+    const nextTitle = window.prompt("Rename chat", selectedSession.title)?.trim();
+    if (!nextTitle || nextTitle === selectedSession.title) {
+      setAssistantSessionMenuOpen(false);
+      return;
+    }
+    setSessionActionBusy("rename");
+    try {
+      const session = await updateChatSession({ sessionId: selectedSession.id, title: nextTitle });
+      selectSession(session.id);
+      setAssistantSessionMenuOpen(false);
+    } finally {
+      setSessionActionBusy("");
+    }
+  }
+
+  async function archiveSelectedSession() {
+    if (!selectedSession || sessionActionBusy) return;
+    setSessionActionBusy("archive");
+    try {
+      await updateChatSession({ sessionId: selectedSession.id, archived: true });
+      selectSession("");
+      setAssistantSessionMenuOpen(false);
+    } finally {
+      setSessionActionBusy("");
+    }
+  }
+
+  function openSelectedSessionInChat() {
+    if (!selectedSession) return;
+    setAssistantSessionMenuOpen(false);
+    setView("chats");
+    selectSession(selectedSession.id);
+  }
+
   async function openAgentSelection() {
     setAssistantAttachMenuOpen(false);
     setMode("chat");
@@ -5782,9 +6289,9 @@ function AssistantPanel({
         onClick: () => void openAgentSelection(),
       };
     }
-    if (!liteLlmReady && /LITELLM_API_KEY|LiteLLM API key|Add your (?:Telnyx )?LiteLLM/i.test(message.content)) {
+    if (/TELNYX_API_KEY|ANTHROPIC_API_KEY|LITELLM_API_KEY|model gateway|LiteLLM API key|Add your (?:Telnyx )?LiteLLM/i.test(message.content)) {
       return {
-        label: "Add LiteLLM API key",
+        label: "Open model settings",
         onClick: openLiteLlmSettings,
       };
     }
@@ -5899,6 +6406,7 @@ function AssistantPanel({
                             </button>
                           </div>
                           {renderNewSessionBotSection("MY AGENTS", myAgentOptions)}
+                          {renderNewSessionBotSection("SELF-HOSTED", selfHostedAgentOptions)}
                           {renderNewSessionBotSection("TELNYX LINK APP", telnyxLinkAppOptions)}
                           {renderNewSessionBotSection("VOICE ASSISTANTS", voiceAssistantOptions)}
                           {renderNewSessionBotSection("A2A Bots", a2aBotOptions)}
@@ -5916,7 +6424,19 @@ function AssistantPanel({
                   </label>
                   <div className="assistantSettingField assistantNewSessionSetting">
                     <span>Runtime route</span>
-                    <strong>{selectedChatAgent?.id === "link-default-runtime" ? selectedChatAgent.description : "Automatic from selected agent"}</strong>
+                    <select value={modelMode} onChange={(event) => setChatModelMode(event.target.value)} aria-label="Runtime route">
+                      {aiModelRoutes.map((route) => (
+                        <option key={route.id} value={route.id} disabled={!route.available}>
+                          {route.label}{route.available ? "" : " (setup required)"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="assistantSettingField assistantNewSessionSetting">
+                    <span>Data boundary</span>
+                    <strong className={`dataBoundaryChip dataBoundaryChip-${selectedModelRoute?.dataBoundary ?? "local"}`}>
+                      {dataBoundaryLabel(selectedModelRoute?.dataBoundary)}
+                    </strong>
                   </div>
                 </div>
                 <div className="assistantNewSessionActions">
@@ -5937,30 +6457,46 @@ function AssistantPanel({
                 </div>
               </div>
             )}
-            {!newSessionDraftOpen && selectedSession && (
-              <div className="assistantSessionContext">
-                <small>Session</small>
-                {selectedChatAgent && (
-                  <span className="assistantSessionAgent" title={selectedChatAgent.displayName}>
-                    <span>{selectedChatAgent.displayName}</span>
-                  </span>
-                )}
-                <input
-                  className="assistantSessionTitleInput"
-                  value={sessionNameDraft}
-                  aria-label="Session name"
-                  onChange={(event) => setSessionNameDraft(event.target.value)}
-                  onBlur={() => void saveSessionName()}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.currentTarget.blur();
-                    }
-                    if (event.key === "Escape") {
-                      setSessionNameDraft(selectedSession.title);
-                      event.currentTarget.blur();
-                    }
-                  }}
-                />
+            {selectedSession && !newSessionDraftOpen && (
+              <div className="assistantSessionBar">
+                <button className="assistantSessionBarTitle" type="button" onClick={openSelectedSessionInChat} title={selectedSession.title}>
+                  <strong>{selectedSession.title}</strong>
+                  <small>{selectedSession.pinnedAt ? "Pinned chat" : "Active chat"}</small>
+                </button>
+                <div className="assistantSessionMenuRoot" ref={assistantSessionMenuRef}>
+                  <button
+                    className="iconButton assistantSessionMenuTrigger"
+                    type="button"
+                    aria-label="Chat actions"
+                    aria-haspopup="menu"
+                    aria-expanded={assistantSessionMenuOpen}
+                    title="Chat actions"
+                    onClick={() => setAssistantSessionMenuOpen((open) => !open)}
+                  >
+                    <MoreHorizontal size={16} />
+                  </button>
+                  {assistantSessionMenuOpen && (
+                    <div className="assistantSessionMenu" role="menu" aria-label="Chat actions">
+                      <button role="menuitem" type="button" onClick={() => void toggleSelectedSessionPin()} disabled={Boolean(sessionActionBusy)}>
+                        <Pin size={15} />
+                        <span>{selectedSession.pinnedAt ? "Unpin chat" : "Pin chat"}</span>
+                      </button>
+                      <button role="menuitem" type="button" onClick={() => void renameSelectedSession()} disabled={Boolean(sessionActionBusy)}>
+                        <Pencil size={15} />
+                        <span>Rename chat</span>
+                      </button>
+                      <button role="menuitem" type="button" onClick={() => void archiveSelectedSession()} disabled={Boolean(sessionActionBusy)}>
+                        <ArchiveIcon size={15} />
+                        <span>Archive chat</span>
+                      </button>
+                      <div className="assistantSessionMenuDivider" />
+                      <button role="menuitem" type="button" onClick={openSelectedSessionInChat}>
+                        <MessageSquare size={15} />
+                        <span>Open in Chat</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
             <div className="assistantLog" ref={assistantLogRef}>
@@ -5984,7 +6520,7 @@ function AssistantPanel({
                   {selectedSession.task && <small>Agent has not started this task yet.</small>}
                 </div>
               )}
-              {!selectedSession && !newSessionDraftOpen && <div className="assistantEmpty">Start with a prompt. Link will route through LiteLLM when configured.</div>}
+              {!selectedSession && !newSessionDraftOpen && <div className="assistantEmpty">Start with a prompt. Link stays local unless you choose a cloud route.</div>}
               <div ref={assistantLogEndRef} />
             </div>
             {docsSuggestionStatus && <div className="voiceInputStatus" aria-live="polite">{docsSuggestionStatus}</div>}
@@ -6041,8 +6577,8 @@ function AssistantPanel({
                         setAssistantAttachMenuOpen((open) => !open);
                       }}
                     >
-                      <Plus size={16} />
-                    </button>
+	                      <Plus size={16} />
+	                    </button>
                     {assistantAttachMenuOpen && (
                       <div className="assistantAttachMenu" role="menu" aria-label="Add context">
                         <button role="menuitem" onClick={startNewSessionFromMenu}>
@@ -6220,9 +6756,52 @@ function AssistantPanel({
                         )}
                       </div>
                     )}
+	                  </div>
+                  <div className="assistantRuntimeMenuRoot" ref={assistantRuntimeMenuRef}>
+                    <button
+                      className="iconButton assistantRuntimeTrigger"
+                      type="button"
+                      title="Chat settings"
+                      aria-label="Chat settings"
+                      aria-expanded={assistantRuntimeMenuOpen}
+                      onClick={() => setAssistantRuntimeMenuOpen((open) => !open)}
+                    >
+                      <Settings size={16} />
+                    </button>
+                    {assistantRuntimeMenuOpen && (
+                      <div className="assistantRuntimeMenu" role="dialog" aria-label="Chat settings">
+                        <div className="assistantRuntimeMenuHeader">
+                          <strong>Chat settings</strong>
+                          <span className={`dataBoundaryChip dataBoundaryChip-${selectedModelRoute?.dataBoundary ?? "local"}`}>
+                            {dataBoundaryLabel(selectedModelRoute?.dataBoundary)}
+                          </span>
+                        </div>
+                        <div className="assistantRuntimeBar" aria-label="Active model route">
+                          <label>
+                            <span><SlidersHorizontal size={14} aria-hidden="true" />Runtime route</span>
+                            <select value={modelMode} onChange={(event) => setChatModelMode(event.target.value)} aria-label="Model route">
+                              {aiModelRoutes.map((route) => (
+                                <option key={route.id} value={route.id} disabled={!route.available}>
+                                  {route.label}{route.available ? "" : " (setup required)"}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <button
+                            className="button secondary assistantRuntimeRefresh"
+                            type="button"
+                            onClick={() => void refreshModelCatalog()}
+                            disabled={refreshingModelCatalog}
+                          >
+                            <RefreshCw size={14} className={refreshingModelCatalog ? "spinning" : ""} />
+                            Refresh models
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-                <div className="assistantComposerSubmit">
+	                </div>
+	                <div className="assistantComposerSubmit">
                   <button
                     className={`iconButton voiceInputButton ${voiceListening ? "active" : ""}`}
                     title={voiceListening ? "Stop voice input" : "Start voice input"}
@@ -6373,7 +6952,7 @@ function AssistantPanel({
 	                      </button>
 	                    )}
 	                  </div>
-	                </div>
+		                </div>
 	              )}
 	              {voiceInputStatus && !deployAppMode && <div className="voiceInputStatus" aria-live="polite">{voiceInputStatus}</div>}
             </div>
@@ -6654,6 +7233,8 @@ function AgentsView({
   const [sendingAgentId, setSendingAgentId] = useState("");
   const [agentMessageStatus, setAgentMessageStatus] = useState("");
   const [expandedAgentIds, setExpandedAgentIds] = useState<string[]>([]);
+  const [selectedAgentDetailId, setSelectedAgentDetailId] = useState("");
+  const [selectedAgentDetailTab, setSelectedAgentDetailTab] = useState<"overview" | "capabilities" | "settings">("overview");
   const [expandedSquad, setExpandedSquad] = useState("");
   const [expandedSkillNames, setExpandedSkillNames] = useState<string[]>([]);
   const [skillMarkdownByName, setSkillMarkdownByName] = useState<Record<string, SkillMarkdownLoadState>>({});
@@ -6695,7 +7276,7 @@ function AgentsView({
       left.localeCompare(right),
     );
   }, [agents]);
-  const tones: DojoKit["tone"][] = ["blue", "orange", "teal", "pink", "purple", "green"];
+  const tones: WikiKit["tone"][] = ["blue", "orange", "teal", "pink", "purple", "green"];
   const squadKits = useMemo(() => {
     const grouped = new Map<string, SkillMetadata[]>();
     for (const skill of skills) {
@@ -6891,6 +7472,11 @@ function AgentsView({
     }
   }
 
+  async function refreshAgentsThenAll() {
+    await refreshAgentControlPlane();
+    await refresh();
+  }
+
   useEffect(() => {
     void refreshAgentControlPlane();
   }, []);
@@ -6946,6 +7532,11 @@ function AgentsView({
     setExpandedAgentIds((current) =>
       current.includes(agentId) ? current.filter((id) => id !== agentId) : [...current, agentId],
     );
+  }
+
+  function openAgentDetail(rowId: string) {
+    setSelectedAgentDetailId(rowId);
+    setSelectedAgentDetailTab("overview");
   }
 
   function toggleSquadKit(kitId: string) {
@@ -7166,6 +7757,228 @@ function AgentsView({
     </button>
   ) : null;
 
+  function agentRowMeta(agent: HostedAgentSummary | AgentSummary) {
+    return [agent.type, agent.status].filter(Boolean).join(" - ") || "Agent";
+  }
+
+  function renderAgentDirectoryRow(row: (typeof agentDirectorySections)[number]["rows"][number]) {
+    const agent = row.agent;
+    const bookmarked = bookmarkedAgentIdSet.has(agent.id);
+    return (
+      <div
+        className="chatResultRow directoryResultRow agentDirectoryResultRow"
+        role="row"
+        key={row.id}
+        tabIndex={0}
+        onClick={() => openAgentDetail(row.id)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openAgentDetail(row.id);
+          }
+        }}
+      >
+        <span className="directoryNameCell" role="cell">
+          <strong>{agent.displayName}</strong>
+          <small>{agent.description || "No description saved."}</small>
+        </span>
+        <span role="cell">{row.category}</span>
+        <span role="cell">{agentRowMeta(agent)}</span>
+        <span className="directoryRowActions" role="cell">
+          {row.section === "team" && (
+            <button
+              className={`iconButton bookmarkButton ${bookmarked ? "selected" : ""}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                toggleBookmark(agent.id);
+              }}
+              title={bookmarked ? "Remove bookmark" : "Bookmark agent"}
+              aria-label={bookmarked ? `Remove ${agent.displayName} bookmark` : `Bookmark ${agent.displayName}`}
+            >
+              <Star size={15} />
+            </button>
+          )}
+        </span>
+        <button
+          className="chatSessionOpenButton"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openAgentDetail(row.id);
+          }}
+          aria-label={`Open ${agent.displayName}`}
+          title="Open agent"
+        >
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  function renderAgentDirectoryTable(section: (typeof agentDirectorySections)[number]) {
+    return (
+      <section className="agentDirectorySection" aria-label={`${section.title} agents`} key={section.id}>
+        <div className="agentDirectorySectionHeader">
+          <h2>{section.title}</h2>
+          <span>{section.rows.length} {section.rows.length === 1 ? "agent" : "agents"}</span>
+        </div>
+        <div className="chatSessionRows directoryTable agentDirectoryTable" role="table" aria-label={`${section.title} agents`}>
+          <div className="chatResultRow directoryResultRow agentDirectoryResultRow chatResultRowHead" role="row">
+            <span role="columnheader">Agent</span>
+            <span role="columnheader">Group</span>
+            <span role="columnheader">Runtime</span>
+            <span role="columnheader">Saved</span>
+            <span role="columnheader" aria-label="Open agent" />
+          </div>
+          <div className="chatResultRows" role="rowgroup">
+            {section.rows.map(renderAgentDirectoryRow)}
+            {section.rows.length === 0 && (
+              <div className="tableEmptyState" role="row">
+                <EmptyState title={`No ${section.title.toLowerCase()} agents found`} body="Try another search term or filter." icon={Bot} />
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const selectedAgentRow = selectedAgentDetailId
+    ? agentDirectorySections.flatMap((section) => section.rows).find((row) => row.id === selectedAgentDetailId)
+    : undefined;
+  const selectedAgentDetail = selectedAgentRow?.agent;
+  const selectedAgentCapabilities = selectedAgentDetail && "capabilities" in selectedAgentDetail ? selectedAgentDetail.capabilities : [];
+  const selectedAgentSource = selectedAgentDetail && "source" in selectedAgentDetail ? selectedAgentDetail.source : "agent-control-plane";
+  const selectedAgentVisibility = selectedAgentDetail && "visibility" in selectedAgentDetail ? selectedAgentDetail.visibility : undefined;
+  const selectedAgentRequiresAuth = Boolean(selectedAgentDetail && "requiresAuthentication" in selectedAgentDetail && selectedAgentDetail.requiresAuthentication);
+
+  if (selectedAgentRow && selectedAgentDetail) {
+    return (
+      <section className="content chatView canonicalChat chatDetailView directoryDetailView agentInfoDetailView">
+        <header className="pageHeader">
+          <div className="chatDetailTitleGroup">
+            <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedAgentDetailId("")} aria-label="Back to agents">
+              <ArrowLeft size={17} />
+            </button>
+            <span>Agents / {selectedAgentRow.section === "you" ? "You" : "Team"}</span>
+            <h1>{selectedAgentDetail.displayName}</h1>
+            <p>{selectedAgentDetail.description || "No description saved."}</p>
+          </div>
+        </header>
+        <section className="chatDetailSurface">
+          <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label="Agent details">
+            {[
+              ["overview", "Overview"],
+              ["capabilities", "Capabilities"],
+              ["settings", "Settings"],
+            ].map(([id, label]) => (
+              <button
+                key={id}
+                className={selectedAgentDetailTab === id ? "selected" : ""}
+                type="button"
+                onClick={() => setSelectedAgentDetailTab(id as typeof selectedAgentDetailTab)}
+                role="tab"
+                aria-selected={selectedAgentDetailTab === id}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {selectedAgentDetailTab === "overview" && (
+            <div className="chatResultDetails directoryDetailPanel">
+              <div><strong>Group</strong><span>{selectedAgentRow.category}</span></div>
+              <div><strong>Runtime</strong><span>{selectedAgentDetail.type || "Agent"}</span></div>
+              <div><strong>Status</strong><span>{formatStatusLabel(selectedAgentDetail.status || "available")}</span></div>
+              <div><strong>Source</strong><span>{formatSourceLabel(selectedAgentSource)}</span></div>
+              {selectedAgentVisibility && <div><strong>Visibility</strong><span>{formatVisibilityLabel(selectedAgentVisibility)}</span></div>}
+            </div>
+          )}
+          {selectedAgentDetailTab === "capabilities" && (
+            <div className="directoryDetailPanel">
+              <div className="tagList">
+                {selectedAgentCapabilities.length > 0 ? selectedAgentCapabilities.map((capability) => <span key={capability}>{capability}</span>) : <span>No capabilities reported</span>}
+                {selectedAgentRequiresAuth && <span>requires auth</span>}
+              </div>
+            </div>
+          )}
+          {selectedAgentDetailTab === "settings" && (
+            <div className="directoryDetailPanel">
+              {selectedAgentRow.section === "you" ? (
+                <div className="agentAppearanceEditor detailAppearanceEditor">
+                  <button className="button secondary compactButton" type="button" onClick={() => setAgentAppearanceOpenId((current) => current === selectedAgentDetail.id ? "" : selectedAgentDetail.id)}>
+                    <Pencil size={13} />
+                    Appearance
+                  </button>
+                  <label className="button ghost compactButton agentImageUpload">
+                    <Upload size={13} />
+                    Image
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(event) => {
+                        uploadAgentImage(selectedAgentDetail.id, event.currentTarget.files?.[0]);
+                        event.currentTarget.value = "";
+                      }}
+                    />
+                  </label>
+                  {agentAppearances[selectedAgentDetail.id] && (
+                    <button className="button ghost compactButton" type="button" onClick={() => resetAgentAppearance(selectedAgentDetail.id)}>
+                      <X size={13} />
+                      Reset
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  className={`button secondary ${bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "selected" : ""}`}
+                  type="button"
+                  onClick={() => toggleBookmark(selectedAgentDetail.id)}
+                >
+                  <Star size={14} />
+                  {bookmarkedAgentIdSet.has(selectedAgentDetail.id) ? "Bookmarked" : "Bookmark"}
+                </button>
+              )}
+              {(selectedAgentSource === "slack" || selectedAgentDetail.type === "slack") && (
+                <div className="agentMessageBox detailMessageBox">
+                  <textarea
+                    value={agentDrafts[selectedAgentDetail.id] ?? ""}
+                    onChange={(event) => setAgentDrafts((current) => ({ ...current, [selectedAgentDetail.id]: event.target.value }))}
+                    onKeyDown={(event) => {
+                      if (shouldSubmitComposer(event)) {
+                        event.preventDefault();
+                        void sendAgent(selectedAgentDetail as AgentSummary);
+                      }
+                    }}
+                    placeholder={`Message ${selectedAgentDetail.displayName}`}
+                  />
+                  <button className="button secondary" onClick={() => void sendAgent(selectedAgentDetail as AgentSummary)} disabled={sendingAgentId === selectedAgentDetail.id || !agentDrafts[selectedAgentDetail.id]?.trim()}>
+                    {sendingAgentId === selectedAgentDetail.id ? "Sending" : "Send"}
+                  </button>
+                </div>
+              )}
+              {agentAppearanceOpenId === selectedAgentDetail.id && (
+                <div className="agentEmojiPicker detailEmojiPicker" aria-label={`Choose avatar emoji for ${selectedAgentDetail.displayName}`}>
+                  {systemAgentEmojis.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={agentAppearances[selectedAgentDetail.id]?.kind === "emoji" && agentAppearances[selectedAgentDetail.id]?.value === emoji ? "selected" : ""}
+                      onClick={() => setAgentEmoji(selectedAgentDetail.id, emoji)}
+                      aria-label={`Use ${emoji} avatar`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {agentMessageStatus && <div className="infoBanner">{agentMessageStatus}</div>}
+            </div>
+          )}
+        </section>
+      </section>
+    );
+  }
+
   return (
     <section className="content agentsView">
       <div className="pageSectionShell">
@@ -7215,6 +8028,7 @@ function AgentsView({
             <option value="status">Status</option>
           </select>
         </label>
+        <TableRefreshButton onClick={refreshAgentsThenAll} disabled={acpBusy} label="Refresh agents" />
       </div>
       )}
       {filtersOpen && !(tab === "skills" && createToolOpen) && (
@@ -7405,7 +8219,7 @@ function AgentsView({
             </form>
           ) : (
             <>
-              <section className="dojoSection" aria-label="My Skills">
+              <section className="wikiSection" aria-label="My Skills">
                 <div className="mySkillsList">
                   {installedSkillRows.map((row) => (
                     <article className="mySkillRow" key={row.key}>
@@ -7421,7 +8235,7 @@ function AgentsView({
                 </div>
                 {installedSkillRows.length === 0 && <div className="appEmptyPanel">No skills installed yet.</div>}
               </section>
-              <section className="dojoSection" aria-label="Active agent teams">
+              <section className="wikiSection" aria-label="Active agent teams">
                 <div className="userSquadsPanel">
                   <span className="userSquadsSummary">Active agent teams</span>
                   <div className="userSquadChips">
@@ -7429,12 +8243,12 @@ function AgentsView({
                   </div>
                 </div>
               </section>
-              <section className="dojoSection" aria-label="Skills">
+              <section className="wikiSection" aria-label="Skills">
                 <div className="squadKitColumns">
                   {filteredSquadKits.map((kit) => {
                     const expanded = expandedSquad === kit.id;
                     return (
-                      <section className={`squadKitColumn dojo-${kit.tone} ${expanded ? "expanded" : ""}`} key={kit.id}>
+                      <section className={`squadKitColumn wiki-${kit.tone} ${expanded ? "expanded" : ""}`} key={kit.id}>
                         <button className="squadKitHeader" onClick={() => toggleSquadKit(kit.id)} aria-expanded={expanded}>
                           <span>
                             <strong>{kit.name}</strong>
@@ -7460,7 +8274,7 @@ function AgentsView({
       ) : (
         <>
         {tab === "personal" && (
-        <section className="dojoSection agentDirectoryList" aria-label="Agents">
+        <section className="wikiSection agentDirectoryList" aria-label="Agents">
           {agentError && agentLoadRecoverable ? (
             <div className="agentRecoveryBanner" role="status">
               <div>
@@ -7482,140 +8296,11 @@ function AgentsView({
               </div>
             </div>
           ) : agentError ? <div className="errorBanner">{agentError}</div> : null}
-          {(sectionFilter === "all" || sectionFilter === "you") && (
-          <section className="agentDirectorySection" aria-label="You agents">
-            <div className="agentDirectorySectionHeader">
-              <h2>You</h2>
-              <span>{filteredHostedAgents.length} {filteredHostedAgents.length === 1 ? "agent" : "agents"}</span>
-            </div>
-          {isAcpReady && filteredHostedAgents.length > 0 && (
-            <div className="myAgentsList">
-              {filteredHostedAgents.map((agent) => (
-                <article className={`myAgentRow ${activeAgent?.id === agent.id ? "selected" : ""}`} key={agent.id}>
-                  <AgentAvatar name={agent.displayName} appearance={agentAppearances[agent.id]} />
-                  <div>
-                    <strong>{agent.displayName}</strong>
-                    {agent.description && <p>{agent.description}</p>}
-                    <small><span className="agentCategoryBadge">Personal</span>{[agent.type, agent.status].filter(Boolean).join(" - ")}</small>
-                    <div className="agentAppearanceEditor">
-                      <button className="button ghost compactButton" type="button" onClick={() => setAgentAppearanceOpenId((current) => current === agent.id ? "" : agent.id)}>
-                        <Pencil size={13} />
-                        Appearance
-                      </button>
-                      <label className="button ghost compactButton agentImageUpload">
-                        <Upload size={13} />
-                        Image
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(event) => {
-                            uploadAgentImage(agent.id, event.currentTarget.files?.[0]);
-                            event.currentTarget.value = "";
-                          }}
-                        />
-                      </label>
-                      {agentAppearances[agent.id] && (
-                        <button className="button ghost compactButton" type="button" onClick={() => resetAgentAppearance(agent.id)}>
-                          <X size={13} />
-                          Reset
-                        </button>
-                      )}
-                      {agentAppearanceOpenId === agent.id && (
-                        <div className="agentEmojiPicker" aria-label={`Choose avatar emoji for ${agent.displayName}`}>
-                          {systemAgentEmojis.map((emoji) => (
-                            <button
-                              key={emoji}
-                              type="button"
-                              className={agentAppearances[agent.id]?.kind === "emoji" && agentAppearances[agent.id]?.value === emoji ? "selected" : ""}
-                              onClick={() => setAgentEmoji(agent.id, emoji)}
-                              aria-label={`Use ${emoji} avatar`}
-                            >
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    className={activeAgent?.id === agent.id ? "button ghost" : "button secondary"}
-                    onClick={() => setActiveAgent({ id: agent.id, displayName: agent.displayName })}
-                  >
-                    {activeAgent?.id === agent.id ? "Active" : "Use agent"}
-                  </button>
-                </article>
-              ))}
-            </div>
-          )}
-
-          {isAcpReady && filteredHostedAgents.length === 0 && !agentError && (
-            <div className="agentEmptyState">
-              <Zap size={24} />
-              <strong>No personal agents found</strong>
-            </div>
-          )}
-          </section>
-          )}
-          {(sectionFilter === "all" || sectionFilter === "team") && (
-          <section className="agentDirectorySection" aria-label="Team agents">
-            <div className="agentDirectorySectionHeader">
-              <h2>Team</h2>
-              <span>{filteredAgents.length} {filteredAgents.length === 1 ? "agent" : "agents"}</span>
-            </div>
-            <div className="myAgentsList">
-              {filteredAgents.map((agent) => {
-                const expanded = expandedAgentIds.includes(agent.id);
-                return (
-                  <article className={`myAgentRow ${activeAgent?.id === agent.id ? "selected" : ""}`} key={agent.id}>
-                    <AgentAvatar name={agent.displayName} appearance={agentAppearances[agent.id]} />
-                    <div>
-                      <strong>{agent.displayName}</strong>
-                      <p>{agent.description}</p>
-                      <small><span className="agentCategoryBadge">{agent.squad || formatSourceLabel(agent.source)}</span>{[agent.type, agent.status].filter(Boolean).join(" - ")}</small>
-                      <div className="agentAppearanceEditor">
-                        <button
-                          className={`iconButton bookmarkButton ${bookmarkedAgentIdSet.has(agent.id) ? "selected" : ""}`}
-                          onClick={() => toggleBookmark(agent.id)}
-                          title={bookmarkedAgentIdSet.has(agent.id) ? "Remove bookmark" : "Bookmark agent"}
-                          aria-label={bookmarkedAgentIdSet.has(agent.id) ? `Remove ${agent.displayName} bookmark` : `Bookmark ${agent.displayName}`}
-                        >
-                          <Star size={15} />
-                        </button>
-                        <button className="button ghost compactButton" onClick={() => toggleAgentDetails(agent.id)} type="button" aria-expanded={expanded}>
-                          <ChevronDown size={13} />
-                          Details
-                        </button>
-                      </div>
-                      {expanded && (
-                        <div className="agentDetailsPanel">
-                          <div className="tagList">
-                            <span>{agentTypeLabel(agent)}</span>
-                            <span>{formatVisibilityLabel(agent.visibility)}</span>
-                            {agent.source && <span>{formatSourceLabel(agent.source)}</span>}
-                            {agent.squad && <span>{agent.squad}</span>}
-                            {agent.capabilities.map((capability) => <span key={capability}>{capability}</span>)}
-                            {agent.requiresAuthentication && <span>requires auth</span>}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    <button
-                      className={activeAgent?.id === agent.id ? "button ghost" : "button secondary"}
-                      onClick={() => setActiveAgent({ id: agent.id, displayName: agent.displayName })}
-                    >
-                      {activeAgent?.id === agent.id ? "Active" : "Use agent"}
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
-            {filteredAgents.length === 0 && <div className="agentEmptyState"><Zap size={24} /><strong>No team agents found</strong></div>}
-          </section>
-          )}
+          {agentDirectorySections.map(renderAgentDirectoryTable)}
         </section>
         )}
         {tab === "squads" && (
-        <section className="dojoSection" aria-label="Squad Agents">
+        <section className="wikiSection agentDirectoryList" aria-label="Squad Agents">
           {squadAgentGroups.map(([squad, rows]) => (
             <section className="squadKitColumn expanded" key={squad}>
               <div className="squadKitHeader">
@@ -7679,7 +8364,7 @@ function AgentsView({
         </section>
         )}
         {tab === "telnyx" && (
-      <section className="dojoSection" aria-label="Agents">
+      <section className="wikiSection agentDirectoryList" aria-label="Agents">
       <div className="agentGrid">
         {filteredAgents.map((agent) => {
           const expanded = expandedAgentIds.includes(agent.id);
@@ -7808,7 +8493,10 @@ function WorkboardView({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [dragTargetStatus, setDragTargetStatus] = useState<WorkboardStatus | null>(null);
   const [pointerDraggingCardId, setPointerDraggingCardId] = useState("");
-  const [hiddenDoneTaskIds, setHiddenDoneTaskIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-done-task-ids"));
+  const [hiddenTaskIds, setHiddenTaskIds] = useState<string[]>(() => [
+    ...readStoredIdList("telnyx-link-hidden-task-ids"),
+    ...readStoredIdList("telnyx-link-hidden-done-task-ids"),
+  ]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const pointerDragRef = useRef<{ cardId: string; pointerId: number; startX: number; startY: number; active: boolean } | null>(null);
@@ -7885,9 +8573,9 @@ function WorkboardView({
 
   const filteredCards = useMemo(() => {
     const term = query.trim().toLowerCase();
-    const hidden = new Set(hiddenDoneTaskIds);
+    const hidden = new Set(hiddenTaskIds);
     return (snapshot?.cards ?? []).filter((card) => {
-      if (card.status === "done" && hidden.has(`${card.provider}:${card.boardId}:${card.id}`)) return false;
+      if (hidden.has(`${card.provider}:${card.boardId}:${card.id}`)) return false;
       const matchesStatus = statusFilter === "all" || card.status === statusFilter;
       const searchable = [
         card.title,
@@ -7904,7 +8592,7 @@ function WorkboardView({
       ].join(" ").toLowerCase();
       return matchesStatus && (!term || searchable.includes(term));
     });
-  }, [hiddenDoneTaskIds, snapshot?.cards, query, statusFilter]);
+  }, [hiddenTaskIds, snapshot?.cards, query, statusFilter]);
 
   function selectedAssignee(agentId: string) {
     return taskAssignees.find((agent) => agent.id === agentId);
@@ -7943,7 +8631,7 @@ function WorkboardView({
       agentSource: inferredSource,
       agentType: resolvedAgent?.type ?? card.assigneeType ?? preferredAgentType,
       approvalMode: "auto",
-      modelMode: inferredSource === "a2a-discovery" ? "a2a-discovery" : inferredSource === "agent-control-plane" ? "agent-control-plane" : "auto-agent-runtime",
+      modelMode: inferredSource === "a2a-discovery" ? "a2a-discovery" : inferredSource === "agent-control-plane" ? "agent-control-plane" : "auto/ask-before-cloud",
       contextScope: "task",
     };
   }
@@ -8016,12 +8704,11 @@ function WorkboardView({
     return "No session";
   }
 
-  function hideDoneTask(card: WorkboardCard) {
-    if (card.status !== "done") return;
+  function hideTask(card: WorkboardCard) {
     const key = `${card.provider}:${card.boardId}:${card.id}`;
-    setHiddenDoneTaskIds((current) => {
+    setHiddenTaskIds((current) => {
       const next = current.includes(key) ? current : [...current, key];
-      window.localStorage.setItem("telnyx-link-hidden-done-task-ids", JSON.stringify(next));
+      window.localStorage.setItem("telnyx-link-hidden-task-ids", JSON.stringify(next));
       return next;
     });
   }
@@ -8560,29 +9247,12 @@ function WorkboardView({
                         <button className="iconButton" onClick={() => void openCardTaskSession(card)} aria-label={`Open task session for ${card.title}`} title="Open task session">
                           <MessageSquare size={14} />
                         </button>
-                        {card.status === "todo" && (
-                          <button className="iconButton" onClick={() => void updateCard(card, "in_progress")} aria-label={`Start ${card.title}`} title="Start task">
-                            <Play size={14} />
-                          </button>
-                        )}
                         <button className="iconButton" onClick={() => openEditCard(card)} aria-label={`Edit ${card.title}`} title="Edit task">
                           <Pencil size={14} />
                         </button>
-                        {card.status === "done" && (
-                          <>
-                            <button className="iconButton" onClick={() => hideDoneTask(card)} aria-label={`Archive ${card.title}`} title="Archive done task">
-                              <ArchiveIcon size={14} />
-                            </button>
-                            <button className="iconButton danger" onClick={() => hideDoneTask(card)} aria-label={`Delete ${card.title}`} title="Delete done task">
-                              <Trash2 size={14} />
-                            </button>
-                          </>
-                        )}
-                        {card.sourceUrl && (
-                          <a className="textLink" href={card.sourceUrl} target="_blank" rel="noreferrer" aria-label={`Open source for ${card.title}`}>
-                            <ExternalLink size={13} />
-                          </a>
-                        )}
+                        <button className="iconButton danger" onClick={() => hideTask(card)} aria-label={`Delete ${card.title}`} title="Delete task">
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </article>
                   ))}
@@ -8676,11 +9346,11 @@ function WorkboardView({
                           </button>
                           {card.status === "done" && (
                             <>
-                              <button className="button secondary" onClick={() => hideDoneTask(card)}>
+                              <button className="button secondary" onClick={() => hideTask(card)}>
                                 <ArchiveIcon size={14} />
                                 Archive
                               </button>
-                              <button className="button secondary danger" onClick={() => hideDoneTask(card)}>
+                              <button className="button secondary danger" onClick={() => hideTask(card)}>
                                 <Trash2 size={14} />
                                 Delete
                               </button>
@@ -8769,26 +9439,19 @@ function calendarEventStatusLabel(event: GoogleCalendarEvent) {
   return event.status === "live" ? "live" : "future";
 }
 
-function calendarDateRailParts(dateLabel: string) {
-  const match = dateLabel.match(/^([A-Za-z]{3,}),?\s+([A-Za-z]{3,})\s+(\d{1,2})$/);
-  if (!match) {
-    return { weekday: dateLabel, month: "", day: "" };
-  }
-  return { weekday: match[1]!.toUpperCase(), month: match[2]!, day: match[3]! };
-}
-
 function CalendarView({
   connectors,
   linkedPhoneNumber,
   setView,
+  refresh,
 }: {
   connectors: ConnectorStatus[];
   linkedPhoneNumber: string;
   setView: (view: ViewId) => void;
+  refresh: () => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [calendarLayout, setCalendarLayout] = useState<"calendar" | "list">("calendar");
   const [selectedEventId, setSelectedEventId] = useState("");
   const [actionStatus, setActionStatus] = useState("");
   const [calendarEvents, setCalendarEvents] = useState<GoogleCalendarEvent[]>([]);
@@ -8821,23 +9484,49 @@ function CalendarView({
     .filter((event) => isFutureCalendarEvent(event))
     .sort((first, second) => (calendarEventStartMs(first) ?? Number.MAX_SAFE_INTEGER) - (calendarEventStartMs(second) ?? Number.MAX_SAFE_INTEGER));
   const selectedEvent = selectedEventId ? visibleEvents.find((event) => event.id === selectedEventId) : undefined;
-  const selectedEventIsTrainingSession = selectedEvent?.id === linkTrainingSessionEvent.id;
-  const sectionedCalendarEvents = [
-    {
-      id: "future",
-      title: "Future",
-      events: futureVisibleEvents,
-    },
-  ].map((section) => ({
-    ...section,
-    dateGroups: section.events.reduce<Array<{ date: string; events: GoogleCalendarEvent[] }>>((groups, event) => {
-      const date = calendarEventDateLabel(event);
-      const group = groups.find((item) => item.date === date);
-      if (group) group.events.push(event);
-      else groups.push({ date, events: [event] });
-      return groups;
-    }, []),
-  })).filter((section) => section.events.length > 0);
+
+  async function refreshCalendarEvents() {
+    if (!calendarReady) {
+      setCalendarEvents([]);
+      setCalendarError("");
+      return;
+    }
+    setLoadingEvents(true);
+    setCalendarError("");
+    try {
+      setCalendarEvents(await linkApi.listGoogleCalendarEvents());
+    } catch (err) {
+      setCalendarEvents([]);
+      setCalendarError(err instanceof Error ? err.message : "Unable to load Google Calendar events.");
+    } finally {
+      setLoadingEvents(false);
+    }
+  }
+
+  async function refreshCalendarContext() {
+    if (!calendarReady) {
+      setMeetingBots([]);
+      setMeetingInvites([]);
+      return;
+    }
+    try {
+      const [bots, invites] = await Promise.all([
+        linkApi.listMeetingBots(),
+        linkApi.listMeetingBotInvites(),
+      ]);
+      setMeetingBots(bots);
+      setMeetingInvites(invites);
+      setInviteBotId((current) => current || bots[0]?.id || "");
+    } catch (err) {
+      setInviteError(err instanceof Error ? err.message : "Unable to load meeting bot invite context.");
+    }
+  }
+
+  async function refreshCalendarTableThenAll() {
+    await refreshCalendarEvents();
+    await refreshCalendarContext();
+    await refresh();
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -9002,25 +9691,49 @@ function CalendarView({
     const expanded = selectedEvent?.id === event.id;
     const trainingSession = event.id === linkTrainingSessionEvent.id;
     const eventInvites = meetingInvites.filter((invite) => invite.eventId === event.id);
+    const joinLabel = trainingSession ? "Booking" : event.meetUrl ? "Meet" : event.phone ? "Phone" : "None";
     return (
-      <article className={`calendarEventCard ${expanded ? "expanded" : ""} ${trainingSession ? "sample" : ""}`} key={event.id}>
-        <button
-          className="calendarEventSummary"
-          type="button"
+      <Fragment key={event.id}>
+        <div
+          className={`chatResultRow calendarResultRow ${expanded ? "expanded" : ""} ${trainingSession ? "sample" : ""}`}
+          role="row"
+          tabIndex={0}
           onClick={() => toggleEvent(event)}
-          aria-expanded={expanded}
+          onKeyDown={(keyboardEvent) => {
+            if (keyboardEvent.key === "Enter" || keyboardEvent.key === " ") {
+              keyboardEvent.preventDefault();
+              toggleEvent(event);
+            }
+          }}
         >
-          <span>
+          <span className="calendarEventNameCell" role="cell">
             <strong>{event.title}</strong>
-            <small>{calendarEventTimeLabel(event)} · {event.attendees}</small>
+            <small>{event.notes || "No description saved."}</small>
           </span>
-          <span className="calendarEventSummaryActions">
+          <span role="cell">
+            <strong>{calendarEventDateLabel(event)}</strong>
+            <small>{calendarEventTimeLabel(event)}</small>
+          </span>
+          <span role="cell">{event.attendees || "No attendees"}</span>
+          <span className="calendarJoinCell" role="cell">
             <Badge tone={event.status === "live" ? "success" : "warning"}>{calendarEventStatusLabel(event)}</Badge>
-            <ChevronDown size={16} />
+            <small>{joinLabel}</small>
           </span>
-        </button>
+          <button
+            className="chatSessionOpenButton"
+            type="button"
+            onClick={(clickEvent) => {
+              clickEvent.stopPropagation();
+              toggleEvent(event);
+            }}
+            aria-label={expanded ? `Collapse ${event.title}` : `Expand ${event.title}`}
+            title={expanded ? "Collapse event" : "Expand event"}
+          >
+            <ChevronDown size={16} />
+          </button>
+        </div>
         {expanded && (
-          <div className="calendarEventInlineDetails">
+          <div className="calendarEventInlineDetails calendarTableDetails" role="row">
             <div className="calendarDetailBlock">
               <strong>Event description</strong>
               <p>{event.notes || "No description saved for this event."}</p>
@@ -9062,12 +9775,12 @@ function CalendarView({
             {actionStatus && expanded && <div className="assistantNotice"><p>{actionStatus}</p></div>}
           </div>
         )}
-      </article>
+      </Fragment>
     );
   }
 
   return (
-    <section className="content calendarView">
+    <section className="content calendarView canonicalChat">
       <header className="pageHeader">
         <div>
           <h1>Calendar</h1>
@@ -9100,7 +9813,7 @@ function CalendarView({
         </section>
       )}
 
-      <div className="calendarControls">
+      <div className="chatSearchRow calendarControls">
         <button
           className={`iconButton agentFilterButton ${filtersOpen ? "selected" : ""}`}
           aria-label={filtersOpen ? "Hide calendar filters" : "Show calendar filters"}
@@ -9113,6 +9826,7 @@ function CalendarView({
           <Search size={16} />
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search calendar events" disabled={!calendarReady} />
         </div>
+        <TableRefreshButton onClick={refreshCalendarTableThenAll} disabled={loadingEvents} label="Refresh calendar" />
       </div>
 
       {filtersOpen && (
@@ -9121,58 +9835,48 @@ function CalendarView({
             <button className="button secondary" disabled={!calendarReady}>Today</button>
             <button className="button secondary" disabled={!calendarReady}>With description</button>
           </div>
-          <div className="workboardLayoutToggle calendarLayoutToggle" role="group" aria-label="Calendar layout">
-            <button
-              className={calendarLayout === "calendar" ? "active" : ""}
-              type="button"
-              onClick={() => setCalendarLayout("calendar")}
-              aria-pressed={calendarLayout === "calendar"}
-            >
-              <CalendarDays size={15} />
-              Calendar
-            </button>
-            <button
-              className={calendarLayout === "list" ? "active" : ""}
-              type="button"
-              onClick={() => setCalendarLayout("list")}
-              aria-pressed={calendarLayout === "list"}
-            >
-              <List size={15} />
-              List
-            </button>
-          </div>
+          <span className="chatFilterCount">{futureVisibleEvents.length} future events</span>
         </div>
       )}
 
-      <section className="calendarEventShell">
-        <div className={calendarLayout === "calendar" ? "calendarEventGrid calendarMode" : "calendarEventGrid listMode"}>
-          <div className="calendarSchedule" aria-label="Google Calendar schedule">
-            {sectionedCalendarEvents.map((section) => (
-              <section className="calendarTimelineSection" key={section.id} aria-label={`${section.title} events`}>
-                <div className="calendarTimelineSectionHeader">
-                  <h2>{section.title}</h2>
-                  <span>{section.events.length}</span>
-                </div>
-                {section.dateGroups.map((group) => {
-                  const dateParts = calendarDateRailParts(group.date);
-                  return (
-                    <section className="calendarDateGroup" key={`${section.id}-${group.date}`}>
-                      <div className="calendarDateRail">
-                        <span>{dateParts.weekday}</span>
-                        {dateParts.day ? <strong>{dateParts.day}</strong> : <h3>{group.date}</h3>}
-                        {dateParts.month && <small>{dateParts.month}</small>}
-                      </div>
-                      <div className="calendarEventList">
-                        {group.events.map(renderCalendarEvent)}
-                      </div>
-                    </section>
-                  );
-                })}
-              </section>
-            ))}
-            {calendarReady && loadingEvents && <div className="calendarEmptyState">Loading Google Calendar events...</div>}
-            {calendarReady && calendarError && <div className="calendarEmptyState">{calendarError}</div>}
-            {calendarReady && !loadingEvents && !calendarError && futureVisibleEvents.length === 0 && <div className="calendarEmptyState">No future calendar events found.</div>}
+      <section className="agentDirectorySection calendarDirectorySection" aria-label="Google Calendar events">
+        <div className="agentDirectorySectionHeader calendarDirectorySectionHeader">
+          <h2>Upcoming</h2>
+          <span>{futureVisibleEvents.length} {futureVisibleEvents.length === 1 ? "event" : "events"}</span>
+        </div>
+        <div className="chatSessionRows directoryTable calendarEventTable" role="table" aria-label="Google Calendar events">
+          <div className="chatResultRow directoryResultRow calendarResultRow chatResultRowHead" role="row">
+            <span role="columnheader">Event</span>
+            <span role="columnheader">When</span>
+            <span role="columnheader">People</span>
+            <span role="columnheader">Join</span>
+            <span role="columnheader" aria-label="Open event" />
+          </div>
+          <div className="chatResultRows" role="rowgroup">
+            {futureVisibleEvents.map(renderCalendarEvent)}
+            {calendarReady && loadingEvents && (
+              <div className="tableEmptyState" role="row">
+                <EmptyState title="Loading events" body="Loading Google Calendar events..." icon={CalendarDays} />
+              </div>
+            )}
+            {calendarReady && calendarError && (
+              <div className="tableEmptyState" role="row">
+                <EmptyState title="Calendar unavailable" body={calendarError} icon={CalendarDays} />
+              </div>
+            )}
+            {calendarReady && !loadingEvents && !calendarError && futureVisibleEvents.length === 0 && (
+              <div className="tableEmptyState" role="row">
+                <EmptyState
+                  title={calendarQuery ? "No events found" : "No upcoming Google Calendar events found"}
+                  body={calendarQuery
+                    ? "Try another search term or filter."
+                    : calendarEvents.length > 0
+                      ? `${calendarEvents.length} calendar events loaded, but none are upcoming after filtering.`
+                      : "Google Calendar is connected, but Link did not receive any events from your primary calendar for the next 180 days. Refresh or reconnect Google Workspace from Settings > Pairings if this looks wrong."}
+                  icon={CalendarDays}
+                />
+              </div>
+            )}
           </div>
         </div>
       </section>
@@ -9369,6 +10073,8 @@ function PhoneView({
   setTab,
   refresh,
   startManagedSkillSetupChat,
+  startEmailDraftChat = async () => {},
+  openNewCall = () => {},
   standaloneInbox = false,
   hideSectionSidebar = false,
   hideHeader = false,
@@ -9383,6 +10089,8 @@ function PhoneView({
   setTab: (tab: PhoneViewTab) => void;
   refresh: () => Promise<void>;
   startManagedSkillSetupChat: (skill: { label: string; query: string; connectorName: string }) => Promise<void>;
+  startEmailDraftChat?: (prompt: string) => Promise<void>;
+  openNewCall?: () => void;
   standaloneInbox?: boolean;
   hideSectionSidebar?: boolean;
   hideHeader?: boolean;
@@ -9391,6 +10099,11 @@ function PhoneView({
 }) {
   const [telnyxCredentialReady, setTelnyxCredentialReady] = useState(false);
   const [phoneAssistants, setPhoneAssistants] = useState<PhoneAssistantOption[]>([]);
+  const [assistantQuery, setAssistantQuery] = useState("");
+  const [assistantFiltersOpen, setAssistantFiltersOpen] = useState(false);
+  const [assistantStatusFilter, setAssistantStatusFilter] = useState("all");
+  const [selectedAssistantId, setSelectedAssistantId] = useState("");
+  const [selectedAssistantTab, setSelectedAssistantTab] = useState<"overview" | "phone" | "settings">("overview");
   const [numbers, setNumbers] = useState<PhoneNumberOption[]>([]);
   const [selectedNumber, setSelectedNumber] = useState<PhoneNumberOption | null>(null);
   const [dialNumber, setDialNumber] = useState("");
@@ -9399,6 +10112,8 @@ function PhoneView({
   const [callAgentFilter, setCallAgentFilter] = useState("all");
   const [callDirectionFilter, setCallDirectionFilter] = useState("all");
   const [callStatusFilter, setCallStatusFilter] = useState("all");
+  const [callHistoryRows, setCallHistoryRows] = useState<PhoneCallHistoryRow[]>([]);
+  const [loadingCallHistory, setLoadingCallHistory] = useState(false);
   const [hiddenCallIds, setHiddenCallIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-call-ids"));
   const [callBulkEdit, setCallBulkEdit] = useState(false);
   const [selectedCallRowIds, setSelectedCallRowIds] = useState<string[]>([]);
@@ -9410,13 +10125,13 @@ function PhoneView({
   const [loadingGoogleContacts, setLoadingGoogleContacts] = useState(false);
   const [googleContactsError, setGoogleContactsError] = useState("");
   const [inboxQuery, setInboxQuery] = useState("");
+  const [inboxFiltersOpen, setInboxFiltersOpen] = useState(false);
   const [inboxThreads, setInboxThreads] = useState<GoogleInboxThreadSummary[]>([]);
+  const [readInboxThreads, setReadInboxThreads] = useState<GoogleInboxThreadSummary[]>([]);
   const [selectedInboxThreadId, setSelectedInboxThreadId] = useState("");
   const [selectedInboxThread, setSelectedInboxThread] = useState<GoogleInboxThread | null>(null);
   const [inboxConnectedOverride, setInboxConnectedOverride] = useState(false);
-  const [hiddenInboxThreadIds, setHiddenInboxThreadIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-inbox-thread-ids"));
-  const [inboxBulkEdit, setInboxBulkEdit] = useState(false);
-  const [selectedInboxRowIds, setSelectedInboxRowIds] = useState<string[]>([]);
+  const [hiddenInboxThreadIds] = useState<string[]>(() => readStoredIdList("telnyx-link-hidden-inbox-thread-ids"));
   const [loadingInbox, setLoadingInbox] = useState(false);
   const [loadingInboxThread, setLoadingInboxThread] = useState(false);
   const [inboxError, setInboxError] = useState("");
@@ -9473,7 +10188,23 @@ function PhoneView({
     { id: "link", label: "Link" },
     ...phoneAssistants.map((assistant) => ({ id: assistant.id, label: assistant.name })),
   ];
-  const callHistoryRows: PhoneCallHistoryRow[] = [];
+  const assistantStatusOptions = useMemo(() => {
+    const statuses = phoneAssistants
+      .map((assistant) => assistant.status || "Available")
+      .filter((status, index, all) => all.indexOf(status) === index)
+      .sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+    return ["all", ...statuses];
+  }, [phoneAssistants]);
+  const filteredPhoneAssistants = useMemo(() => {
+    const query = assistantQuery.trim().toLowerCase();
+    return phoneAssistants.filter((assistant) => {
+      const status = assistant.status || "Available";
+      const matchesStatus = assistantStatusFilter === "all" || status === assistantStatusFilter;
+      const matchesQuery = !query || `${assistant.name} ${assistant.id} ${assistant.phoneNumber ?? ""} ${status} ${assistant.description ?? ""}`.toLowerCase().includes(query);
+      return matchesStatus && matchesQuery;
+    });
+  }, [assistantQuery, assistantStatusFilter, phoneAssistants]);
+  const selectedAssistant = phoneAssistants.find((assistant) => assistant.id === selectedAssistantId) ?? null;
   const filteredCallRows = callHistoryRows.filter((call) => {
     if (hiddenCallIds.includes(call.id)) return false;
     const term = callQuery.trim().toLowerCase();
@@ -9487,6 +10218,10 @@ function PhoneView({
     const hidden = new Set(hiddenInboxThreadIds);
     return inboxThreads.filter((thread) => !hidden.has(thread.threadId));
   }, [hiddenInboxThreadIds, inboxThreads]);
+  const visibleReadInboxThreads = useMemo(() => {
+    const hidden = new Set(hiddenInboxThreadIds);
+    return readInboxThreads.filter((thread) => !hidden.has(thread.threadId));
+  }, [hiddenInboxThreadIds, readInboxThreads]);
   const telnyxBotContacts = [
     {
       id: "telnyx-link-bot",
@@ -9544,6 +10279,23 @@ function PhoneView({
     }
   }
 
+  async function refreshPhoneCallHistory() {
+    if (!telnyxApiReady) {
+      setCallHistoryRows([]);
+      return;
+    }
+    setLoadingCallHistory(true);
+    setError("");
+    try {
+      setCallHistoryRows(await linkApi.listPhoneCallHistory({ maxResults: 50 }));
+    } catch (err) {
+      setCallHistoryRows([]);
+      setError(err instanceof Error ? err.message : "Unable to load Telnyx call detail records.");
+    } finally {
+      setLoadingCallHistory(false);
+    }
+  }
+
   useEffect(() => {
     void refreshCredentialStatus();
     window.addEventListener("focus", refreshCredentialStatus);
@@ -9553,6 +10305,26 @@ function PhoneView({
   useEffect(() => {
     void refreshPhoneAssistants();
   }, [telnyxApiReady]);
+
+  useEffect(() => {
+    if (tab === "calls") void refreshPhoneCallHistory();
+  }, [tab, telnyxApiReady]);
+
+  useEffect(() => {
+    if (selectedAssistantId && !phoneAssistants.some((assistant) => assistant.id === selectedAssistantId)) {
+      setSelectedAssistantId("");
+      setSelectedAssistantTab("overview");
+    }
+  }, [phoneAssistants, selectedAssistantId]);
+
+  useEffect(() => {
+    if (tab !== "assistants") return;
+    setAssistantQuery("");
+    setAssistantFiltersOpen(false);
+    setAssistantStatusFilter("all");
+    setSelectedAssistantId("");
+    setSelectedAssistantTab("overview");
+  }, [tab]);
 
   useEffect(() => {
     window.localStorage.setItem("telnyx-link-dismissed-contact-skill-prompts", JSON.stringify(dismissedContactSkillIds));
@@ -9591,6 +10363,7 @@ function PhoneView({
     async function refreshInboxThreads() {
       if (tab !== "inbox" || !inboxReady) {
         setInboxThreads([]);
+        setReadInboxThreads([]);
         setSelectedInboxThreadId("");
         setSelectedInboxThread(null);
         setInboxError("");
@@ -9599,14 +10372,20 @@ function PhoneView({
       setLoadingInbox(true);
       setInboxError("");
       try {
-        const threads = await linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 });
+        const [threads, readThreads] = await Promise.all([
+          linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 }),
+          linkApi.listGoogleInboxThreads({ query: inboxReadQuery(inboxQuery), maxResults: 20 }),
+        ]);
         if (!cancelled) {
           setInboxThreads(threads);
-          setSelectedInboxThreadId((current) => current && threads.some((thread) => thread.threadId === current) ? current : threads[0]?.threadId ?? "");
+          setReadInboxThreads(readThreads);
+          const knownThreadIds = new Set([...threads, ...readThreads].map((thread) => thread.threadId));
+          setSelectedInboxThreadId((current) => current && knownThreadIds.has(current) ? current : "");
         }
       } catch (err) {
         if (!cancelled) {
           setInboxThreads([]);
+          setReadInboxThreads([]);
           setInboxError(err instanceof Error ? err.message : "Unable to load Google Inbox threads.");
         }
       } finally {
@@ -9660,9 +10439,14 @@ function PhoneView({
       await linkApi.connectGoogleInboxWithGog();
       setInboxConnectedOverride(true);
       await refresh();
-      const threads = await linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 });
+      const [threads, readThreads] = await Promise.all([
+        linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 }),
+        linkApi.listGoogleInboxThreads({ query: inboxReadQuery(inboxQuery), maxResults: 20 }),
+      ]);
       setInboxThreads(threads);
-      setSelectedInboxThreadId(threads[0]?.threadId ?? "");
+      setReadInboxThreads(readThreads);
+      setSelectedInboxThreadId("");
+      setSelectedInboxThread(null);
       setInboxStatus("Google Inbox connected. Link can read threads and save drafts, but cannot send from Electron.");
     } catch (err) {
       setInboxError(err instanceof Error ? err.message : "Unable to connect Google Inbox.");
@@ -9680,18 +10464,24 @@ function PhoneView({
     setLoadingInbox(true);
     setInboxError("");
     try {
-      const threads = await linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 });
+      const [threads, readThreads] = await Promise.all([
+        linkApi.listGoogleInboxThreads({ query: inboxQuery, maxResults: 20 }),
+        linkApi.listGoogleInboxThreads({ query: inboxReadQuery(inboxQuery), maxResults: 20 }),
+      ]);
       setInboxThreads(threads);
-      setSelectedInboxThreadId(threads[0]?.threadId ?? "");
+      setReadInboxThreads(readThreads);
+      setSelectedInboxThreadId("");
+      setSelectedInboxThread(null);
       setInboxStatus(
         threads.length
-          ? `Loaded ${threads.length} unread inbox thread${threads.length === 1 ? "" : "s"}.`
+          ? `Loaded ${threads.length} unread inbox thread${threads.length === 1 ? "" : "s"} and ${readThreads.length} read thread${readThreads.length === 1 ? "" : "s"}.`
           : inboxQuery.trim()
             ? "No unread inbox messages matched this search."
             : "Inbox connected. 0 unread messages.",
       );
     } catch (err) {
       setInboxThreads([]);
+      setReadInboxThreads([]);
       setSelectedInboxThreadId("");
       setInboxError(err instanceof Error ? err.message : "Unable to search Google Inbox.");
     } finally {
@@ -9699,37 +10489,17 @@ function PhoneView({
     }
   }
 
-  function hideInboxThread(thread: GoogleInboxThreadSummary) {
-    setHiddenInboxThreadIds((current) => {
-      const next = current.includes(thread.threadId) ? current : [...current, thread.threadId];
-      window.localStorage.setItem("telnyx-link-hidden-inbox-thread-ids", JSON.stringify(next));
-      return next;
-    });
-    if (selectedInboxThreadId === thread.threadId) {
-      setSelectedInboxThreadId("");
-      setSelectedInboxThread(null);
+  async function refreshPhoneTableThenAll() {
+    if (tab === "inbox") {
+      await searchInboxThreads();
+    } else if (tab === "assistants") {
+      await refreshPhoneAssistants();
+    } else if (tab === "calls") {
+      await refreshPhoneCallHistory();
+    } else if (tab === "numbers" && telnyxApiReady) {
+      await refreshAccountNumbers();
     }
-  }
-
-  function hideSelectedInboxThread() {
-    if (!selectedInboxThread) return;
-    hideInboxThread(selectedInboxThread);
-  }
-
-  function setInboxRowSelected(threadId: string, selected: boolean) {
-    setSelectedInboxRowIds((current) => selected ? current.includes(threadId) ? current : [...current, threadId] : current.filter((id) => id !== threadId));
-  }
-
-  function toggleInboxBulkEdit() {
-    setInboxBulkEdit((active) => !active);
-    setSelectedInboxRowIds([]);
-  }
-
-  function hideSelectedInboxRows() {
-    const selectedIds = new Set(selectedInboxRowIds);
-    visibleInboxThreads.filter((thread) => selectedIds.has(thread.threadId)).forEach(hideInboxThread);
-    setSelectedInboxRowIds([]);
-    setInboxBulkEdit(false);
+    await refresh();
   }
 
   function hideCallRow(call: PhoneCallHistoryRow) {
@@ -9768,7 +10538,7 @@ function PhoneView({
       const session = await linkApi.sendChatMessage({
         workspaceId: "workspace-link",
         approvalMode: "review",
-        modelMode: "auto-agent-runtime",
+        modelMode: "auto/ask-before-cloud",
         contextScope: "inbox-draft",
         systemInstruction: "Draft only a concise, customer-safe email reply. Do not say you sent anything. Do not include internal rationale or instructions.",
         content: buildInboxDraftPrompt(selectedInboxThread),
@@ -9817,12 +10587,76 @@ function PhoneView({
     }
   }
 
+  async function startInboxDraftEmailChat() {
+    setInboxError("");
+    const prompt = selectedInboxThread
+      ? buildInboxDraftPrompt(selectedInboxThread)
+      : [
+          "Help me draft an email in Gmail.",
+          "",
+          "Ask me for the recipient, subject, audience, context, desired tone, and any constraints before writing.",
+          "Do not send the email. Prepare draft copy only and call out anything that needs human review before saving to Gmail Drafts.",
+        ].join("\n");
+    setInboxStatus(selectedInboxThread ? "Opening a chat to draft a reply for the selected thread..." : "Opening a chat to draft a new email...");
+    try {
+      await startEmailDraftChat(prompt);
+    } catch (err) {
+      setInboxError(err instanceof Error ? err.message : "Unable to start an email draft chat.");
+      setInboxStatus("");
+    }
+  }
+
   function openSelectedThreadInGmail() {
     const url = savedInboxDraft?.url
       || selectedInboxThread?.url
       || (selectedInboxThreadId ? `https://mail.google.com/mail/u/0/#inbox/${encodeURIComponent(selectedInboxThreadId)}` : "https://mail.google.com/mail/u/0/#inbox");
     window.open(url, "_blank");
   }
+
+	  function renderInboxThreadRow(thread: GoogleInboxThreadSummary) {
+	    const selected = selectedInboxThreadId === thread.threadId;
+	    const openThread = () => setSelectedInboxThreadId(thread.threadId);
+	    return (
+	      <div
+	        key={thread.threadId}
+	        className={`chatResultRow directoryResultRow phoneInboxThread phoneInboxRow ${selected ? "selected" : ""}`}
+	        onClick={openThread}
+	        role="row"
+	        tabIndex={0}
+	        onKeyDown={(event) => {
+	          if (event.key === "Enter" || event.key === " ") {
+	            event.preventDefault();
+	            openThread();
+	          }
+	        }}
+	        aria-label={`Open inbox thread ${thread.subject || "Untitled"}`}
+      >
+        <span className="phoneInboxFromCell" role="cell">
+          {thread.from || "Unknown sender"}
+        </span>
+        <span className="phoneInboxSubjectCell" role="cell">
+          <strong>{thread.subject || "No subject"}</strong>
+          <small>{thread.snippet || "No preview available."}</small>
+        </span>
+        <span role="cell">{thread.date || "No date"}</span>
+        <span role="cell">
+          <em>{thread.unread ? "Unread" : "Read"}</em>
+        </span>
+	        <button
+	          className="chatSessionOpenButton"
+	          type="button"
+	          onClick={(event) => {
+	            event.stopPropagation();
+	            openThread();
+	          }}
+	          aria-label={`Open inbox thread ${thread.subject || "Untitled"}`}
+	          title="Open thread"
+	        >
+	          <ArrowRight size={16} />
+	        </button>
+	      </div>
+	    );
+	  }
 
   useEffect(() => {
     if (tab === "numbers" && telnyxApiReady) void refreshAccountNumbers();
@@ -9868,25 +10702,23 @@ function PhoneView({
   const showSectionSidebar = !standaloneInbox && !hideSectionSidebar;
   const sectionParent = headerParent ?? (standaloneInbox ? "Link" : "Calls");
   const phoneHeaderAction = tab === "calls" ? (
-    <BulkEditControls
-      active={callBulkEdit}
-      selectedCount={selectedCallRowIds.length}
-      onToggle={toggleCallBulkEdit}
-      onArchive={hideSelectedCallRows}
-      onDelete={hideSelectedCallRows}
-    />
+    <button className="button primary" type="button" onClick={openNewCall}>
+      <Plus size={15} />
+      New Call
+    </button>
   ) : tab === "inbox" ? (
-    <BulkEditControls
-      active={inboxBulkEdit}
-      selectedCount={selectedInboxRowIds.length}
-      onToggle={toggleInboxBulkEdit}
-      onArchive={hideSelectedInboxRows}
-      onDelete={hideSelectedInboxRows}
-    />
+    <button className="button primary" type="button" onClick={() => void startInboxDraftEmailChat()}>
+      <Plus size={15} />
+      Draft Email
+    </button>
+  ) : tab === "numbers" ? (
+    <button className="button primary" type="button" onClick={() => window.open("https://portal.telnyx.com/#/app/numbers/my-numbers", "_blank")}>
+      Open Telnyx Portal
+    </button>
   ) : null;
 
   return (
-    <section className={embedded ? "phoneView settingsPhoneView" : "content phoneView"}>
+    <section className={embedded ? "phoneView settingsPhoneView" : `content phoneView ${standaloneInbox ? "standaloneInboxView" : ""}`}>
       <div className={`pageSectionShell ${!showSectionSidebar ? "pageSectionShellSingle" : ""}`}>
         {showSectionSidebar && (
           <PageSectionSidebar
@@ -9904,7 +10736,111 @@ function PhoneView({
         <div className="pageSectionMain">
           {!hideHeader && <PageSectionHeader parent={sectionParent} title={phoneHeadingTitle} action={phoneHeaderAction} />}
 
-      {tab === "inbox" && (
+      {tab === "inbox" && selectedInboxThreadId && (
+        <section className="phoneInboxTable phoneContentTable phoneInboxDetailScreen" aria-label="Selected inbox thread">
+          <div className="phoneInboxDetail phoneInboxDetailPage">
+            {loadingInboxThread && <div className="phoneNumberEmpty">Loading thread...</div>}
+            {!loadingInboxThread && selectedInboxThread && (
+              <>
+                <header className="phoneInboxDetailHeader">
+                  <div className="chatDetailTitleGroup">
+                    <button
+                      className="iconButton chatDetailBackButton"
+                      type="button"
+                      onClick={() => setSelectedInboxThreadId("")}
+                      aria-label="Back to inbox"
+                      title="Back to inbox"
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                    <div>
+                      <h2>{selectedInboxThread.subject || "(No subject)"}</h2>
+                      <p>{selectedInboxThread.participants.join(", ") || selectedInboxThread.from || "Unknown sender"}</p>
+                    </div>
+                  </div>
+                  <div className="phoneInboxDetailActions">
+                    <Badge tone={selectedInboxThread.unread ? "warning" : "success"}>{selectedInboxThread.unread ? "Unread" : "Read"}</Badge>
+                    <button
+                      className="iconButton"
+                      type="button"
+                      aria-label="Open in Gmail"
+                      title="Open in Gmail"
+                      onClick={openSelectedThreadInGmail}
+                    >
+                      <ExternalLink size={17} />
+                    </button>
+                  </div>
+                </header>
+
+                <div className="phoneInboxMessages" aria-label="Thread messages">
+                  {selectedInboxThread.messages.map((message) => (
+                    <article className="phoneInboxMessage" key={message.id}>
+                      <header>
+                        <strong>{message.from}</strong>
+                        <span>{message.date || "No date"}</span>
+                      </header>
+                      <p>{message.body || message.snippet || "No message body available."}</p>
+                    </article>
+                  ))}
+                </div>
+
+                <section className="phoneInboxDraftComposer" aria-label="Gmail draft composer">
+                  <div className="phoneInboxDraftFields">
+                    <label className="componentField">
+                      <span>To</span>
+                      <input value={inboxDraftTo} onChange={(event) => setInboxDraftTo(event.target.value)} placeholder="recipient@example.com" />
+                    </label>
+                    <label className="componentField">
+                      <span>Subject</span>
+                      <input value={inboxDraftSubject} onChange={(event) => setInboxDraftSubject(event.target.value)} placeholder="Re: Subject" />
+                    </label>
+                  </div>
+                  <label className="componentField">
+                    <span>Draft</span>
+                    <textarea value={inboxDraftBody} onChange={(event) => setInboxDraftBody(event.target.value)} placeholder="Ask an agent to draft a reply, or write one here..." />
+                  </label>
+                  <div className="phoneButtonRow">
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={() => void draftInboxReplyWithAgent()}
+                      disabled={draftingWithAgent}
+                    >
+                      <Bot size={15} />
+                      {draftingWithAgent ? "Drafting..." : "Draft with Link"}
+                    </button>
+                    <button
+                      className="button primary"
+                      type="button"
+                      onClick={() => void saveInboxDraft()}
+                      disabled={savingInboxDraft || !inboxDraftBody.trim()}
+                    >
+                      <Save size={15} />
+                      {savingInboxDraft ? "Saving..." : savedInboxDraft ? "Update Gmail draft" : "Save Gmail draft"}
+                    </button>
+                  </div>
+                </section>
+              </>
+            )}
+            {!loadingInboxThread && !selectedInboxThread && (
+              <div className="phoneNumberEmpty">
+                <button
+                  className="iconButton chatDetailBackButton"
+                  type="button"
+                  onClick={() => setSelectedInboxThreadId("")}
+                  aria-label="Back to inbox"
+                  title="Back to inbox"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                Choose an inbox thread to read it and prepare a draft.
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {tab === "inbox" && !selectedInboxThreadId && (
         <section className="phoneInboxTable phoneContentTable" aria-label="Google Inbox">
           {!inboxReady && (
             <div className="phoneSetupAlert inboxSetupAlert">
@@ -9927,17 +10863,16 @@ function PhoneView({
           <header className="phoneInboxToolbar">
             <div className="chatSearchRow phoneInboxSearchRow">
               <button
-                className="iconButton agentFilterButton"
+                className={`iconButton agentFilterButton ${inboxFiltersOpen ? "selected" : ""}`}
                 type="button"
-                aria-label="Refresh inbox"
-                title="Refresh inbox"
-                disabled={!inboxReady || loadingInbox}
-                onClick={() => void searchInboxThreads()}
+                aria-label={inboxFiltersOpen ? "Hide inbox filters" : "Show inbox filters"}
+                title={inboxFiltersOpen ? "Hide inbox filters" : "Show inbox filters"}
+                onClick={() => setInboxFiltersOpen((open) => !open)}
               >
-                <RefreshCw size={18} />
+                <SlidersHorizontal size={16} />
               </button>
-              <label className="componentField">
-                <Search size={15} />
+              <div className="explorerSearch compactSearch">
+                <Search size={16} />
                 <input
                   value={inboxQuery}
                   onChange={(event) => setInboxQuery(event.target.value)}
@@ -9947,9 +10882,25 @@ function PhoneView({
                   placeholder="Search unread messages, senders, subjects, or snippets"
                   disabled={!inboxReady}
                 />
-              </label>
+              </div>
+              <TableRefreshButton onClick={refreshPhoneTableThenAll} disabled={tab === "inbox" && (!inboxReady || loadingInbox)} label="Refresh inbox" />
             </div>
           </header>
+
+          {inboxFiltersOpen && (
+            <div className="chatFilterBar phoneInboxFilterBar" role="group" aria-label="Inbox filters">
+              <span className="chatFilterCount">{visibleInboxThreads.length} unread threads</span>
+              <button
+                className="button secondary"
+                type="button"
+                disabled={!inboxReady || loadingInbox}
+                onClick={() => void searchInboxThreads()}
+              >
+                <RefreshCw size={15} />
+                Refresh
+              </button>
+            </div>
+          )}
 
           {(inboxStatus || inboxError) && (
             <div className={inboxError ? "assistantNotice warning phoneInboxNotice" : "assistantNotice phoneInboxNotice"} aria-live="polite">
@@ -9958,58 +10909,25 @@ function PhoneView({
           )}
 
           <div className="phoneInboxShell">
-            <div className={`phoneInboxThreadList phoneInboxRows ${inboxBulkEdit ? "bulkEditing" : ""}`} role="table" aria-label="Unread inbox threads">
-              <div className="phoneInboxRow phoneInboxRowHead" role="row">
-                <span className="bulkSelectCell" role="columnheader" aria-label="Select inbox threads" />
+            <div className="phoneInboxSectionHeader">
+              <span>Unread</span>
+              <small>{visibleInboxThreads.length} unread</small>
+            </div>
+            <div className="chatSessionRows directoryTable phoneInboxThreadList phoneInboxRows" role="table" aria-label="Unread inbox threads">
+              <div className="chatResultRow directoryResultRow phoneInboxRow phoneInboxRowHead chatResultRowHead" role="row">
                 <span role="columnheader">From</span>
                 <span role="columnheader">Subject</span>
                 <span role="columnheader">Last</span>
                 <span role="columnheader">Status</span>
                 <span role="columnheader" aria-label="Open thread" />
               </div>
-              {visibleInboxThreads.map((thread) => {
-                const selected = selectedInboxThreadId === thread.threadId;
-                return (
-                  <div
-                    key={thread.threadId}
-                    className={`phoneInboxThread phoneInboxRow ${selected ? "selected" : ""}`}
-                    onClick={() => setSelectedInboxThreadId(thread.threadId)}
-                    role="row"
-                    tabIndex={0}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedInboxThreadId(thread.threadId);
-                      }
-                    }}
-                    aria-label={`Open inbox thread ${thread.subject || "Untitled"}`}
-                  >
-                    <BulkSelectCell
-                      active={inboxBulkEdit}
-                      checked={selectedInboxRowIds.includes(thread.threadId)}
-                      label={`Select ${thread.subject || "inbox thread"}`}
-                      onChange={(checked) => setInboxRowSelected(thread.threadId, checked)}
-                    />
-                    <span className="phoneInboxFromCell" role="cell">
-                      {thread.from || "Unknown sender"}
-                    </span>
-                    <span className="phoneInboxSubjectCell" role="cell">
-                      <strong>{thread.subject || "No subject"}</strong>
-                      <small>{thread.snippet || "No preview available."}</small>
-                    </span>
-                    <span role="cell">{thread.date || "No date"}</span>
-                    <span role="cell">
-                      <em>{thread.unread ? "Unread" : "Read"}</em>
-                    </span>
-                    <span className="phoneInboxOpenCell" role="cell" aria-hidden="true">
-                      <ArrowRight size={18} />
-                    </span>
-                  </div>
-                );
-              })}
+              <div className="chatResultRows" role="rowgroup">
+              {visibleInboxThreads.map(renderInboxThreadRow)}
               {visibleInboxThreads.length === 0 && (
-                <div className="phoneInboxEmptyState">
-                  <strong>
+                <div className="chatResultRow directoryResultRow phoneInboxRow phoneInboxConnectedRow" role="row">
+                  <span className="phoneInboxFromCell" role="cell">{inboxReady ? "Google Inbox" : "Inbox setup"}</span>
+                  <span className="phoneInboxSubjectCell" role="cell">
+                    <strong>
                     {loadingInbox
                       ? "Checking unread messages..."
                       : inboxReady
@@ -10017,145 +10935,218 @@ function PhoneView({
                           ? "No unread messages match this search."
                           : "Inbox connected. 0 unread messages."
                         : "Connect Google Inbox to load unread messages."}
-                  </strong>
-                  <span>
+                    </strong>
+                    <small>
                     {inboxReady
-                      ? "Link checked Gmail unread threads. New unread messages will appear here."
+                      ? "Link can read threads and save Gmail drafts. Sending stays outside Electron."
                       : "Link can read Gmail threads and save drafts after the Inbox connector is connected."}
+                    </small>
                   </span>
+                  <span role="cell">{inboxReady ? "Now" : "Not connected"}</span>
+                  <span role="cell">
+                    <em>{inboxReady ? "Connected" : "Setup"}</em>
+                  </span>
+                  <span className="phoneInboxOpenCell" role="cell" aria-hidden="true" />
                 </div>
               )}
+              </div>
             </div>
 
-            {(loadingInboxThread || selectedInboxThread) && (
-            <div className="phoneInboxDetail" aria-label="Selected inbox thread">
-              {loadingInboxThread && <div className="phoneNumberEmpty">Loading thread...</div>}
-              {!loadingInboxThread && selectedInboxThread && (
-                <>
-                  <header className="phoneInboxDetailHeader">
-                    <div>
-                      <h2>{selectedInboxThread.subject}</h2>
-                      <p>{selectedInboxThread.participants.join(", ") || selectedInboxThread.from}</p>
-                    </div>
-                    <div className="phoneInboxDetailActions">
-                      <Badge tone={selectedInboxThread.unread ? "warning" : "success"}>{selectedInboxThread.unread ? "Unread" : "Read"}</Badge>
-                      <TableRowLifecycleActions
-                        label={selectedInboxThread.subject || "inbox thread"}
-                        onArchive={hideSelectedInboxThread}
-                        onDelete={hideSelectedInboxThread}
-                      />
-                      <button
-                        className="iconButton"
-                        type="button"
-                        aria-label="Open in Gmail"
-                        title="Open in Gmail"
-                        onClick={openSelectedThreadInGmail}
-                      >
-                        <ExternalLink size={17} />
-                      </button>
-                    </div>
-                  </header>
-
-                  <div className="phoneInboxMessages" aria-label="Thread messages">
-                    {selectedInboxThread.messages.map((message) => (
-                      <article className="phoneInboxMessage" key={message.id}>
-                        <header>
-                          <strong>{message.from}</strong>
-                          <span>{message.date || "No date"}</span>
-                        </header>
-                        <p>{message.body || message.snippet || "No message body available."}</p>
-                      </article>
-                    ))}
-                  </div>
-
-                  <section className="phoneInboxDraftComposer" aria-label="Gmail draft composer">
-                    <div className="phoneInboxDraftFields">
-                      <label className="componentField">
-                        <span>To</span>
-                        <input value={inboxDraftTo} onChange={(event) => setInboxDraftTo(event.target.value)} placeholder="recipient@example.com" />
-                      </label>
-                      <label className="componentField">
-                        <span>Subject</span>
-                        <input value={inboxDraftSubject} onChange={(event) => setInboxDraftSubject(event.target.value)} placeholder="Re: Subject" />
-                      </label>
-                    </div>
-                    <label className="componentField">
-                      <span>Draft</span>
-                      <textarea value={inboxDraftBody} onChange={(event) => setInboxDraftBody(event.target.value)} placeholder="Ask an agent to draft a reply, or write one here..." />
-                    </label>
-                    <div className="phoneButtonRow">
-                      <button
-                        className="button secondary"
-                        type="button"
-                        onClick={() => void draftInboxReplyWithAgent()}
-                        disabled={draftingWithAgent}
-                      >
-                        <Bot size={15} />
-                        {draftingWithAgent ? "Drafting..." : "Draft with Link"}
-                      </button>
-                      <button
-                        className="button primary"
-                        type="button"
-                        onClick={() => void saveInboxDraft()}
-                        disabled={savingInboxDraft || !inboxDraftBody.trim()}
-                      >
-                        <Save size={15} />
-                        {savingInboxDraft ? "Saving..." : savedInboxDraft ? "Update Gmail draft" : "Save Gmail draft"}
-                      </button>
-                    </div>
-                  </section>
-                </>
-              )}
-              {!loadingInboxThread && !selectedInboxThread && (
-                <div className="phoneNumberEmpty">Choose an inbox thread to read it and prepare a draft.</div>
-              )}
+            <div className="phoneInboxSectionHeader">
+              <span>Everything else</span>
+              <small>{visibleReadInboxThreads.length} read</small>
             </div>
-            )}
+            <div className="chatSessionRows directoryTable phoneInboxThreadList phoneInboxRows phoneInboxReadRows" role="table" aria-label="Read inbox threads">
+              <div className="chatResultRow directoryResultRow phoneInboxRow phoneInboxRowHead chatResultRowHead" role="row">
+                <span role="columnheader">From</span>
+                <span role="columnheader">Subject</span>
+                <span role="columnheader">Last</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader" aria-label="Open thread" />
+              </div>
+              <div className="chatResultRows" role="rowgroup">
+              {visibleReadInboxThreads.map(renderInboxThreadRow)}
+              {visibleReadInboxThreads.length === 0 && (
+                <div className="chatResultRow directoryResultRow phoneInboxRow phoneInboxConnectedRow" role="row">
+                  <span className="phoneInboxFromCell" role="cell">Google Inbox</span>
+                  <span className="phoneInboxSubjectCell" role="cell">
+                    <strong>{loadingInbox ? "Checking read messages..." : "No read messages found."}</strong>
+                    <small>Read Gmail messages will appear here when Link finds matching threads.</small>
+                  </span>
+                  <span role="cell">{inboxReady ? "Now" : "Not connected"}</span>
+                  <span role="cell">
+                    <em>{inboxReady ? "Read" : "Setup"}</em>
+                  </span>
+                  <span className="phoneInboxOpenCell" role="cell" aria-hidden="true" />
+                </div>
+              )}
+              </div>
+            </div>
           </div>
         </section>
       )}
 
       {tab === "assistants" && (
         <section className="phoneAssistantTable phoneContentTable" aria-label="Telnyx Voice AI assistants">
-          <header className="phoneNumberTableHeader">
-            <div className="tabPageActionBar">
-              <button
-                className="iconButton"
-                type="button"
-                onClick={() => void refreshPhoneAssistants()}
-                disabled={!telnyxApiReady || busy}
-                aria-label="Refresh assistants"
-                title="Refresh assistants"
-              >
-                <RefreshCw size={16} />
-              </button>
+          {selectedAssistant ? (
+            <div className="settingsDirectoryDetail embeddedDirectoryDetailView phoneAssistantDetailView">
+              <header className="directoryEmbeddedDetailHeader">
+                <button className="button ghost" type="button" onClick={() => setSelectedAssistantId("")}>
+                  <ArrowLeft size={16} />
+                  Assistants
+                </button>
+                <div>
+                  <h2>{selectedAssistant.name}</h2>
+                  <p>{selectedAssistant.description || "Telnyx Voice AI assistant"}</p>
+                </div>
+                <Badge tone={selectedAssistant.phoneNumber ? "success" : "warning"}>{selectedAssistant.status || "Available"}</Badge>
+              </header>
+              <section className="chatDetailSurface">
+                <div className="chatDetailTabs directoryDetailTabs" role="tablist" aria-label={`${selectedAssistant.name} assistant details`}>
+                  {(["overview", "phone", "settings"] as const).map((detailTab) => (
+                    <button
+                      key={detailTab}
+                      className={selectedAssistantTab === detailTab ? "selected" : ""}
+                      type="button"
+                      onClick={() => setSelectedAssistantTab(detailTab)}
+                    >
+                      {detailTab === "overview" ? "Overview" : detailTab === "phone" ? "Phone" : "Settings"}
+                    </button>
+                  ))}
+                </div>
+                {selectedAssistantTab === "overview" && (
+                  <div className="chatResultDetails directoryDetailPanel">
+                    <div>
+                      <strong>Status</strong>
+                      <span>{selectedAssistant.status || "Available"}</span>
+                    </div>
+                    <div>
+                      <strong>Assistant ID</strong>
+                      <span>{selectedAssistant.id}</span>
+                    </div>
+                    <div>
+                      <strong>Description</strong>
+                      <span>{selectedAssistant.description || "No description provided"}</span>
+                    </div>
+                  </div>
+                )}
+                {selectedAssistantTab === "phone" && (
+                  <div className="chatResultDetails directoryDetailPanel">
+                    <div>
+                      <strong>Phone number</strong>
+                      <span>{selectedAssistant.phoneNumber || "No phone number assigned"}</span>
+                    </div>
+                    <div>
+                      <strong>Callable</strong>
+                      <span>{selectedAssistant.phoneNumber && telnyxApiReady ? "Ready" : "Needs Telnyx number"}</span>
+                    </div>
+                  </div>
+                )}
+                {selectedAssistantTab === "settings" && (
+                  <div className="directoryDetailPanel">
+                    <div className="assistantNotice">
+                      <p>Manage assistant prompts, tools, and phone assignments in the Telnyx Portal.</p>
+                    </div>
+                    <button className="button primary" type="button" onClick={() => window.open("https://portal.telnyx.com/#/app/voice-ai/assistants", "_blank")}>
+                      <ExternalLink size={15} />
+                      Open Telnyx Portal
+                    </button>
+                  </div>
+                )}
+              </section>
             </div>
-            <div className="phoneButtonRow">
-              <button className="button primary" onClick={() => window.open("https://portal.telnyx.com/#/app/voice-ai/assistants", "_blank")}>Open Telnyx Portal</button>
-            </div>
-          </header>
-
-          <div className="phoneAssistantRows" role="table" aria-label="Telnyx Voice AI assistants">
-            <div className="phoneAssistantRow phoneAssistantRowHead" role="row">
-              <span role="columnheader">Assistant</span>
-              <span role="columnheader">Phone</span>
-              <span role="columnheader">Status</span>
-              <span role="columnheader">Description</span>
-            </div>
-            {phoneAssistants.map((assistant) => (
-              <div className="phoneAssistantRow" role="row" key={assistant.id}>
-                <strong role="cell">{assistant.name}</strong>
-                <span role="cell">{assistant.phoneNumber || "No phone number"}</span>
-                <span role="cell"><em>{assistant.status || "Available"}</em></span>
-                <span role="cell">{assistant.description || "Telnyx Voice AI assistant"}</span>
+          ) : (
+            <>
+              <header className="phoneAssistantToolbar">
+                <div className="chatSearchRow phoneAssistantSearchRow">
+                  <button
+                    className={`iconButton agentFilterButton ${assistantFiltersOpen || assistantStatusFilter !== "all" ? "selected" : ""}`}
+                    type="button"
+                    aria-label={assistantFiltersOpen ? "Hide assistant filters" : "Show assistant filters"}
+                    title={assistantFiltersOpen ? "Hide assistant filters" : "Show assistant filters"}
+                    onClick={() => setAssistantFiltersOpen((open) => !open)}
+                  >
+                    <SlidersHorizontal size={18} />
+                  </button>
+                  <div className="explorerSearch compactSearch">
+                    <Search size={17} />
+                    <input
+                      value={assistantQuery}
+                      onChange={(event) => setAssistantQuery(event.target.value)}
+                      placeholder="Search assistants, numbers, statuses, or descriptions"
+                      disabled={!telnyxApiReady}
+                    />
+                  </div>
+                  <button
+                    className="iconButton agentFilterButton"
+                    type="button"
+                    onClick={() => void refreshPhoneAssistants()}
+                    disabled={!telnyxApiReady || busy}
+                    aria-label="Refresh assistants"
+                    title="Refresh assistants"
+                  >
+                    <RefreshCw size={16} />
+                  </button>
+                </div>
+                {assistantFiltersOpen && (
+                  <div className="chatFilterBar phoneAssistantFilterBar" role="group" aria-label="Assistant filters">
+                    <span className="chatFilterCount">{filteredPhoneAssistants.length} assistants</span>
+                    <label className="agentFilter">
+                      <span>Status</span>
+                      <select value={assistantStatusFilter} onChange={(event) => setAssistantStatusFilter(event.target.value)}>
+                        {assistantStatusOptions.map((status) => (
+                          <option key={status} value={status}>
+                            {status === "all" ? "All" : status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="button primary" onClick={() => window.open("https://portal.telnyx.com/#/app/voice-ai/assistants", "_blank")}>Open Telnyx Portal</button>
+                  </div>
+                )}
+              </header>
+              <div className="chatSessionRows directoryTable phoneAssistantDirectoryTable" role="table" aria-label="Telnyx Voice AI assistants">
+                <div className="chatResultRow directoryResultRow phoneAssistantDirectoryResultRow chatResultRowHead" role="row">
+                  <span role="columnheader">Assistant</span>
+                  <span role="columnheader">Phone</span>
+                  <span role="columnheader">Status</span>
+                  <span role="columnheader">Description</span>
+                  <span role="columnheader" aria-label="Open assistant" />
+                </div>
+                <div className="chatResultRows">
+                  {filteredPhoneAssistants.map((assistant) => (
+                    <div className="chatResultRow directoryResultRow phoneAssistantDirectoryResultRow" role="row" key={assistant.id}>
+                      <span className="directoryNameCell" role="cell">
+                        <strong>{assistant.name}</strong>
+                        <small>{assistant.id}</small>
+                      </span>
+                      <span role="cell">{assistant.phoneNumber || "No phone number"}</span>
+                      <span role="cell"><Badge tone={assistant.phoneNumber ? "success" : "warning"}>{assistant.status || "Available"}</Badge></span>
+                      <span role="cell">{assistant.description || "Telnyx Voice AI assistant"}</span>
+                      <span className="directoryRowActions" role="cell">
+                        <button
+                          className="chatSessionOpenButton"
+                          type="button"
+                          aria-label={`Open ${assistant.name}`}
+                          onClick={() => {
+                            setSelectedAssistantId(assistant.id);
+                            setSelectedAssistantTab("overview");
+                          }}
+                        >
+                          <ArrowRight size={18} />
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                  {filteredPhoneAssistants.length === 0 && (
+                    <div className="phoneNumberEmpty">
+                      {telnyxApiReady ? "No Telnyx Voice AI assistants match this search." : "Add a Telnyx API key to load your assistants."}
+                    </div>
+                  )}
+                </div>
               </div>
-            ))}
-            {phoneAssistants.length === 0 && (
-              <div className="phoneNumberEmpty">
-                {telnyxApiReady ? "No Telnyx Voice AI assistants found for this account." : "Add a Telnyx API key to load your assistants."}
-              </div>
-            )}
-          </div>
+            </>
+          )}
         </section>
       )}
 
@@ -10323,7 +11314,26 @@ function PhoneView({
                 placeholder="Search calls, numbers, contacts, or agents"
               />
             </div>
+            <button
+              className={`iconButton agentFilterButton ${callBulkEdit ? "selected" : ""}`}
+              type="button"
+              aria-label={callBulkEdit ? "Exit bulk edit" : "Edit calls"}
+              title={callBulkEdit ? "Exit bulk edit" : "Edit calls"}
+              onClick={toggleCallBulkEdit}
+            >
+              <Pencil size={16} />
+            </button>
+            <TableRefreshButton onClick={refreshPhoneTableThenAll} disabled={loadingCallHistory} label="Refresh calls" />
           </div>
+          {callBulkEdit && (
+            <BulkEditControls
+              active={callBulkEdit}
+              selectedCount={selectedCallRowIds.length}
+              onToggle={toggleCallBulkEdit}
+              onArchive={hideSelectedCallRows}
+              onDelete={hideSelectedCallRows}
+            />
+          )}
           {callFiltersOpen && (
             <div className="chatFilterBar phoneCallFilterBar" role="group" aria-label="Call filters">
               <span className="chatFilterCount">{filteredCallRows.length} calls</span>
@@ -10355,7 +11365,7 @@ function PhoneView({
             </div>
           )}
           <section className={`phoneCallsTable phoneContentTable ${callBulkEdit ? "bulkEditing" : ""}`} aria-label="Recent calls">
-            <div className="phoneCallRows" role="table" aria-label="Recent calls">
+            <div className={`phoneCallRows ${filteredCallRows.length === 0 ? "empty" : ""}`} role="table" aria-label="Recent calls">
               <div className="phoneCallRow phoneCallRowHead" role="row">
                 <span className="bulkSelectCell" role="columnheader" aria-label="Select calls" />
                 <span role="columnheader">Contact</span>
@@ -10380,11 +11390,13 @@ function PhoneView({
                 </div>
               ))}
               {filteredCallRows.length === 0 && (
-                <EmptyState
-                  title={callQuery.trim() || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "No calls found" : "No call history yet"}
-                  body={callQuery.trim() || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "Try another search term or filter." : "Calls placed from Link will appear here."}
-                  icon={Phone}
-                />
+                <div className="tableEmptyState" role="row">
+                  <EmptyState
+                    title={loadingCallHistory ? "Loading call history..." : callQuery.trim() || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "No calls found" : "No call history yet"}
+                    body={loadingCallHistory ? "Pulling recent Telnyx call detail records." : callQuery.trim() || callAgentFilter !== "all" || callDirectionFilter !== "all" || callStatusFilter !== "all" ? "Try another search term or filter." : "Recent Telnyx account calls will appear here after call detail records are available."}
+                    icon={Phone}
+                  />
+                </div>
               )}
             </div>
           </section>
@@ -10409,12 +11421,6 @@ function PhoneView({
         )}
 
         <section className="phoneNumberTable phoneContentTable" aria-label="Telnyx account numbers">
-          <header className="phoneNumberTableHeader">
-            <div className="phoneButtonRow">
-              <button className="button primary" onClick={() => window.open("https://portal.telnyx.com/#/app/numbers/my-numbers", "_blank")}>Open Telnyx Portal</button>
-            </div>
-          </header>
-
           <div className="phoneNumberRows" role="table" aria-label="Active Telnyx numbers">
             <div className="phoneNumberRow phoneNumberRowHead" role="row">
               <span role="columnheader">Number</span>
@@ -10463,6 +11469,11 @@ function replySubject(subject: string) {
   const trimmed = subject.trim();
   if (!trimmed) return "Re:";
   return /^re:/i.test(trimmed) ? trimmed : `Re: ${trimmed}`;
+}
+
+function inboxReadQuery(query: string) {
+  const trimmed = query.replace(/\bis:(?:read|unread)\b|\blabel:unread\b/gi, "").trim();
+  return trimmed ? `${trimmed} is:read` : "is:read";
 }
 
 function buildInboxDraftPrompt(thread: GoogleInboxThread) {
@@ -10703,8 +11714,13 @@ function ArchiveTabs({
   const [freeFormEntities, setFreeFormEntities] = useState(true);
   const [observationsEnabled, setObservationsEnabled] = useState(false);
   const [observationsMission, setObservationsMission] = useState("");
+  const [okfBundle, setOkfBundle] = useState<OkfBundlePreview | null>(null);
+  const [selectedOkfConceptIds, setSelectedOkfConceptIds] = useState<string[]>([]);
+  const [okfStatus, setOkfStatus] = useState("");
+  const [okfBusy, setOkfBusy] = useState(false);
   const selectedBank = banks.find((bank) => bank.id === selectedBankId) ?? banks[0];
   const isKeyScopedBank = selectedBank?.id === "hindsight-key-scoped";
+  const selectedOkfConcepts = okfBundle?.concepts.filter((concept) => selectedOkfConceptIds.includes(concept.id)) ?? [];
   const memoryTabs = [
     { id: "documents", label: "Documents", icon: FileText },
     { id: "memories", label: "Entries", icon: ArchiveIcon },
@@ -10779,6 +11795,59 @@ function ArchiveTabs({
     }
   }
 
+  async function chooseOkfBundle() {
+    if (okfBusy) return;
+    setOkfBusy(true);
+    setOkfStatus("Selecting OKF bundle...");
+    try {
+      const bundle = await linkApi.selectOkfBundle();
+      if (!bundle) {
+        setOkfStatus("OKF import canceled.");
+        return;
+      }
+      setOkfBundle(bundle);
+      setSelectedOkfConceptIds(bundle.concepts.map((concept) => concept.id));
+      const status = bundle.errors.length > 0
+        ? `Validated with ${bundle.errors.length} error${bundle.errors.length === 1 ? "" : "s"}.`
+        : `Validated ${bundle.summary.conceptCount} concept${bundle.summary.conceptCount === 1 ? "" : "s"}.`;
+      setOkfStatus(status);
+    } catch (error) {
+      setOkfBundle(null);
+      setSelectedOkfConceptIds([]);
+      setOkfStatus(error instanceof Error ? error.message : "OKF bundle validation failed.");
+    } finally {
+      setOkfBusy(false);
+    }
+  }
+
+  async function importSelectedOkfConcepts() {
+    if (!okfBundle || selectedOkfConcepts.length === 0 || okfBusy) return;
+    setOkfBusy(true);
+    setOkfStatus("Importing selected OKF concepts...");
+    try {
+      const result = await linkApi.importOkfConcepts({
+        concepts: selectedOkfConcepts,
+        bankId: isKeyScopedBank ? undefined : selectedBank?.id,
+      });
+      const suffix = result.errors.length > 0 ? ` ${result.errors.length} failed.` : "";
+      setOkfStatus(`Imported ${result.importedCount} OKF concept${result.importedCount === 1 ? "" : "s"}.${suffix}`);
+      const recallSeed = selectedOkfConcepts[0]?.title || selectedOkfConcepts[0]?.id;
+      if (recallSeed) await runRecallForQuery(recallSeed);
+    } catch (error) {
+      setOkfStatus(error instanceof Error ? error.message : "OKF import failed.");
+    } finally {
+      setOkfBusy(false);
+    }
+  }
+
+  function toggleOkfConcept(concept: OkfConceptPreview) {
+    setSelectedOkfConceptIds((current) =>
+      current.includes(concept.id)
+        ? current.filter((id) => id !== concept.id)
+        : [...current, concept.id],
+    );
+  }
+
   return (
     <div className={`archiveTabsSurface ${compact ? "compact" : ""}`}>
       {!compact && (
@@ -10820,6 +11889,9 @@ function ArchiveTabs({
             </div>
             <div className="headerActions">
               <button className="button secondary"><Upload size={15} />Upload files</button>
+              <button className="button secondary" onClick={() => void chooseOkfBundle()} disabled={okfBusy}>
+                <FileText size={15} />Import OKF
+              </button>
               <button className="button primary" onClick={() => setTextCaptureOpen((open) => !open)} aria-expanded={textCaptureOpen}>
                 <FileText size={15} />Add text
               </button>
@@ -10835,6 +11907,60 @@ function ArchiveTabs({
               <textarea value={documentText} onChange={(event) => setDocumentText(event.target.value)} placeholder="Paste text that this bank should remember..." />
             </label>
           )}
+          <section className="okfImportPanel" aria-label="OKF bundle import">
+            <div className="okfImportHeader">
+              <div>
+                <h3>OKF bundle</h3>
+                <p>Validate a Markdown knowledge bundle, select concepts, then retain them into the archive.</p>
+              </div>
+              <div className="okfImportActions">
+                <button className="button secondary" onClick={() => void chooseOkfBundle()} disabled={okfBusy}>
+                  {okfBusy ? "Validating" : "Choose bundle"}
+                </button>
+                <button className="button primary" onClick={() => void importSelectedOkfConcepts()} disabled={!okfBundle || selectedOkfConcepts.length === 0 || okfBusy}>
+                  Retain selected
+                </button>
+              </div>
+            </div>
+            {okfStatus && <div className="voiceInputStatus okfImportStatus" aria-live="polite">{okfStatus}</div>}
+            {okfBundle && (
+              <>
+                <div className="okfImportSummary">
+                  <span><strong>{formatCompactCount(okfBundle.summary.conceptCount)}</strong> concepts</span>
+                  <span><strong>{Object.keys(okfBundle.summary.typeCounts).length}</strong> types</span>
+                  <span><strong>{formatCompactCount(okfBundle.summary.linkedConceptCount)}</strong> linked</span>
+                  <span><strong>{formatCompactCount(okfBundle.summary.brokenLinkCount)}</strong> broken links</span>
+                </div>
+                {(okfBundle.errors.length > 0 || okfBundle.warnings.length > 0) && (
+                  <div className="okfImportDiagnostics">
+                    {okfBundle.errors.slice(0, 3).map((error) => <Badge key={error} tone="danger">{error}</Badge>)}
+                    {okfBundle.warnings.slice(0, 3).map((warning) => <Badge key={warning} tone="warning">{warning}</Badge>)}
+                  </div>
+                )}
+                <div className="okfConceptToolbar">
+                  <span>{selectedOkfConcepts.length} selected</span>
+                  <button className="button ghost" onClick={() => setSelectedOkfConceptIds(okfBundle.concepts.map((concept) => concept.id))}>Select all</button>
+                  <button className="button ghost" onClick={() => setSelectedOkfConceptIds([])}>Clear</button>
+                </div>
+                <div className="okfConceptList">
+                  {okfBundle.concepts.map((concept) => {
+                    const selected = selectedOkfConceptIds.includes(concept.id);
+                    return (
+                      <label className={`okfConceptRow ${selected ? "selected" : ""}`} key={concept.id}>
+                        <input type="checkbox" checked={selected} onChange={() => toggleOkfConcept(concept)} />
+                        <span>
+                          <strong>{concept.title}</strong>
+                          <small>{concept.description || concept.path}</small>
+                        </span>
+                        <Badge tone="default">{concept.type}</Badge>
+                        <span className="okfConceptMeta">{concept.tags.slice(0, 3).join(", ") || "No tags"}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </section>
         </div>
       )}
 
@@ -11134,9 +12260,9 @@ function formatSkillUpdatedAt(value?: string): string {
   return `Updated ${Math.floor(months / 12)}y ago`;
 }
 
-function DojoView({
+function WikiView({
   initialTab,
-  dojoState,
+  wikiState,
   skills,
   selectedWorkspace,
   activeAgent,
@@ -11150,8 +12276,8 @@ function DojoView({
   setView,
   onEdgePreviewReady,
 }: {
-  initialTab?: Extract<DojoTab, "apps" | "skills">;
-  dojoState: DojoState | null;
+  initialTab?: WikiTab | undefined;
+  wikiState: WikiState | null;
   skills: SkillMetadata[];
   selectedWorkspace?: WorkspaceSummary;
   activeAgent: ActiveAgentSelection | null;
@@ -11165,8 +12291,8 @@ function DojoView({
   setView: (view: ViewId) => void;
   onEdgePreviewReady: (preview: EdgePreviewSurface) => void;
 }) {
-  const [tab, setTab] = useState<DojoTab>(initialTab ?? "support");
-  const activePage: DojoPage = tab === "apps" || tab === "skills" ? tab : "wiki";
+  const [tab, setTab] = useState<WikiTab>(initialTab ?? "support");
+  const activePage: WikiPage = tab === "apps" ? "apps" : tab === "skills" ? "skills" : "wiki";
   const activeWikiSource = tab === "apps" || tab === "skills" ? "support" : tab;
   const [query, setQuery] = useState(skillSearchRequest);
   const keepQueryForTabReset = useRef(Boolean(skillSearchRequest.trim()));
@@ -11174,6 +12300,10 @@ function DojoView({
   const [sort, setSort] = useState<"az" | "za">("az");
   const [filterOpen, setFilterOpen] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState("");
+  const [selectedSkillDetailName, setSelectedSkillDetailName] = useState("");
+  const [selectedSkillDetailTab, setSelectedSkillDetailTab] = useState<"overview" | "source" | "usage">("overview");
+  const [selectedAppDetailId, setSelectedAppDetailId] = useState("");
+  const [selectedAppDetailTab, setSelectedAppDetailTab] = useState<"overview" | "source" | "actions">("overview");
   const [expandedSkillNames, setExpandedSkillNames] = useState<string[]>([]);
   const [skillMarkdownByName, setSkillMarkdownByName] = useState<Record<string, SkillMarkdownLoadState>>({});
   const [result, setResult] = useState("");
@@ -11183,6 +12313,7 @@ function DojoView({
   const [appActionBusyId, setAppActionBusyId] = useState("");
   const [localDraftApps, setLocalDraftApps] = useState<LinkLocalEdgeDraftApp[]>([]);
   const [localDraftBusy, setLocalDraftBusy] = useState(false);
+  const [wikiDocumentationSources, setWikiDocumentationSources] = useState<WikiDocumentationSource[]>([]);
   const [publishDraft, setPublishDraft] = useState<PublishAppDraft>({
     name: "",
     slug: "",
@@ -11200,7 +12331,11 @@ function DojoView({
     envSchema: "",
     reviewers: "",
     riskLevel: "medium",
+    deploymentTarget: "local-only",
   });
+  const [skillDeploymentTarget, setSkillDeploymentTarget] = useState<ArtifactDeploymentTarget>("local-only");
+  const [artifactDeployments, setArtifactDeployments] = useState<ArtifactDeploymentRecord[]>([]);
+  const [deploymentBusyId, setDeploymentBusyId] = useState("");
   const publishMenuRef = useRef<HTMLDivElement | null>(null);
   const publishOptions = [
     { label: "App", detail: "Build and deploy an Edge-hosted app with your bot.", icon: Grid2X2Plus, tab: "apps" },
@@ -11247,29 +12382,47 @@ function DojoView({
     if (activePage === "skills") return ["all", ...new Set(skills.map((skill) => skill.team).filter(Boolean))];
     return ["all"];
   }, [activePage, skills]);
-  const activeWikiSourceTab = wikiSourceTabs.find((source) => source.id === activeWikiSource) ?? wikiSourceTabs[0]!;
-  const wikiSearchPlaceholder = activeWikiSourceTab.id === "support"
-    ? "Search Help Center..."
-    : activeWikiSourceTab.id === "developers"
-      ? "Search Developer Docs..."
-      : activeWikiSourceTab.id === "pylon"
-        ? "Search Pylon tickets..."
-        : "Search Guru...";
+  const activeDirectoryAgent = activeAgent ? agents.find((agent) => agent.id === activeAgent.id) : undefined;
+  const openClawActiveAgent = String(activeDirectoryAgent?.type ?? "").toLowerCase().includes("openclaw");
+  const wikiNavigationTabs = useMemo(() => {
+    const configuredTabs = wikiDocumentationSources
+      .filter((source) => source.enabled)
+      .map(wikiConfigFromDocumentationSource);
+    return configuredTabs.length ? configuredTabs : wikiSourceTabs;
+  }, [wikiDocumentationSources]);
+  const activeWikiSourceTab = wikiNavigationTabs.find((source) => source.id === activeWikiSource) ?? wikiNavigationTabs[0]!;
+  const wikiSearchPlaceholder = activeWikiSourceTab.externalSource === "support"
+    ? `Search ${activeWikiSourceTab.label}...`
+    : activeWikiSourceTab.externalSource === "developers"
+      ? `Search ${activeWikiSourceTab.label}...`
+      : activeWikiSourceTab.externalSource === "pylon"
+        ? `Search ${activeWikiSourceTab.label}...`
+        : activeWikiSourceTab.externalSource === "custom"
+          ? `Search ${activeWikiSourceTab.label}...`
+          : `Search ${activeWikiSourceTab.label}...`;
   const searchPlaceholder = activePage === "apps"
         ? "Search apps..."
         : activePage === "skills"
           ? "Search skills..."
         : wikiSearchPlaceholder;
-  const activeDirectoryAgent = activeAgent ? agents.find((agent) => agent.id === activeAgent.id) : undefined;
-  const openClawActiveAgent = String(activeDirectoryAgent?.type ?? "").toLowerCase().includes("openclaw");
 
   useEffect(() => {
     window.localStorage.setItem("telnyx-link-installed-agent-skills", JSON.stringify(installedSkillKeys));
   }, [installedSkillKeys]);
 
   useEffect(() => {
-    if (initialTab) setTab(initialTab);
+    setTab(initialTab ?? "support");
   }, [initialTab]);
+
+  useEffect(() => {
+    void linkApi.listWikiSources().then(setWikiDocumentationSources).catch(() => setWikiDocumentationSources([]));
+  }, []);
+
+  useEffect(() => {
+    if (activePage !== "wiki") return;
+    if (wikiNavigationTabs.some((source) => source.id === activeWikiSource)) return;
+    setTab(wikiNavigationTabs[0]?.id ?? "support");
+  }, [activePage, activeWikiSource, wikiNavigationTabs]);
 
   useEffect(() => {
     if (!skillSearchRequest.trim()) return;
@@ -11289,6 +12442,10 @@ function DojoView({
     }
     setSort("az");
     setExpandedSkillNames([]);
+    setSelectedSkillDetailName("");
+    setSelectedSkillDetailTab("overview");
+    setSelectedAppDetailId("");
+    setSelectedAppDetailTab("overview");
   }, [tab]);
 
 	  useEffect(() => {
@@ -11310,9 +12467,21 @@ function DojoView({
 	    }
 	  }
 
+  async function refreshArtifactDeployments() {
+    try {
+      setArtifactDeployments(await linkApi.listArtifactDeployments());
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Unable to load deployment records.");
+    }
+  }
+
 	  useEffect(() => {
 	    if (activePage === "apps") void refreshLocalDraftApps();
 	  }, [activePage]);
+
+  useEffect(() => {
+    if (activePage === "apps" || activePage === "skills") void refreshArtifactDeployments();
+  }, [activePage]);
 
 	  function toggleSkillDetails(skillName: string) {
     if (!expandedSkillNames.includes(skillName)) void loadSkillMarkdown(skillName);
@@ -11360,6 +12529,55 @@ function DojoView({
       ...(localSkillStatsById[skillId] ?? {}),
       skillId,
     };
+  }
+
+  function deploymentForArtifact(artifactKind: "app" | "skill", artifactId: string) {
+    return artifactDeployments.find((deployment) => deployment.artifactKind === artifactKind && deployment.artifactId === artifactId);
+  }
+
+  function appArtifactIdFromSlug(slug: string) {
+    return `app-${rendererSlugify(slug || "app")}`;
+  }
+
+  function deploymentTargetLabel(target: ArtifactDeploymentTarget) {
+    if (target === "local-only") return "Keep Local";
+    if (target === "local-shared") return "Local Shared";
+    if (target === "telnyx-byo-cloud") return "Telnyx BYO Cloud";
+    return "Telnyx Managed";
+  }
+
+  function deploymentBoundaryLabel(deployment?: Pick<ArtifactDeploymentRecord, "dataBoundary" | "target">) {
+    if (!deployment) return "Local";
+    if (deployment.target === "telnyx-managed") return "Telnyx Managed";
+    return deployment.dataBoundary === "telnyx-cloud" ? "Telnyx Cloud" : "Local";
+  }
+
+  function deploymentStatusLabel(status?: ArtifactDeploymentRecord["status"]) {
+    if (status === "published") return "Published";
+    if (status === "shared_local") return "Local shared";
+    if (status === "failed") return "Failed";
+    return "Local";
+  }
+
+  function renderDeploymentChip(deployment?: ArtifactDeploymentRecord) {
+    const boundary = deployment?.dataBoundary ?? "local";
+    return (
+      <span className={`dataBoundaryChip dataBoundaryChip-${boundary}`}>
+        {deployment ? `${deploymentBoundaryLabel(deployment)} / ${deploymentStatusLabel(deployment.status)}` : "Local / Not published"}
+      </span>
+    );
+  }
+
+  function formatArtifactDeploymentResult(deployment: ArtifactDeploymentRecord) {
+    return JSON.stringify({
+      status: deployment.status,
+      target: deploymentTargetLabel(deployment.target),
+      dataBoundary: deploymentBoundaryLabel(deployment),
+      artifact: deployment.artifactName,
+      message: deployment.message,
+      url: deployment.url,
+      updatedAt: deployment.updatedAt,
+    }, null, 2);
   }
 
   function updateSkillStats(stats: {
@@ -11423,83 +12641,134 @@ function DojoView({
     setResult(`${trackedSkill.name} installed on ${activeAgent.displayName}.`);
   }
 
+  function skillManifestFromMetadata(skill: SkillMetadata): ToolStudioManifestInput {
+    const trackedSkill = skillWithLocalStats(skill);
+    const markdownState = skillMarkdownByName[trackedSkill.name];
+    return {
+      toolId: trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill),
+      name: trackedSkill.name,
+      description: trackedSkill.description,
+      owner: trackedSkill.owner || "Local user",
+      team: trackedSkill.team || "Personal",
+      audience: trackedSkill.audience || "Local workspace",
+      artifactType: trackedSkill.artifactType ?? "skill",
+      inputs: "User prompt or selected chat context.",
+      outputs: "Reviewable agent output.",
+      toolsRequired: trackedSkill.toolsRequired ?? [],
+      riskLevel: trackedSkill.riskLevel ?? "medium",
+      customerSafe: Boolean(trackedSkill.customerSafe),
+      approvalRequired: Boolean(trackedSkill.approvalRequired),
+      sourceOfTruth: trackedSkill.sourceOfTruth || trackedSkill.source || "Local Link skill",
+      repeatedChecks: trackedSkill.repeatedChecks || "Run the included local skill fixture before publishing.",
+      humanCheckpoints: trackedSkill.humanCheckpoints || "Human owner reviews external or destructive actions.",
+      testFixture: trackedSkill.testFixture || "Use the current chat request as a fixture.",
+      reviewers: trackedSkill.reviewers ?? [],
+      version: trackedSkill.version || "1.0.0",
+      visibility: trackedSkill.visibility || "private",
+      skillMarkdown: markdownState?.status === "ready"
+        ? markdownState.result.markdown
+        : "",
+      checklist: ["No secrets in SKILL.md", "Data boundary reviewed", "Owner accepted deployment target"],
+    };
+  }
+
+  async function deploySkill(skill: SkillMetadata, target = skillDeploymentTarget) {
+    const trackedSkill = skillWithLocalStats(skill);
+    setDeploymentBusyId(`skill:${trackedSkill.skillId}:${target}`);
+    setSelectedSkill(trackedSkill.name);
+    try {
+      const deployment = await linkApi.deployArtifact({
+        artifactKind: "skill",
+        artifactId: trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill),
+        artifactName: trackedSkill.name,
+        target,
+        skill: skillManifestFromMetadata(trackedSkill),
+        permissions: trackedSkill.toolsRequired ?? [],
+        secretsRequired: [],
+      });
+      await refreshArtifactDeployments();
+      setResult(formatArtifactDeploymentResult(deployment));
+    } catch (error) {
+      setResult(error instanceof Error ? error.message : "Unable to deploy skill.");
+    } finally {
+      setDeploymentBusyId("");
+    }
+  }
+
+  function openSkillDetail(skill: SkillMetadata) {
+    const trackedSkill = skillWithLocalStats(skill);
+    setSelectedSkill(trackedSkill.name);
+    setSelectedSkillDetailName(trackedSkill.name);
+    setSelectedSkillDetailTab("overview");
+    void loadSkillMarkdown(trackedSkill.name);
+  }
+
   function renderSkillButton(skill: SkillMetadata) {
     const trackedSkill = skillWithLocalStats(skill);
     const installed = activeAgent ? installedSkillKeys.includes(`${activeAgent.id}:${trackedSkill.name}`) : false;
-    const expanded = expandedSkillNames.includes(trackedSkill.name);
-    const skillMarkdown = skillMarkdownByName[trackedSkill.name];
     const downloadCount = trackedSkill.downloadCount ?? trackedSkill.installCount ?? 0;
+    const deployment = deploymentForArtifact("skill", trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill));
     return (
-      <article key={trackedSkill.name} className={`agentCard skillResultRow ${selectedSkill === trackedSkill.name ? "selected" : ""} ${expanded ? "expanded" : ""}`}>
-        <div className="connectorTitle">
-          <span className="agentTitleText">
-            <strong>{trackedSkill.name}</strong>
-          </span>
-          <div className="agentCardActions">
-            <button
-              className={`iconButton bookmarkButton skillInstallIconButton ${trackedSkill.starredByActor ? "selected" : ""}`}
-              onClick={() => void toggleSkillStar(trackedSkill)}
-              type="button"
-              title={trackedSkill.starredByActor ? "Unstar skill" : "Star skill"}
-              aria-label={trackedSkill.starredByActor ? `Unstar ${trackedSkill.name}` : `Star ${trackedSkill.name}`}
-            >
-              <Star size={15} fill={trackedSkill.starredByActor ? "currentColor" : "none"} />
-            </button>
-            <button
-              className={`iconButton bookmarkButton skillInstallIconButton ${installed ? "selected" : ""}`}
-              onClick={() => void installSkill(trackedSkill)}
-              type="button"
-              title={installed ? "Skill installed" : "Install skill"}
-              aria-label={installed ? `${trackedSkill.name} installed` : `Install ${trackedSkill.name}`}
-            >
-              <Plus size={15} />
-            </button>
-            <button
-              className="iconButton agentDetailsButton"
-              onClick={() => toggleSkillDetails(trackedSkill.name)}
-              type="button"
-              title={expanded ? "Hide skill details" : "Show skill details"}
-              aria-label={expanded ? `Hide ${trackedSkill.name} details` : `Show ${trackedSkill.name} details`}
-              aria-expanded={expanded}
-            >
-              <ChevronDown size={16} />
-            </button>
-          </div>
-        </div>
-        <p>{trackedSkill.description}</p>
-        <div className="skillMarketplaceMeta" aria-label={`${trackedSkill.name} marketplace stats`}>
-          <button className="skillCategoryLink" type="button" onClick={() => setFilter(trackedSkill.team)}>
-            {trackedSkill.team}
+      <div
+        key={trackedSkill.name}
+        className={`chatResultRow directoryResultRow skillDirectoryResultRow ${selectedSkill === trackedSkill.name ? "selected" : ""}`}
+        role="row"
+        tabIndex={0}
+        onClick={() => openSkillDetail(trackedSkill)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openSkillDetail(trackedSkill);
+          }
+        }}
+      >
+        <span className="directoryNameCell" role="cell">
+          <strong>{trackedSkill.name}</strong>
+          <small>{trackedSkill.description}</small>
+          {renderDeploymentChip(deployment)}
+        </span>
+        <span role="cell">{trackedSkill.team}</span>
+        <span role="cell">{trackedSkill.product ?? trackedSkill.language ?? "Workflow"}</span>
+        <span role="cell">{formatCompactCount(trackedSkill.starCount)} stars / {formatCompactCount(downloadCount)} installs</span>
+        <span className="directoryRowActions" role="cell">
+          <button
+            className={`iconButton bookmarkButton skillInstallIconButton ${trackedSkill.starredByActor ? "selected" : ""}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              void toggleSkillStar(trackedSkill);
+            }}
+            type="button"
+            title={trackedSkill.starredByActor ? "Unstar skill" : "Star skill"}
+            aria-label={trackedSkill.starredByActor ? `Unstar ${trackedSkill.name}` : `Star ${trackedSkill.name}`}
+          >
+            <Star size={15} fill={trackedSkill.starredByActor ? "currentColor" : "none"} />
           </button>
-          <span><Star size={14} />{formatCompactCount(trackedSkill.starCount)}</span>
-          <span><Download size={14} />{formatCompactCount(downloadCount)}</span>
-        </div>
-        {expanded && (
-          <div className="agentDetailsPanel">
-            <div className="tagList">
-              <span>{trackedSkill.product ?? "workflow"}</span>
-              <span>{trackedSkill.language ?? "skill"}</span>
-              {trackedSkill.source && <span>{trackedSkill.source}</span>}
-              <span>{trackedSkill.approvalRequired ? "approval gated" : "ready"}</span>
-              {installed && <span>installed</span>}
-            </div>
-            <div className="skillMarkdownPanel">
-              <div className="skillMarkdownHeader">
-                <span><FileText size={14} />SKILL.md</span>
-                {skillMarkdown?.status === "ready" && (
-                  <a href={skillMarkdown.result.sourceUrl} target="_blank" rel="noreferrer">
-                    <ExternalLink size={13} />
-                    GitHub
-                  </a>
-                )}
-              </div>
-              {skillMarkdown?.status === "loading" && <p className="skillMarkdownStatus">Loading SKILL.md...</p>}
-              {skillMarkdown?.status === "error" && <p className="skillMarkdownStatus error">{skillMarkdown.message}</p>}
-              {skillMarkdown?.status === "ready" && <pre>{skillMarkdown.result.markdown}</pre>}
-            </div>
-          </div>
-        )}
-      </article>
+          <button
+            className={`iconButton bookmarkButton skillInstallIconButton ${installed ? "selected" : ""}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              void installSkill(trackedSkill);
+            }}
+            type="button"
+            title={installed ? "Skill installed" : "Install skill"}
+            aria-label={installed ? `${trackedSkill.name} installed` : `Install ${trackedSkill.name}`}
+          >
+            <Plus size={15} />
+          </button>
+        </span>
+        <button
+          className="chatSessionOpenButton"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openSkillDetail(trackedSkill);
+          }}
+          aria-label={`Open ${trackedSkill.name}`}
+          title="Open skill"
+        >
+          <ArrowRight size={16} />
+        </button>
+      </div>
     );
   }
 
@@ -11579,12 +12848,26 @@ function DojoView({
 
 	  async function submitPublishIntent() {
 	    setPublishBusy(true);
-	    setResult("Submitting app...");
+	    setResult("Deploying app...");
 	    try {
-	      const response = await linkApi.createPublishIntent(publishInputFromDraft());
+      const appInput = publishInputFromDraft();
+      if (publishDraft.deploymentTarget === "telnyx-byo-cloud") {
+        setResult("Import the app as a local draft, then use Deploy to Telnyx Cloud from the Personal app row.");
+        return;
+      }
+	      const deployment = await linkApi.deployArtifact({
+        artifactKind: "app",
+        artifactId: appArtifactIdFromSlug(appInput.slug || appInput.name),
+        artifactName: appInput.name,
+        target: publishDraft.deploymentTarget,
+        app: appInput,
+        permissions: appInput.envSchema ?? [],
+        secretsRequired: publishDraft.deploymentTarget === "telnyx-managed" ? ["TELNYX_AUTH_REV2 or TELNYX_API_KEY"] : [],
+      });
       await refreshPublishedApps();
-      setPublishAppOpen(false);
-      setResult(formatPublisherResult(response));
+      await refreshArtifactDeployments();
+      if (deployment.status !== "failed") setPublishAppOpen(false);
+      setResult(formatArtifactDeploymentResult(deployment));
     } catch (err) {
       setResult(err instanceof Error ? err.message : "App publish request failed.");
     } finally {
@@ -11592,9 +12875,9 @@ function DojoView({
 	    }
 	  }
 
-	  async function importLocalDraftApp(scope: LinkLocalEdgeImportScope) {
+	  async function importLocalDraftApp(scope: LinkLocalEdgeImportScope = "personal") {
 	    setLocalDraftBusy(true);
-	    setResult(`Choose a ${scope} app folder or Zip archive to import.`);
+	    setResult("Choose an app folder or Zip archive to import.");
 	    try {
 	      const response = await linkApi.importLocalEdgeApp({ scope });
 	      if (response.canceled) {
@@ -11633,6 +12916,45 @@ function DojoView({
 	      setAppActionBusyId("");
 	    }
 	  }
+
+  async function deployLocalDraftApp(app: LinkLocalEdgeDraftApp, target: ArtifactDeploymentTarget) {
+    setAppActionBusyId(app.id);
+    setDeploymentBusyId(`app:${app.id}:${target}`);
+    try {
+      const deployment = await linkApi.deployArtifact({
+        artifactKind: "app",
+        artifactId: appArtifactIdFromSlug(app.slug),
+        artifactName: app.name,
+        target,
+        app: {
+          name: app.name,
+          slug: app.slug,
+          description: app.description,
+          ownerSquad: "personal.tools",
+          audience: "Personal workspace",
+          appType: "web",
+          sourceRepo: "https://github.com/team-telnyx/link",
+          sourceRef: "main",
+          sourceSubdir: app.sourceSubdir || app.directory,
+          buildCommand: app.buildCommand || "npm run build",
+          installCommand: app.installCommand,
+          outputDir: app.outputDir || "dist",
+          riskLevel: "low",
+          directory: app.directory,
+          replaceExisting: true,
+        },
+        secretsRequired: target === "telnyx-byo-cloud" ? ["TELNYX_API_KEY or TELNYX_AUTH_REV2", "telnyx-edge CLI auth"] : [],
+      });
+      await refreshPublishedApps();
+      await refreshArtifactDeployments();
+      setResult(formatArtifactDeploymentResult(deployment));
+    } catch (err) {
+      setResult(err instanceof Error ? err.message : "Unable to deploy local app.");
+    } finally {
+      setAppActionBusyId("");
+      setDeploymentBusyId("");
+    }
+  }
 
 	  async function deleteLocalDraftApp(app: LinkLocalEdgeDraftApp) {
 	    setAppActionBusyId(app.id);
@@ -11736,6 +13058,15 @@ function DojoView({
           </button>
         </div>
         <div className="publisherForm">
+          <label className="publisherWideField">
+            <span>Deployment target</span>
+            <select value={publishDraft.deploymentTarget} onChange={(event) => updatePublishDraft("deploymentTarget", event.target.value as ArtifactDeploymentTarget)}>
+              <option value="local-only">Keep Local</option>
+              <option value="local-shared">Local Shared</option>
+              <option value="telnyx-managed">Telnyx Managed</option>
+              <option value="telnyx-byo-cloud">Telnyx BYO Cloud</option>
+            </select>
+          </label>
           <label>
             <span>Name</span>
             <input value={publishDraft.name} onChange={(event) => updatePublishDraft("name", event.target.value)} placeholder="Internal app name" />
@@ -11815,7 +13146,7 @@ function DojoView({
           </button>
           <button className="button primary" onClick={() => void submitPublishIntent()} disabled={publishBusy}>
             <Upload size={15} />
-            Submit
+            {publishDraft.deploymentTarget === "local-only" ? "Keep Local" : "Submit"}
           </button>
           <button className="button ghost" onClick={() => setPublishAppOpen(false)} disabled={publishBusy}>Cancel</button>
         </div>
@@ -11849,145 +13180,290 @@ function DojoView({
 	    );
 	  }
 
-	  function renderLocalDraftAppCard(app: LinkLocalEdgeDraftApp) {
-	    return (
-	      <article className="marketplaceCard localDraftAppCard" key={app.id}>
-	        <div className="marketplaceCardHeader">
-	          <div className="marketplaceIcon">
-	            <Grid2X2Plus size={18} />
-	          </div>
-	          <div>
-	            <strong>{app.name}</strong>
-	            <small>{app.slug}.apidev.telnyx.com</small>
-	          </div>
-	          <Badge tone="warning">Draft</Badge>
-	        </div>
-	        <p>{app.description}</p>
-	        <div className="marketplaceMeta">
-	          <span><FolderOpen size={13} /> {app.sourceSubdir || app.directory.split("/").slice(-2).join("/")}</span>
-	          <span><SquareTerminal size={13} /> {app.outputDir || "dist"}</span>
-	          <span><Clock size={13} /> {formatSkillUpdatedAt(app.updatedAt)}</span>
-	        </div>
-	        <div className="marketplaceActions">
-          <button className="button primary" onClick={() => void previewLocalDraftApp(app)} disabled={appActionBusyId === app.id}>
-	            <MonitorPlay size={14} />
-	            Preview
-	          </button>
-          <button className="button ghost" onClick={() => void deleteLocalDraftApp(app)} disabled={appActionBusyId === app.id}>
-	            <Trash2 size={14} />
-	            Remove
-	          </button>
-	        </div>
-	      </article>
-	    );
-	  }
+  function openAppDetail(id: string) {
+    setSelectedAppDetailId(id);
+    setSelectedAppDetailTab("overview");
+  }
+
+  function renderLocalDraftAppRow(app: LinkLocalEdgeDraftApp) {
+    const sourceLabel = app.sourceSubdir || app.directory.split("/").slice(-2).join("/");
+    const rowId = `local:${app.id}`;
+    const deployment = deploymentForArtifact("app", appArtifactIdFromSlug(app.slug));
+    return (
+      <div
+        className="chatResultRow directoryResultRow appDirectoryResultRow"
+        role="row"
+        key={rowId}
+        tabIndex={0}
+        onClick={() => openAppDetail(rowId)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openAppDetail(rowId);
+          }
+        }}
+      >
+        <span className="directoryNameCell" role="cell">
+          <strong>{app.name}</strong>
+          <small>{app.description || `${app.slug}.apidev.telnyx.com`}</small>
+        </span>
+        <span role="cell">{sourceLabel}</span>
+        <span role="cell">{renderDeploymentChip(deployment)}</span>
+        <span role="cell">{formatSkillUpdatedAt(app.updatedAt)}</span>
+        <button
+          className="chatSessionOpenButton"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openAppDetail(rowId);
+          }}
+          aria-label={`Open ${app.name}`}
+          title="Open app"
+        >
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    );
+  }
+
+  function renderPublishedAppRow(app: LinkPublishedApp) {
+    const rowId = `published:${app.id}`;
+    const deployment = deploymentForArtifact("app", app.id) ?? deploymentForArtifact("app", appArtifactIdFromSlug(app.slug));
+    return (
+      <div
+        className="chatResultRow directoryResultRow appDirectoryResultRow"
+        role="row"
+        key={rowId}
+        tabIndex={0}
+        onClick={() => openAppDetail(rowId)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            openAppDetail(rowId);
+          }
+        }}
+      >
+        <span className="directoryNameCell" role="cell">
+          <strong>{app.name}</strong>
+          <small>{app.description || app.audience}</small>
+        </span>
+        <span role="cell">{app.ownerSquad}</span>
+        <span role="cell">{renderDeploymentChip(deployment)}</span>
+        <span role="cell">{formatPublishedAppType(app.appType)}</span>
+        <button
+          className="chatSessionOpenButton"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            openAppDetail(rowId);
+          }}
+          aria-label={`Open ${app.name}`}
+          title="Open app"
+        >
+          <ArrowRight size={16} />
+        </button>
+      </div>
+    );
+  }
 
 	  function renderAppsTab() {
+    const selectedLocalApp = selectedAppDetailId.startsWith("local:")
+      ? localDraftApps.find((app) => `local:${app.id}` === selectedAppDetailId)
+      : undefined;
+    const selectedPublishedApp = selectedAppDetailId.startsWith("published:")
+      ? publishedApps.find((app) => `published:${app.id}` === selectedAppDetailId)
+      : undefined;
+    const selectedApp = selectedLocalApp ?? selectedPublishedApp;
+    if (selectedApp) {
+      const isLocal = Boolean(selectedLocalApp);
+      const selectedTitle = selectedApp.name;
+      const selectedDescription = selectedApp.description || (selectedLocalApp ? `${selectedLocalApp.slug}.apidev.telnyx.com` : selectedPublishedApp?.audience ?? "");
+      const selectedArtifactId = selectedLocalApp
+        ? appArtifactIdFromSlug(selectedLocalApp.slug)
+        : selectedPublishedApp
+          ? selectedPublishedApp.id
+          : "";
+      const selectedDeployment = selectedArtifactId
+        ? deploymentForArtifact("app", selectedArtifactId) ?? (selectedPublishedApp ? deploymentForArtifact("app", appArtifactIdFromSlug(selectedPublishedApp.slug)) : undefined)
+        : undefined;
+      return (
+        <div className="marketplaceView embeddedMarketplace directoryDetailView embeddedDirectoryDetailView">
+          <header className="directoryEmbeddedDetailHeader">
+            <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedAppDetailId("")} aria-label="Back to apps">
+              <ArrowLeft size={17} />
+            </button>
+            <div>
+              <span>Apps / {isLocal ? "Personal" : "Team"}</span>
+              <h2>{selectedTitle}</h2>
+              <p>{selectedDescription || "No description saved."}</p>
+            </div>
+          </header>
+          <section className="chatDetailSurface">
+            <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label="App details">
+              {[
+                ["overview", "Overview"],
+                ["source", "Source"],
+                ["actions", "Actions"],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  className={selectedAppDetailTab === id ? "selected" : ""}
+                  type="button"
+                  onClick={() => setSelectedAppDetailTab(id as typeof selectedAppDetailTab)}
+                  role="tab"
+                  aria-selected={selectedAppDetailTab === id}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {selectedAppDetailTab === "overview" && selectedLocalApp && (
+              <div className="chatResultDetails directoryDetailPanel">
+                <div><strong>Status</strong><span>Draft</span></div>
+                <div><strong>Data boundary</strong><span>{renderDeploymentChip(selectedDeployment)}</span></div>
+                <div><strong>Slug</strong><span>{selectedLocalApp.slug}.apidev.telnyx.com</span></div>
+                <div><strong>Target</strong><span>{selectedDeployment ? deploymentTargetLabel(selectedDeployment.target) : "Keep Local"}</span></div>
+                <div><strong>Output</strong><span>{selectedLocalApp.outputDir || "dist"}</span></div>
+                <div><strong>Updated</strong><span>{formatSkillUpdatedAt(selectedLocalApp.updatedAt)}</span></div>
+              </div>
+            )}
+            {selectedAppDetailTab === "overview" && selectedPublishedApp && (
+              <div className="chatResultDetails directoryDetailPanel">
+                <div><strong>Status</strong><span>{formatStatusLabel(selectedPublishedApp.status)}</span></div>
+                <div><strong>Data boundary</strong><span>{renderDeploymentChip(selectedDeployment)}</span></div>
+                <div><strong>Owner</strong><span>{selectedPublishedApp.ownerSquad}</span></div>
+                <div><strong>Audience</strong><span>{selectedPublishedApp.audience}</span></div>
+                <div><strong>Target</strong><span>{selectedDeployment ? deploymentTargetLabel(selectedDeployment.target) : "Telnyx Managed"}</span></div>
+                <div><strong>Access</strong><span>{selectedPublishedApp.access.toUpperCase()}</span></div>
+                <div><strong>Risk</strong><span>{selectedPublishedApp.riskLevel}</span></div>
+                <div><strong>Type</strong><span>{formatPublishedAppType(selectedPublishedApp.appType)}</span></div>
+              </div>
+            )}
+            {selectedAppDetailTab === "source" && selectedLocalApp && (
+              <div className="chatResultDetails directoryDetailPanel">
+                <div><strong>Directory</strong><span>{selectedLocalApp.directory}</span></div>
+                <div><strong>Source subdir</strong><span>{selectedLocalApp.sourceSubdir || "Not set"}</span></div>
+                <div><strong>Output dir</strong><span>{selectedLocalApp.outputDir || "dist"}</span></div>
+              </div>
+            )}
+            {selectedAppDetailTab === "source" && selectedPublishedApp && (
+              <div className="chatResultDetails directoryDetailPanel">
+                <div><strong>Repository</strong><span>{selectedPublishedApp.sourceRepo ?? "No source repo"}</span></div>
+                <div><strong>Ref</strong><span>{selectedPublishedApp.sourceRef ?? "main"}</span></div>
+                <div><strong>Subdir</strong><span>{selectedPublishedApp.sourceSubdir ?? "."}</span></div>
+                <div><strong>Version</strong><span>{selectedPublishedApp.latestVersion?.version ?? "Pending"}</span></div>
+              </div>
+            )}
+            {selectedAppDetailTab === "actions" && selectedLocalApp && (
+              <div className="directoryDetailPanel directoryActionPanel">
+                <button className="button primary" onClick={() => void previewLocalDraftApp(selectedLocalApp)} disabled={appActionBusyId === selectedLocalApp.id}>
+                  <MonitorPlay size={14} />
+                  Preview
+                </button>
+                <button className="button secondary" onClick={() => void deployLocalDraftApp(selectedLocalApp, "local-only")} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:local-only`}>
+                  <Save size={14} />
+                  Keep Local
+                </button>
+                <button className="button secondary" onClick={() => void deployLocalDraftApp(selectedLocalApp, "telnyx-byo-cloud")} disabled={appActionBusyId === selectedLocalApp.id || deploymentBusyId === `app:${selectedLocalApp.id}:telnyx-byo-cloud`}>
+                  <Upload size={14} />
+                  Deploy to Telnyx Cloud
+                </button>
+                <button className="button ghost" onClick={() => void deleteLocalDraftApp(selectedLocalApp)} disabled={appActionBusyId === selectedLocalApp.id}>
+                  <Trash2 size={14} />
+                  Remove
+                </button>
+              </div>
+            )}
+            {selectedAppDetailTab === "actions" && selectedPublishedApp && (
+              <div className="directoryDetailPanel directoryActionPanel">
+                <button className="button secondary" onClick={() => void openPublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id || !publisherReachable || !isPublishedAppOpenable(selectedPublishedApp)}>
+                  <ExternalLink size={14} />
+                  {publisherReachable ? "Open VPN" : "Connect VPN"}
+                </button>
+                <button className="button ghost" onClick={() => void duplicatePublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
+                  <FolderOpen size={14} />
+                  Duplicate
+                </button>
+                {["submitted", "preview", "approved"].includes(selectedPublishedApp.status) && (
+                  <button className="button primary" onClick={() => void reviewPublishedApp(selectedPublishedApp, "approve")} disabled={appActionBusyId === selectedPublishedApp.id}>
+                    <SquareCheck size={14} />
+                    Approve
+                  </button>
+                )}
+                {["submitted", "preview"].includes(selectedPublishedApp.status) && (
+                  <button className="button ghost" onClick={() => void reviewPublishedApp(selectedPublishedApp, "reject")} disabled={appActionBusyId === selectedPublishedApp.id}>
+                    <X size={14} />
+                    Reject
+                  </button>
+                )}
+                {(selectedPublishedApp.versions?.length ?? 0) > 1 && selectedPublishedApp.status !== "deprecated" && (
+                  <button className="button ghost" onClick={() => void rollbackPublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
+                    <RefreshCw size={14} />
+                    Rollback
+                  </button>
+                )}
+                {selectedPublishedApp.status !== "deprecated" && (
+                  <button className="button ghost" onClick={() => void deprecatePublishedApp(selectedPublishedApp)} disabled={appActionBusyId === selectedPublishedApp.id}>
+                    <ArchiveIcon size={14} />
+                    Deprecate
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+          {result && <pre className="resultPreview">{result}</pre>}
+        </div>
+      );
+    }
+
     return (
       <div className="marketplaceView embeddedMarketplace appDirectoryList">
 	        {renderPublishAppPanel()}
 	        <section className="appDirectorySection" aria-label="Personal apps">
-	          <div className="appDirectorySectionHeader">
-              <div>
-                <h2>Personal</h2>
-                <span>{filteredLocalDraftApps.length} {filteredLocalDraftApps.length === 1 ? "app" : "apps"}</span>
-              </div>
-              <div className="tabPageActionBar">
-	            <button className="button secondary compactButton" type="button" onClick={() => void importLocalDraftApp("personal")} disabled={localDraftBusy}>
-	              <Upload size={14} />
-	              Import personal
-	            </button>
-	            <button className="button ghost compactButton" type="button" onClick={() => void importLocalDraftApp("company")} disabled={localDraftBusy}>
-	              <Upload size={14} />
-	              Import company
-	            </button>
-	            <button className="button ghost compactButton" type="button" onClick={() => void refreshLocalDraftApps()} disabled={localDraftBusy}>
-	              <RefreshCw size={14} />
-	              Refresh
-	            </button>
-	          </div>
+            <div className="appDirectorySectionHeader">
+              <h2>Personal</h2>
+	              <span className="appDirectorySectionCount">{filteredLocalDraftApps.length} {filteredLocalDraftApps.length === 1 ? "APP" : "APPS"}</span>
             </div>
-	          {filteredLocalDraftApps.length > 0 ? (
-	            <div className="marketplaceGrid compactMarketplaceGrid">
-	              {filteredLocalDraftApps.map(renderLocalDraftAppCard)}
-	            </div>
-	          ) : (
-	            <div className="appEmptyPanel">{localDraftBusy ? "Loading draft apps..." : "No draft apps yet."}</div>
-	          )}
+	          <div className="chatSessionRows directoryTable appDirectoryTable" role="table" aria-label="Personal apps">
+              <div className="chatResultRow directoryResultRow appDirectoryResultRow chatResultRowHead" role="row">
+                <span role="columnheader">App</span>
+                <span role="columnheader">Source</span>
+                <span role="columnheader">Status</span>
+                <span role="columnheader">Updated</span>
+                <span role="columnheader" aria-label="Open app" />
+              </div>
+              <div className="chatResultRows" role="rowgroup">
+                {filteredLocalDraftApps.map(renderLocalDraftAppRow)}
+                {filteredLocalDraftApps.length === 0 && (
+                  <div className="tableEmptyState" role="row">
+                    <EmptyState title={localDraftBusy ? "Loading draft apps" : "No draft apps yet"} body="Import a local app to see it here." icon={Grid2X2Plus} />
+                  </div>
+                )}
+              </div>
+            </div>
 	        </section>
 	        <section className="appDirectorySection" aria-label="Team apps">
             <div className="appDirectorySectionHeader">
-              <div>
-                <h2>Team</h2>
-                <span>{filteredApps.length} {filteredApps.length === 1 ? "app" : "apps"}</span>
-              </div>
+              <h2>Team</h2>
+	              <span className="appDirectorySectionCount">{filteredApps.length} {filteredApps.length === 1 ? "APP" : "APPS"}</span>
             </div>
-          {filteredApps.length > 0 ? (
-            <div className="marketplaceGrid">
-              {filteredApps.map((app) => (
-                <article className="marketplaceCard" key={app.id}>
-                  <div className="marketplaceCardHeader">
-                    <div className="marketplaceIcon">
-                      <Grid2X2Plus size={18} />
-                    </div>
-                    <div>
-                      <strong>{app.name}</strong>
-                      <small>{app.ownerSquad}</small>
-                    </div>
-                    <Badge tone={publisherBadgeTone(app.status)}>{formatStatusLabel(app.status)}</Badge>
-                  </div>
-                  <p>{app.description}</p>
-                  <div className="marketplaceMeta">
-                    <span><Bot size={13} /> {formatPublishedAppType(app.appType)}</span>
-                    <span><Users size={13} /> {app.audience}</span>
-                    <span><ShieldCheck size={13} /> {app.access.toUpperCase()}</span>
-                    <span><Target size={13} /> {app.riskLevel}</span>
-                    {app.latestVersion?.version && <span><Tags size={13} /> {app.latestVersion.version}</span>}
-                  </div>
-                  <div className="publisherSource">
-                    <span>{app.sourceRepo ?? "No source repo"}</span>
-                    <small>{[app.sourceRef, app.sourceSubdir].filter(Boolean).join(" / ") || "source pending"}</small>
-                  </div>
-                  <div className="marketplaceActions">
-                    <button className="button secondary" onClick={() => void openPublishedApp(app)} disabled={appActionBusyId === app.id || !publisherReachable || !isPublishedAppOpenable(app)}>
-                      <ExternalLink size={14} />
-                      {publisherReachable ? "Open VPN" : "Connect VPN"}
-                    </button>
-                    <button className="button ghost" onClick={() => void duplicatePublishedApp(app)} disabled={appActionBusyId === app.id}>
-                      <FolderOpen size={14} />
-                      Duplicate
-                    </button>
-                    {["submitted", "preview", "approved"].includes(app.status) && (
-                      <button className="button primary" onClick={() => void reviewPublishedApp(app, "approve")} disabled={appActionBusyId === app.id}>
-                        <SquareCheck size={14} />
-                        Approve
-                      </button>
-                    )}
-                    {["submitted", "preview"].includes(app.status) && (
-                      <button className="button ghost" onClick={() => void reviewPublishedApp(app, "reject")} disabled={appActionBusyId === app.id}>
-                        <X size={14} />
-                        Reject
-                      </button>
-                    )}
-                    {(app.versions?.length ?? 0) > 1 && app.status !== "deprecated" && (
-                      <button className="button ghost" onClick={() => void rollbackPublishedApp(app)} disabled={appActionBusyId === app.id}>
-                        <RefreshCw size={14} />
-                        Rollback
-                      </button>
-                    )}
-                    {app.status !== "deprecated" && (
-                      <button className="button ghost" onClick={() => void deprecatePublishedApp(app)} disabled={appActionBusyId === app.id}>
-                        <ArchiveIcon size={14} />
-                        Deprecate
-                      </button>
-                    )}
-                  </div>
-                </article>
-              ))}
-	            </div>
-	          ) : (
-	            <div className="appEmptyPanel">No Telnyx apps found.</div>
-	          )}
+          <div className="chatSessionRows directoryTable appDirectoryTable" role="table" aria-label="Team apps">
+            <div className="chatResultRow directoryResultRow appDirectoryResultRow chatResultRowHead" role="row">
+              <span role="columnheader">App</span>
+              <span role="columnheader">Owner</span>
+              <span role="columnheader">Status</span>
+              <span role="columnheader">Type</span>
+              <span role="columnheader" aria-label="Open app" />
+            </div>
+            <div className="chatResultRows" role="rowgroup">
+              {filteredApps.map(renderPublishedAppRow)}
+              {filteredApps.length === 0 && (
+                <div className="tableEmptyState" role="row">
+                  <EmptyState title="No Team apps found" body="Published apps will appear here." icon={Grid2X2Plus} />
+                </div>
+              )}
+            </div>
+          </div>
 	        </section>
         {result && <pre className="resultPreview">{result}</pre>}
       </div>
@@ -11995,22 +13471,140 @@ function DojoView({
 	  }
 
   function renderSkillsTab() {
+    const selectedSkillDetail = selectedSkillDetailName
+      ? skills.find((skill) => skill.name === selectedSkillDetailName)
+      : undefined;
+    if (selectedSkillDetail) {
+      const trackedSkill = skillWithLocalStats(selectedSkillDetail);
+      const installed = activeAgent ? installedSkillKeys.includes(`${activeAgent.id}:${trackedSkill.name}`) : false;
+      const skillMarkdown = skillMarkdownByName[trackedSkill.name];
+      const downloadCount = trackedSkill.downloadCount ?? trackedSkill.installCount ?? 0;
+      const skillDeployment = deploymentForArtifact("skill", trackedSkill.skillId ?? rendererSkillRegistryId(trackedSkill));
+      return (
+        <div className="marketplaceView embeddedMarketplace directoryDetailView embeddedDirectoryDetailView">
+          <header className="directoryEmbeddedDetailHeader">
+            <button className="iconButton chatDetailBackButton" type="button" onClick={() => setSelectedSkillDetailName("")} aria-label="Back to skills">
+              <ArrowLeft size={17} />
+            </button>
+            <div>
+              <span>Skills / {trackedSkill.team}</span>
+              <h2>{trackedSkill.name}</h2>
+              <p>{trackedSkill.description}</p>
+            </div>
+          </header>
+          <section className="chatDetailSurface">
+            <div className="chatReviewTabs directoryDetailTabs" role="tablist" aria-label="Skill details">
+              {[
+                ["overview", "Overview"],
+                ["source", "SKILL.md"],
+                ["usage", "Usage"],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  className={selectedSkillDetailTab === id ? "selected" : ""}
+                  type="button"
+                  onClick={() => setSelectedSkillDetailTab(id as typeof selectedSkillDetailTab)}
+                  role="tab"
+                  aria-selected={selectedSkillDetailTab === id}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {selectedSkillDetailTab === "overview" && (
+              <div className="chatResultDetails directoryDetailPanel">
+                <div><strong>Team</strong><span>{trackedSkill.team}</span></div>
+                <div><strong>Product</strong><span>{trackedSkill.product ?? "Workflow"}</span></div>
+                <div><strong>Language</strong><span>{trackedSkill.language ?? "Skill"}</span></div>
+                <div><strong>Data boundary</strong><span>{renderDeploymentChip(skillDeployment)}</span></div>
+                <div><strong>Target</strong><span>{skillDeployment ? deploymentTargetLabel(skillDeployment.target) : "Keep Local"}</span></div>
+                <div><strong>Source</strong><span>{trackedSkill.source || "Local registry"}</span></div>
+                <div><strong>Status</strong><span>{trackedSkill.approvalRequired ? "Approval gated" : "Ready"}</span></div>
+              </div>
+            )}
+            {selectedSkillDetailTab === "source" && (
+              <div className="directoryDetailPanel skillMarkdownPanel directoryMarkdownPanel">
+                <div className="skillMarkdownHeader">
+                  <span><FileText size={14} />SKILL.md</span>
+                  {skillMarkdown?.status === "ready" && (
+                    <a href={skillMarkdown.result.sourceUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink size={13} />
+                      GitHub
+                    </a>
+                  )}
+                </div>
+                {skillMarkdown?.status === "loading" && <p className="skillMarkdownStatus">Loading SKILL.md...</p>}
+                {skillMarkdown?.status === "error" && <p className="skillMarkdownStatus error">{skillMarkdown.message}</p>}
+                {skillMarkdown?.status === "ready" ? <pre>{skillMarkdown.result.markdown}</pre> : null}
+                {!skillMarkdown && <p className="skillMarkdownStatus">Open the source tab to load SKILL.md.</p>}
+              </div>
+            )}
+            {selectedSkillDetailTab === "usage" && (
+              <div className="directoryDetailPanel directoryActionPanel">
+                <div className="chatResultDetails directoryDetailPanel">
+                  <div><strong>Stars</strong><span>{formatCompactCount(trackedSkill.starCount)}</span></div>
+                  <div><strong>Installs</strong><span>{formatCompactCount(downloadCount)}</span></div>
+                  <div><strong>Active agent</strong><span>{activeAgent?.displayName ?? "None selected"}</span></div>
+                  <div><strong>Installed</strong><span>{installed ? "Yes" : "No"}</span></div>
+                </div>
+                <button className={`button secondary ${trackedSkill.starredByActor ? "selected" : ""}`} type="button" onClick={() => void toggleSkillStar(trackedSkill)}>
+                  <Star size={14} />
+                  {trackedSkill.starredByActor ? "Unstar" : "Star"}
+                </button>
+                <button className={`button primary ${installed ? "selected" : ""}`} type="button" onClick={() => void installSkill(trackedSkill)}>
+                  <Plus size={14} />
+                  {installed ? "Installed" : "Install"}
+                </button>
+                <label className="deploymentTargetField">
+                  <span>Deployment target</span>
+                  <select value={skillDeploymentTarget} onChange={(event) => setSkillDeploymentTarget(event.target.value as ArtifactDeploymentTarget)}>
+                    <option value="local-only">Keep Local</option>
+                    <option value="local-shared">Local Shared</option>
+                    <option value="telnyx-managed">Telnyx Managed</option>
+                    <option value="telnyx-byo-cloud">Telnyx BYO Cloud</option>
+                  </select>
+                </label>
+                <button className="button secondary" type="button" onClick={() => void deploySkill(trackedSkill)} disabled={Boolean(deploymentBusyId)}>
+                  <Upload size={14} />
+                  {skillDeploymentTarget === "local-only" ? "Keep Local" : "Publish Cloud"}
+                </button>
+              </div>
+            )}
+          </section>
+          {result && <pre className="resultPreview">{result}</pre>}
+        </div>
+      );
+    }
+
     return (
       <div className="marketplaceView embeddedMarketplace">
-        {filteredSkills.length > 0 ? (
-          <div className="agentGrid dojoSkillList">
-            {filteredSkills.map(renderSkillButton)}
+        <div className="chatSessionRows directoryTable skillDirectoryTable" role="table" aria-label="Skills">
+          <div className="chatResultRow directoryResultRow skillDirectoryResultRow chatResultRowHead" role="row">
+            <span role="columnheader">Skill</span>
+            <span role="columnheader">Team</span>
+            <span role="columnheader">Type</span>
+            <span role="columnheader">Stats</span>
+            <span role="columnheader">Actions</span>
+            <span role="columnheader" aria-label="Open skill" />
           </div>
-        ) : (
-          <EmptyState title="No skills found" body="Try another search term or team filter." />
-        )}
+          <div className="chatResultRows" role="rowgroup">
+            {filteredSkills.length > 0 ? (
+              filteredSkills.map(renderSkillButton)
+            ) : (
+              <div className="tableEmptyState" role="row">
+                <EmptyState title="No skills found" body="Try another search term or team filter." icon={Zap} />
+              </div>
+            )}
+          </div>
+        </div>
         {result && <pre className="resultPreview">{result}</pre>}
       </div>
     );
   }
 
-  function renderDocsSourceTab(source: WikiSourceTab) {
-    if (source === "support") {
+  function renderDocsSourceTab(source: WikiSourceConfig) {
+    const externalSource = source.externalSource;
+    if (externalSource === "support") {
       return <HelpCenterConsole selectedWorkspace={selectedWorkspace} question={query} setQuestion={setQuery} sort={sort} />;
     }
 
@@ -12019,7 +13613,7 @@ function DojoView({
         selectedWorkspace={selectedWorkspace}
         embedded
         externalQuery={query}
-        externalSource={source}
+        externalSource={externalSource}
         externalSort={sort}
         hideSearch
         docSourcesOnly
@@ -12031,7 +13625,7 @@ function DojoView({
   function renderWikiTab() {
     return (
       <div className="wikiView embeddedWikiView">
-        {renderDocsSourceTab(activeWikiSourceTab.id)}
+        {renderDocsSourceTab(activeWikiSourceTab)}
       </div>
     );
   }
@@ -12041,14 +13635,23 @@ function DojoView({
     skills: renderSkillsTab,
     wiki: renderWikiTab,
   }[activePage];
-  const triforceSectionMeta = {
+  const wikiSectionMeta = {
     apps: ["Apps", Grid2X2Plus],
     skills: ["Skills", Zap],
     wiki: ["Wiki", BookOpen],
-  } satisfies Record<DojoPage, [string, AppIcon]>;
-  const [dojoHeadingTitle] = triforceSectionMeta[activePage];
-  const triforceHeaderAction = (
-    <div className="headerActions expertoHeaderActions" aria-label="Wiki actions">
+  } satisfies Record<WikiPage, [string, AppIcon]>;
+  const [wikiHeadingTitle] = wikiSectionMeta[activePage];
+  const wikiHeaderAction = (
+    <div className="headerActions wikiHeaderActions" aria-label="Wiki actions">
+      {activePage === "apps" && (
+        <>
+          <button className="button secondary" type="button" onClick={() => void importLocalDraftApp()} disabled={localDraftBusy}>
+            <Upload size={15} />
+            Import
+          </button>
+          <TableRefreshButton onClick={refreshLocalDraftApps} disabled={localDraftBusy} label="Refresh apps" />
+        </>
+      )}
       <div className="publishMenuWrap" ref={publishMenuRef}>
         <button className="button primary" onClick={() => setPublishMenuOpen((open) => !open)} aria-expanded={publishMenuOpen} aria-haspopup="menu">
           <Plus size={15} />
@@ -12078,19 +13681,16 @@ function DojoView({
     </div>
   );
 
-  if (!dojoState) return <EmptyState title="No Wiki state" body="Training data will appear when the local Link state loads." />;
+  if (!wikiState) return <EmptyState title="No Wiki state" body="Training data will appear when the local Link state loads." />;
 
   return (
-    <section className="content dojoView">
+    <section className="content wikiHubView">
       <div className={`pageSectionShell ${activePage === "wiki" ? "" : "pageSectionShellSingle"}`}>
         {activePage === "wiki" && (
           <PageSectionSidebar
-            tabs={[
-              ["support", "Help", BookOpen],
-              ["developers", "Docs", FileText],
-              ["wiki", "Guru", BookOpen],
-              ["pylon", "Pylon", FileText],
-            ] as const}
+            heading="Wiki"
+            headingIcon={BookOpen}
+            tabs={wikiNavigationTabs.map((source) => [source.id, source.label, source.icon] as const)}
             activeTab={tab}
             onSelect={setTab}
             label="Wiki sections"
@@ -12098,28 +13698,28 @@ function DojoView({
         )}
         <div className="pageSectionMain">
           {activePage === "wiki" ? (
-            <PageSectionHeader parent="Wiki" title={activeWikiSourceTab.title} action={triforceHeaderAction} />
+            <PageSectionHeader parent="Link" title={activeWikiSourceTab.title} action={wikiHeaderAction} />
           ) : (
             <header className="pageHeader">
-              <h1>{dojoHeadingTitle}</h1>
-              {triforceHeaderAction}
+              <h1>{wikiHeadingTitle}</h1>
+              {wikiHeaderAction}
             </header>
           )}
-      <div className="dojoToolbar">
+      <div className="wikiToolbar">
         <button
-          className={`iconButton dojoFilterButton ${filter !== "all" || filterOpen ? "selected" : ""}`}
+          className={`iconButton wikiFilterButton ${filter !== "all" || filterOpen ? "selected" : ""}`}
           aria-label={filterOpen ? "Hide filters" : "Show filters"}
           title={filterOpen ? "Hide filters" : "Show filters"}
           onClick={() => setFilterOpen((open) => !open)}
         >
           <SlidersHorizontal size={16} />
         </button>
-        <label className="dojoSearchField">
+        <label className="wikiSearchField">
           <Search size={16} />
           <input value={query} placeholder={searchPlaceholder} onChange={(event) => setQuery(event.target.value)} />
         </label>
         {filterOpen && (
-          <div className="dojoFilterPanel" role="group" aria-label="Wiki filters">
+          <div className="wikiFilterPanel" role="group" aria-label="Wiki filters">
             {tabFilterOptions.map((option) => (
               <button
                 key={option}
@@ -12135,20 +13735,74 @@ function DojoView({
             ))}
           </div>
         )}
-        <label className="dojoSelectField">
+        <label className="wikiSelectField">
           <select value={sort} onChange={(event) => setSort(event.target.value as "az" | "za")}>
             <option value="az">A-Z</option>
             <option value="za">Z-A</option>
           </select>
         </label>
       </div>
-      <div className="dojoContent">
+      <div className="wikiHubContent">
         {tabContent()}
       </div>
         </div>
       </div>
     </section>
   );
+	}
+
+function emptyWikiSourceDraft(type: WikiSourceDraft["type"] = "github"): WikiSourceDraft {
+  return {
+    id: "",
+    type,
+    label: "",
+    iconName: "book",
+    target: "",
+    description: "",
+    branch: type === "github" ? "main" : "",
+    path: type === "github" ? "docs" : "",
+    enabled: true,
+  };
+}
+
+function wikiSourceDraftFromSource(source: WikiDocumentationSource): WikiSourceDraft {
+  return {
+    id: source.id,
+    type: source.type,
+    label: source.label,
+    iconName: wikiSourceIconName(source),
+    target: source.target,
+    description: source.description,
+    branch: String(source.metadata?.branch ?? ""),
+    path: String(source.metadata?.path ?? ""),
+    enabled: source.enabled,
+  };
+}
+
+function wikiSourceInputFromDraft(draft: WikiSourceDraft): WikiDocumentationSourceInput {
+  return {
+    ...(draft.id ? { id: draft.id } : {}),
+    label: draft.label.trim(),
+    type: draft.type,
+    target: draft.target.trim(),
+    description: draft.description.trim(),
+    enabled: draft.enabled,
+    metadata: {
+      icon: draft.iconName,
+      ...(draft.type === "github" && draft.branch.trim() ? { branch: draft.branch.trim() } : {}),
+      ...(draft.type === "github" && draft.path.trim() ? { path: draft.path.trim() } : {}),
+    },
+  };
+}
+
+function wikiSourceTypeDisplay(type: WikiDocumentationSourceType) {
+  if (type === "github") return "GitHub";
+  if (type === "mcp") return "MCP";
+  if (type === "okf") return "OKF";
+  if (type === "telnyx_support") return "Help";
+  if (type === "telnyx_developers") return "Docs";
+  if (type === "pylon") return "Pylon";
+  return "Guru";
 }
 
 function SettingsView({
@@ -12178,7 +13832,18 @@ function SettingsView({
 }) {
   const [credentials, setCredentials] = useState<CredentialGroupStatus[]>([]);
   const [dialerBuilderActions, setDialerBuilderActions] = useState<ReactNode>(null);
-  const visibleCredentials = useMemo(
+  const [settingsQuery, setSettingsQuery] = useState("");
+  const [settingsFiltersOpen, setSettingsFiltersOpen] = useState(false);
+  const [settingsStatusFilter, setSettingsStatusFilter] = useState<"all" | "connected" | "needs_setup">("all");
+	  const [settingsSortMode, setSettingsSortMode] = useState<"az" | "za" | "status">("az");
+	  const [settingsRefreshBusy, setSettingsRefreshBusy] = useState(false);
+	  const [selectedSettingsDetailId, setSelectedSettingsDetailId] = useState("");
+	  const [selectedSettingsDetailTab, setSelectedSettingsDetailTab] = useState<"overview" | "details" | "actions">("overview");
+	  const [wikiSources, setWikiSources] = useState<WikiDocumentationSource[]>([]);
+	  const [wikiSourceDraft, setWikiSourceDraft] = useState<WikiSourceDraft>(() => emptyWikiSourceDraft());
+	  const [wikiSourceStatus, setWikiSourceStatus] = useState("");
+	  const [wikiSourceBusy, setWikiSourceBusy] = useState("");
+	  const visibleCredentials = useMemo(
     () => credentials.filter((group) => group.id !== "agent-control-plane" && group.id !== "mcp-proxy"),
     [credentials],
   );
@@ -12187,86 +13852,744 @@ function SettingsView({
     [visibleCredentials],
   );
   const settingsTabHeading = {
-    auth: ["Auth", ShieldCheck],
+    auth: ["Pairings", ShieldCheck],
     plugins: ["Plugins", Plug],
     contacts: ["Contacts", Users],
-    assistants: ["Assistants", Bot],
+    assistants: ["Voice AI", Bot],
     numbers: ["Numbers", PhoneCall],
     agents: ["Agent Setup", Bot],
-    speak: ["Speech", Mic],
-    dialer: ["Dialer Builder", Keyboard],
-    design: ["Design System", Grid2X2],
-  } satisfies Record<typeof tab, [string, AppIcon]>;
+	    speak: ["Speech", Mic],
+	    dialer: ["Dialer Builder", Keyboard],
+	    design: ["Tool Design", Grid2X2],
+	    wiki: ["Sources", Plug],
+	  } satisfies Record<typeof tab, [string, AppIcon]>;
   const [settingsHeadingTitle] = settingsTabHeading[tab];
+	  async function refreshCredentials() {
+	    setCredentials(await linkApi.listCredentials());
+	  }
 
-  async function refreshCredentials() {
-    setCredentials(await linkApi.listCredentials());
+	  async function refreshWikiSources() {
+	    setWikiSources(await linkApi.listWikiSources());
+	  }
+
+	  async function refreshSettingsDirectories() {
+	    setSettingsRefreshBusy(true);
+	    try {
+	      await Promise.all([refreshCredentials(), refreshWikiSources()]);
+	      await refresh();
+	    } finally {
+      setSettingsRefreshBusy(false);
+    }
   }
+
+	  useEffect(() => {
+	    void Promise.all([refreshCredentials(), refreshWikiSources()]);
+	  }, []);
 
   useEffect(() => {
-    void refreshCredentials();
-  }, []);
+    setSettingsQuery("");
+    setSettingsFiltersOpen(false);
+    setSettingsStatusFilter("all");
+	    setSettingsSortMode("az");
+	    setSelectedSettingsDetailId("");
+	    setSelectedSettingsDetailTab("overview");
+	    setWikiSourceStatus("");
+	    setWikiSourceBusy("");
+	    setWikiSourceDraft(emptyWikiSourceDraft());
+	  }, [tab]);
+
+  const googleWorkspaceConnected = connectors.some((connector) =>
+    ["google-drive", "google-calendar"].includes(connector.id) &&
+    (connector.status === "connected" || connector.status === "signed_in"),
+  );
+
+  function credentialConnected(group: CredentialGroupStatus) {
+    return credentialGroupConnected(group, connectors, googleWorkspaceConnected);
+  }
+
+  function settingsConnectorTools(connector: ConnectorStatus) {
+    const connectorName = connector.name.toLowerCase().replace(/\s+mcp$/i, "");
+    if (connector.category === "MCP" && connector.id !== "mcp-proxy") {
+      return tools.filter((tool) => {
+        const searchable = `${tool.name} ${tool.category}`.toLowerCase();
+        return searchable.includes(connectorName.toLowerCase()) || searchable.includes(connector.id.replace("mcp-server-", ""));
+      });
+    }
+    if (connector.id === "mcp-proxy") return tools.filter((tool) => tool.category === "MCP" || /^[a-z0-9_-]+\./i.test(tool.name));
+    return tools.filter((tool) => tool.category.toLowerCase().includes(connector.name.toLowerCase()) || tool.name.toLowerCase().startsWith(`${connector.id}.`));
+  }
+
+	  async function connectSettingsConnector(id: string) {
+	    if (id === "agent-control-plane") {
+	      await linkApi.signInAgentControlPlane();
+	      await refresh();
+	      return;
+	    }
+	    setTab("auth");
+	  }
+
+	  function updateWikiSourceDraft<K extends keyof WikiSourceDraft>(key: K, value: WikiSourceDraft[K]) {
+	    setWikiSourceDraft((current) => ({ ...current, [key]: value }));
+	  }
+
+	  async function saveWikiSourceDraft() {
+	    setWikiSourceBusy("save");
+	    setWikiSourceStatus("");
+	    try {
+	      const sources = await linkApi.saveWikiSource(wikiSourceInputFromDraft(wikiSourceDraft));
+	      setWikiSources(sources);
+	      setWikiSourceStatus(wikiSourceDraft.id ? "Wiki source updated." : "Wiki source added.");
+	      setWikiSourceDraft(emptyWikiSourceDraft(wikiSourceDraft.type));
+	    } catch (error) {
+	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki source could not be saved.");
+	    } finally {
+	      setWikiSourceBusy("");
+	    }
+	  }
+
+	  async function deleteWikiSource(source: WikiDocumentationSource) {
+	    setWikiSourceBusy(source.id);
+	    setWikiSourceStatus("");
+	    try {
+	      setWikiSources(await linkApi.deleteWikiSource(source.id));
+	      if (wikiSourceDraft.id === source.id) setWikiSourceDraft(emptyWikiSourceDraft(source.type === "mcp" || source.type === "okf" ? source.type : "github"));
+	      setWikiSourceStatus(`${source.label} removed.`);
+	    } catch (error) {
+	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki source could not be removed.");
+	    } finally {
+	      setWikiSourceBusy("");
+	    }
+	  }
+
+	  async function resetWikiSources() {
+	    setWikiSourceBusy("reset");
+	    setWikiSourceStatus("");
+	    try {
+	      setWikiSources(await linkApi.resetWikiSources());
+	      setWikiSourceDraft(emptyWikiSourceDraft());
+	      setWikiSourceStatus("Wiki sources reset to Telnyx defaults.");
+	    } catch (error) {
+	      setWikiSourceStatus(error instanceof Error ? error.message : "Wiki sources could not be reset.");
+	    } finally {
+	      setWikiSourceBusy("");
+	    }
+	  }
+
+	  async function uploadOkfWikiSource() {
+	    setWikiSourceBusy("okf");
+	    setWikiSourceStatus("Selecting OKF bundle...");
+	    try {
+	      const bundle = await linkApi.selectOkfBundle();
+	      if (!bundle) {
+	        setWikiSourceStatus("OKF selection canceled.");
+	        return;
+	      }
+	      const label = bundle.sourcePath.split(/[\\/]/).filter(Boolean).pop()?.replace(/\.zip$/i, "") || "OKF bundle";
+	      const sources = await linkApi.saveWikiSource({
+	        label,
+	        type: "okf",
+	        target: bundle.sourcePath,
+	        description: `${bundle.summary.conceptCount} concepts, ${bundle.summary.brokenLinkCount} broken links`,
+	        enabled: bundle.errors.length === 0,
+	        metadata: {
+	          rootPath: bundle.rootPath,
+	          conceptCount: bundle.summary.conceptCount,
+	          warnings: bundle.warnings.length,
+	          errors: bundle.errors.length,
+	        },
+	      });
+	      setWikiSources(sources);
+	      setWikiSourceStatus(`${label} added to Wiki sources.`);
+	      setWikiSourceDraft(emptyWikiSourceDraft("okf"));
+	    } catch (error) {
+	      setWikiSourceStatus(error instanceof Error ? error.message : "OKF source could not be added.");
+	    } finally {
+	      setWikiSourceBusy("");
+	    }
+	  }
+
+	  async function pairGitHubForWiki() {
+	    setWikiSourceBusy("github-auth");
+	    setWikiSourceStatus("");
+	    try {
+	      await linkApi.connectGitHubWithDeviceFlow();
+	      await refreshCredentials();
+	      setWikiSourceStatus("GitHub paired.");
+	    } catch (error) {
+	      setWikiSourceStatus(error instanceof Error ? error.message : "GitHub could not be paired.");
+	    } finally {
+	      setWikiSourceBusy("");
+	    }
+	  }
+
+	  function renderSettingsDirectoryToolbar(placeholder: string, countLabel: string) {
+    return (
+      <>
+        <div className="chatSearchRow settingsDirectorySearchRow">
+          <button
+            className={`iconButton agentFilterButton ${settingsFiltersOpen || settingsStatusFilter !== "all" ? "selected" : ""}`}
+            type="button"
+            aria-label={settingsFiltersOpen ? "Hide filters" : "Show filters"}
+            title={settingsFiltersOpen ? "Hide filters" : "Show filters"}
+            onClick={() => setSettingsFiltersOpen((open) => !open)}
+          >
+            <SlidersHorizontal size={18} />
+          </button>
+          <div className="explorerSearch compactSearch">
+            <Search size={17} />
+            <input value={settingsQuery} onChange={(event) => setSettingsQuery(event.target.value)} placeholder={placeholder} />
+          </div>
+          <label className="wikiSelectField settingsDirectorySort">
+            <select value={settingsSortMode} onChange={(event) => setSettingsSortMode(event.target.value as "az" | "za" | "status")}>
+              <option value="az">A-Z</option>
+              <option value="za">Z-A</option>
+              <option value="status">Status</option>
+            </select>
+          </label>
+          <TableRefreshButton onClick={refreshSettingsDirectories} disabled={settingsRefreshBusy} label="Refresh settings" />
+        </div>
+        {settingsFiltersOpen && (
+          <div className="chatFilterBar settingsDirectoryFilterBar" role="group" aria-label="Settings filters">
+            <span className="chatFilterCount">{countLabel}</span>
+            <label className="agentFilter">
+              <span>Status</span>
+              <select value={settingsStatusFilter} onChange={(event) => setSettingsStatusFilter(event.target.value as "all" | "connected" | "needs_setup")}>
+                <option value="all">All</option>
+                <option value="connected">Connected</option>
+                <option value="needs_setup">Needs setup</option>
+              </select>
+            </label>
+          </div>
+        )}
+      </>
+    );
+  }
 
   function renderAuthTab() {
+    const query = settingsQuery.trim().toLowerCase();
+    const sortedCredentials = [...requiredCredentials].sort((left, right) => {
+      if (settingsSortMode === "status") {
+        const statusCompare = Number(credentialConnected(right)) - Number(credentialConnected(left));
+        if (statusCompare !== 0) return statusCompare;
+      }
+      const nameCompare = left.label.localeCompare(right.label, undefined, { sensitivity: "base" });
+      return settingsSortMode === "za" ? -nameCompare : nameCompare;
+    });
+    const filteredCredentials = sortedCredentials.filter((group) => {
+      const connected = credentialConnected(group);
+      const matchesStatus =
+        settingsStatusFilter === "all" ||
+        (settingsStatusFilter === "connected" && connected) ||
+        (settingsStatusFilter === "needs_setup" && !connected);
+      const matchesQuery =
+        !query ||
+        `${group.label} ${group.id} ${group.help} ${group.fields.map((field) => field.name).join(" ")}`.toLowerCase().includes(query);
+      return matchesStatus && matchesQuery;
+    });
+    const selectedGroupId = selectedSettingsDetailId.startsWith("auth:") ? selectedSettingsDetailId.slice(5) : "";
+    const selectedGroup = requiredCredentials.find((group) => group.id === selectedGroupId);
+    if (selectedGroup) {
+      const selectedFields = visibleCredentialFields(selectedGroup);
+      const connected = credentialConnected(selectedGroup);
+      return (
+        <div className="settingsDirectoryDetail embeddedDirectoryDetailView">
+          <header className="directoryEmbeddedDetailHeader">
+            <button className="button ghost" type="button" onClick={() => setSelectedSettingsDetailId("")}>
+              <ArrowLeft size={16} />
+              Auth
+            </button>
+            <div>
+              <h2>{selectedGroup.label}</h2>
+              <p>{credentialHelpCopy(selectedGroup)}</p>
+            </div>
+            <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
+          </header>
+          <section className="chatDetailSurface">
+            <div className="chatDetailTabs directoryDetailTabs" role="tablist" aria-label={`${selectedGroup.label} credential details`}>
+              {(["overview", "details", "actions"] as const).map((detailTab) => (
+                <button
+                  key={detailTab}
+                  className={selectedSettingsDetailTab === detailTab ? "selected" : ""}
+                  type="button"
+                  onClick={() => setSelectedSettingsDetailTab(detailTab)}
+                >
+                  {detailTab === "overview" ? "Overview" : detailTab === "details" ? "Credentials" : "Actions"}
+                </button>
+              ))}
+            </div>
+            {selectedSettingsDetailTab === "overview" && (
+              <div className="chatResultDetails directoryDetailPanel">
+                <div>
+                  <strong>Status</strong>
+                  <span>{connected ? "Connected" : "Needs setup"}</span>
+                </div>
+                <div>
+                  <strong>Fields</strong>
+                  <span>{selectedFields.length ? `${selectedFields.filter((field) => field.configured).length}/${selectedFields.length} configured` : "Managed connection"}</span>
+                </div>
+                <div>
+                  <strong>Source</strong>
+                  <span>{selectedGroup.id}</span>
+                </div>
+              </div>
+            )}
+            {selectedSettingsDetailTab === "details" && (
+              <div className="settingsCredentialDetailPanel">
+                <CredentialGroupCards
+                  connectors={connectors}
+                  groups={[selectedGroup]}
+                  setGroups={setCredentials}
+                  onSaved={async () => {
+                    await refresh();
+                    await refreshCredentials();
+                  }}
+                />
+              </div>
+            )}
+            {selectedSettingsDetailTab === "actions" && (
+              <div className="directoryDetailPanel">
+                <div className="assistantNotice">
+                  <p>{connected ? "This credential is ready for Link workflows." : "Open the Credentials tab to connect or update this credential."}</p>
+                </div>
+              </div>
+            )}
+          </section>
+        </div>
+      );
+    }
+
     return (
-      <div className="setupSettingsPanel">
-        <div className="credentialList">
-          <CredentialSection title="" groups={requiredCredentials}>
-            <CredentialGroupCards
-              connectors={connectors}
-              groups={requiredCredentials}
-              setGroups={setCredentials}
-              onSaved={async () => {
-                await refresh();
-                await refreshCredentials();
-              }}
-            />
-          </CredentialSection>
+      <div className="setupSettingsPanel settingsDirectoryPanel">
+        {renderSettingsDirectoryToolbar("Search auth, providers, keys, or setup notes", `${filteredCredentials.length} credentials`)}
+        <div className="chatSessionRows directoryTable settingsDirectoryTable" role="table" aria-label="Authentication credentials">
+          <div className="chatResultRow directoryResultRow settingsDirectoryResultRow chatResultRowHead" role="row">
+            <span role="columnheader">Name</span>
+            <span role="columnheader">Type</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Fields</span>
+            <span role="columnheader" aria-label="Open credential" />
+          </div>
+          <div className="chatResultRows">
+            {filteredCredentials.map((group) => {
+              const connected = credentialConnected(group);
+              const visibleFields = visibleCredentialFields(group);
+              return (
+                <div className="chatResultRow directoryResultRow settingsDirectoryResultRow" role="row" key={group.id}>
+                  <span className="directoryNameCell" role="cell">
+                    <strong>{group.label}</strong>
+                    <small>{credentialHelpCopy(group)}</small>
+                  </span>
+                  <span role="cell">{group.id}</span>
+                  <span role="cell">
+                    <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
+                  </span>
+                  <span role="cell">{visibleFields.length ? `${visibleFields.filter((field) => field.configured).length}/${visibleFields.length}` : "Managed"}</span>
+                  <span className="directoryRowActions" role="cell">
+                    <button
+                      className="chatSessionOpenButton"
+                      type="button"
+                      aria-label={`Open ${group.label}`}
+                      onClick={() => {
+                        setSelectedSettingsDetailId(`auth:${group.id}`);
+                        setSelectedSettingsDetailTab("overview");
+                      }}
+                    >
+                      <ArrowRight size={18} />
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+            {filteredCredentials.length === 0 && (
+              <div className="phoneNumberEmpty">No authentication settings match this search.</div>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
-  function renderPluginsTab() {
-    return (
-      <div className="setupSettingsPanel">
-        <div className="mcpsPanel pluginsSettingsPanel">
-          <ConnectionsView
-            connectors={connectors}
-            tools={tools}
-            refresh={refresh}
-            openSettings={() => {
-              setTab("auth");
-            }}
-            embedded
-            showHeader={false}
-          />
+	  function renderPluginsTab() {
+    const query = settingsQuery.trim().toLowerCase();
+    const sortedConnectors = sortConnectors(connectors, settingsSortMode);
+    const filteredConnectors = sortedConnectors.filter((connector) => {
+      const connected = connector.status === "connected" || connector.status === "signed_in";
+      const matchesStatus =
+        settingsStatusFilter === "all" ||
+        (settingsStatusFilter === "connected" && connected) ||
+        (settingsStatusFilter === "needs_setup" && !connected);
+      const matchesQuery = !query || `${connector.name} ${connector.id} ${connector.category} ${connector.description} ${connector.requiredAccess.join(" ")}`.toLowerCase().includes(query);
+      return matchesStatus && matchesQuery;
+    });
+    const selectedConnectorId = selectedSettingsDetailId.startsWith("plugin:") ? selectedSettingsDetailId.slice(7) : "";
+    const selectedConnector = connectors.find((connector) => connector.id === selectedConnectorId);
+    if (selectedConnector) {
+      const connected = selectedConnector.status === "connected" || selectedConnector.status === "signed_in";
+      const connectorToolList = settingsConnectorTools(selectedConnector);
+      const grouped = {
+        read: connectorToolList.filter((tool) => tool.capability === "read"),
+        write: connectorToolList.filter((tool) => tool.capability !== "read"),
+        interactive: connectorToolList.filter((tool) => tool.approvalRequired || tool.riskLevel === "high"),
+      };
+      return (
+        <div className="settingsDirectoryDetail embeddedDirectoryDetailView">
+          <header className="directoryEmbeddedDetailHeader">
+            <button className="button ghost" type="button" onClick={() => setSelectedSettingsDetailId("")}>
+              <ArrowLeft size={16} />
+              Plugins
+            </button>
+            <div>
+              <h2>{selectedConnector.name}</h2>
+              <p>{selectedConnector.description}</p>
+            </div>
+            <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
+          </header>
+          <section className="chatDetailSurface">
+            <div className="chatDetailTabs directoryDetailTabs" role="tablist" aria-label={`${selectedConnector.name} plugin details`}>
+              {(["overview", "details", "actions"] as const).map((detailTab) => (
+                <button
+                  key={detailTab}
+                  className={selectedSettingsDetailTab === detailTab ? "selected" : ""}
+                  type="button"
+                  onClick={() => setSelectedSettingsDetailTab(detailTab)}
+                >
+                  {detailTab === "overview" ? "Overview" : detailTab === "details" ? "Tools" : "Actions"}
+                </button>
+              ))}
+            </div>
+            {selectedSettingsDetailTab === "overview" && (
+              <div className="chatResultDetails directoryDetailPanel">
+                <div>
+                  <strong>Status</strong>
+                  <span>{connected ? "Connected" : "Needs setup"}</span>
+                </div>
+                <div>
+                  <strong>Type</strong>
+                  <span>{connectorTypeLabel(selectedConnector)}</span>
+                </div>
+                <div>
+                  <strong>Mode</strong>
+                  <span>{connectorModeLabel(selectedConnector)}</span>
+                </div>
+                <div>
+                  <strong>Access</strong>
+                  <span>{selectedConnector.requiredAccess.join(", ") || "No access scopes listed"}</span>
+                </div>
+              </div>
+            )}
+            {selectedSettingsDetailTab === "details" && (
+              <div className="directoryDetailPanel">
+                <ToolGroup title="Read-only tools" tools={grouped.read} />
+                <ToolGroup title="Write/delete tools" tools={grouped.write} />
+                <ToolGroup title="Interactive tools" tools={grouped.interactive} />
+              </div>
+            )}
+            {selectedSettingsDetailTab === "actions" && (
+              <div className="directoryDetailPanel">
+                <button
+                  className={connected ? "button ghost" : "button secondary"}
+                  type="button"
+                  disabled={connected}
+                  onClick={() => void connectSettingsConnector(selectedConnector.id)}
+                >
+                  {connectorButtonLabel(selectedConnector)}
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+	    );
+	  }
+
+	  return (
+      <div className="setupSettingsPanel settingsDirectoryPanel">
+        {renderSettingsDirectoryToolbar("Search plugins, tools, sources, or access", `${filteredConnectors.length} plugins`)}
+        <div className="chatSessionRows directoryTable settingsDirectoryTable" role="table" aria-label="Plugins">
+          <div className="chatResultRow directoryResultRow settingsDirectoryResultRow chatResultRowHead" role="row">
+            <span role="columnheader">Name</span>
+            <span role="columnheader">Type</span>
+            <span role="columnheader">Status</span>
+            <span role="columnheader">Tools</span>
+            <span role="columnheader" aria-label="Open plugin" />
+          </div>
+          <div className="chatResultRows">
+            {filteredConnectors.map((connector) => {
+              const connected = connector.status === "connected" || connector.status === "signed_in";
+              return (
+                <div className="chatResultRow directoryResultRow settingsDirectoryResultRow" role="row" key={connector.id}>
+                  <span className="directoryNameCell" role="cell">
+                    <strong>{connector.name}</strong>
+                    <small>{connector.description}</small>
+                  </span>
+                  <span role="cell">{connectorTypeLabel(connector)}</span>
+                  <span role="cell">
+                    <Badge tone={connected ? "success" : "warning"}>{connected ? "Connected" : "Needs setup"}</Badge>
+                  </span>
+                  <span role="cell">{settingsConnectorTools(connector).length}</span>
+                  <span className="directoryRowActions" role="cell">
+                    <button
+                      className="chatSessionOpenButton"
+                      type="button"
+                      aria-label={`Open ${connector.name}`}
+                      onClick={() => {
+                        setSelectedSettingsDetailId(`plugin:${connector.id}`);
+                        setSelectedSettingsDetailTab("overview");
+                      }}
+                    >
+                      <ArrowRight size={18} />
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+            {filteredConnectors.length === 0 && (
+              <div className="phoneNumberEmpty">No plugins match this search.</div>
+            )}
+          </div>
         </div>
       </div>
     );
   }
+
+
+	  function renderWikiSettingsTab() {
+	    const sortedSources = [...wikiSources].sort((left, right) => {
+	      const telnyxCompare = Number(right.configuredBy === "telnyx") - Number(left.configuredBy === "telnyx");
+	      if (telnyxCompare !== 0) return telnyxCompare;
+	      return left.label.localeCompare(right.label, undefined, { sensitivity: "base" });
+	    });
+	    const userSources = wikiSources.filter((source) => source.configuredBy !== "telnyx");
+	    const enabledSources = wikiSources.filter((source) => source.enabled);
+	    const githubCredential = credentials.find((group) => group.id === "github");
+	    const githubReady = githubCredential ? credentialConnected(githubCredential) : false;
+	    const targetLabel = wikiSourceDraft.type === "github" ? "Repository" : wikiSourceDraft.type === "mcp" ? "MCP endpoint" : wikiSourceDraft.type === "okf" ? "OKF bundle" : "Target";
+	    const targetPlaceholder = wikiSourceDraft.type === "github" ? "team-telnyx/link or https://github.com/team/repo" : wikiSourceDraft.type === "mcp" ? "https://mcp.example.com" : wikiSourceDraft.type === "okf" ? "/path/to/knowledge.zip" : "Source URL or connector target";
+	    const canChangeWikiSourceType = !wikiSourceDraft.id || ["github", "mcp", "okf"].includes(wikiSourceDraft.type);
+
+	    return (
+	      <div className="wikiSettingsPanel">
+	        <section className="accessCard wikiSourceSummary">
+	          <div className="accessCardHeader">
+	            <div className="accessCardTitle">
+	              <span className="accessIcon"><BookOpen size={18} /></span>
+	              <div>
+	                <h3>Wiki sources</h3>
+	                <p>Choose which Wiki sections appear, rename them, and pick icons from the Link icon library.</p>
+	              </div>
+	            </div>
+	            <div className="wikiSourceHeaderActions">
+	              <button className="button secondary" type="button" onClick={() => void pairGitHubForWiki()} disabled={wikiSourceBusy === "github-auth" || githubReady}>
+	                <GithubIcon />
+	                {githubReady ? "GitHub paired" : "Pair GitHub"}
+	              </button>
+	              <button className="button secondary" type="button" onClick={() => void uploadOkfWikiSource()} disabled={wikiSourceBusy === "okf"}>
+	                <Upload size={14} />
+	                Upload OKF
+	              </button>
+	              <button className="button ghost" type="button" onClick={() => void resetWikiSources()} disabled={wikiSourceBusy === "reset"}>
+	                <RefreshCw size={14} />
+	                Reset
+	              </button>
+	            </div>
+	          </div>
+	          <div className="wikiSourceMetrics">
+	            <div><span>Total</span><strong>{wikiSources.length}</strong></div>
+	            <div><span>Enabled</span><strong>{enabledSources.length}</strong></div>
+	            <div><span>User</span><strong>{userSources.length}</strong></div>
+	            <div><span>GitHub</span><strong>{githubReady ? "Paired" : "Missing"}</strong></div>
+	          </div>
+	          {wikiSourceStatus && <p className="wikiSourceStatus">{wikiSourceStatus}</p>}
+	        </section>
+
+	        <section className="accessCard wikiSourceEditor" aria-label="Add or repoint Wiki source">
+	          <form
+	            onSubmit={(event) => {
+	              event.preventDefault();
+	              void saveWikiSourceDraft();
+	            }}
+	          >
+	            <div className="wikiSourceEditorHeader">
+	              <div>
+	                <h3>{wikiSourceDraft.id ? "Repoint source" : "Add source"}</h3>
+	                <p>{wikiSourceDraft.id ? "Update the target and availability for this source." : "Connect a GitHub repo, MCP endpoint, or OKF bundle."}</p>
+	              </div>
+	              {wikiSourceDraft.id && (
+	                <button className="button ghost" type="button" onClick={() => setWikiSourceDraft(emptyWikiSourceDraft(wikiSourceDraft.type))}>
+	                  <X size={14} />
+	                  Cancel
+	                </button>
+	              )}
+	            </div>
+	            {canChangeWikiSourceType ? (
+	              <div className="wikiSourceTypePicker" role="tablist" aria-label="Wiki source type">
+	                {(["github", "mcp", "okf"] as const).map((sourceType) => (
+	                <button
+	                  key={sourceType}
+	                  className={wikiSourceDraft.type === sourceType ? "selected" : ""}
+	                  type="button"
+	                  onClick={() => setWikiSourceDraft((current) => ({ ...emptyWikiSourceDraft(sourceType), id: current.id && current.type === sourceType ? current.id : "" }))}
+	                >
+	                  {sourceType === "github" ? <GithubIcon /> : sourceType === "mcp" ? <Plug size={14} /> : <FileText size={14} />}
+	                  {wikiSourceTypeDisplay(sourceType)}
+	                </button>
+	                ))}
+	              </div>
+	            ) : (
+	              <div className="wikiSourceFixedType">
+	                <Badge tone="default">{wikiSourceTypeDisplay(wikiSourceDraft.type)}</Badge>
+	              </div>
+	            )}
+	            <div className="wikiSourceFormGrid">
+	              <label className="wikiSourceField">
+	                <span>Name</span>
+	                <input value={wikiSourceDraft.label} onChange={(event) => updateWikiSourceDraft("label", event.target.value)} placeholder="Support runbooks" />
+	              </label>
+	              <div className="wikiSourceField wikiIconPickerField">
+	                <span>Icon</span>
+	                <div className="wikiIconPicker" role="radiogroup" aria-label="Wiki section icon">
+	                  {wikiIconOptions.map((option) => {
+	                    const Icon = option.icon;
+	                    return (
+	                      <button
+	                        key={option.id}
+	                        className={wikiSourceDraft.iconName === option.id ? "selected" : ""}
+	                        type="button"
+	                        title={option.label}
+	                        aria-label={option.label}
+	                        aria-checked={wikiSourceDraft.iconName === option.id}
+	                        role="radio"
+	                        onClick={() => updateWikiSourceDraft("iconName", option.id)}
+	                      >
+	                        <Icon size={15} />
+	                      </button>
+	                    );
+	                  })}
+	                </div>
+	              </div>
+	              <label className="wikiSourceField">
+	                <span>{targetLabel}</span>
+	                <input value={wikiSourceDraft.target} onChange={(event) => updateWikiSourceDraft("target", event.target.value)} placeholder={targetPlaceholder} />
+	              </label>
+	              {wikiSourceDraft.type === "github" && (
+	                <>
+	                  <label className="wikiSourceField">
+	                    <span>Branch</span>
+	                    <input value={wikiSourceDraft.branch} onChange={(event) => updateWikiSourceDraft("branch", event.target.value)} placeholder="main" />
+	                  </label>
+	                  <label className="wikiSourceField">
+	                    <span>Path</span>
+	                    <input value={wikiSourceDraft.path} onChange={(event) => updateWikiSourceDraft("path", event.target.value)} placeholder="docs" />
+	                  </label>
+	                </>
+	              )}
+	              <label className="wikiSourceField wide">
+	                <span>Description</span>
+	                <input value={wikiSourceDraft.description} onChange={(event) => updateWikiSourceDraft("description", event.target.value)} placeholder="Internal docs indexed for Wiki search" />
+	              </label>
+	              <div className="wikiSourceFormActions">
+	                <button
+	                  className={`settingsToggle ${wikiSourceDraft.enabled ? "selected" : ""}`}
+	                  type="button"
+	                  aria-label={wikiSourceDraft.enabled ? "Disable source" : "Enable source"}
+	                  onClick={() => updateWikiSourceDraft("enabled", !wikiSourceDraft.enabled)}
+	                >
+	                  <span>{wikiSourceDraft.enabled ? "Enabled" : "Disabled"}</span>
+	                  <i />
+	                </button>
+	                <button className="button primary" type="submit" disabled={wikiSourceBusy === "save" || !wikiSourceDraft.label.trim() || !wikiSourceDraft.target.trim()}>
+	                  <Save size={14} />
+	                  {wikiSourceDraft.id ? "Save" : "Add"}
+	                </button>
+	              </div>
+	            </div>
+	          </form>
+	        </section>
+
+	        <section className="wikiSourceTableSection" aria-label="Configured Wiki sources">
+	          <div className="chatSessionRows directoryTable wikiSourceTable" role="table" aria-label="Configured Wiki sources">
+	            <div className="chatResultRow directoryResultRow wikiSourceRow chatResultRowHead" role="row">
+	              <span role="columnheader">Source</span>
+	              <span role="columnheader">Type</span>
+	              <span role="columnheader">Status</span>
+	              <span role="columnheader">Target</span>
+	              <span role="columnheader">Actions</span>
+	            </div>
+	            <div className="chatResultRows" role="rowgroup">
+	              {sortedSources.map((source) => (
+	                <div className="chatResultRow directoryResultRow wikiSourceRow" role="row" key={source.id}>
+	                  <span className="directoryNameCell wikiSourceNameCell" role="cell">
+	                    {(() => {
+	                      const SourceIcon = wikiIconForName(wikiSourceIconName(source));
+	                      return <SourceIcon size={17} />;
+	                    })()}
+	                    <span>
+	                      <strong>{source.label}</strong>
+	                      <small>{source.description}</small>
+	                    </span>
+	                  </span>
+	                  <span role="cell">{wikiSourceTypeDisplay(source.type)}</span>
+	                  <span role="cell">
+	                    <Badge tone={source.enabled ? (source.status === "connected" ? "success" : "warning") : "default"}>{source.enabled ? source.status.replace("_", " ") : "Disabled"}</Badge>
+	                  </span>
+	                  <span className="wikiSourceTargetCell" role="cell">{source.target}</span>
+	                  <span className="directoryRowActions wikiSourceRowActions" role="cell">
+	                    <>
+	                        <button className="iconButton" type="button" title="Repoint source" aria-label={`Repoint ${source.label}`} onClick={() => setWikiSourceDraft(wikiSourceDraftFromSource(source))}>
+	                          <Pencil size={15} />
+	                        </button>
+	                        <button className="iconButton" type="button" title="Remove source" aria-label={`Remove ${source.label}`} onClick={() => void deleteWikiSource(source)} disabled={wikiSourceBusy === source.id}>
+	                          <Trash2 size={15} />
+	                        </button>
+	                    </>
+	                  </span>
+	                </div>
+	              ))}
+	            </div>
+	          </div>
+	        </section>
+	      </div>
+	    );
+	  }
 
   return (
     <section className="content settingsView">
       <div className="pageSectionShell">
         <PageSectionSidebar
-          tabs={[
-            ["auth", "Auth", ShieldCheck],
-            ["plugins", "Plugins", Plug],
-            ["contacts", "Contacts", Users],
-            ["assistants", "Assistants", Bot],
-            ["numbers", "Numbers", PhoneCall],
-            ["agents", "Agents", Bot],
-            ["speak", "Speech", Mic],
-            ["dialer", "Dialer Builder", Keyboard],
-            ["design", "Design System", Grid2X2],
+          heading="Settings"
+          headingIcon={Settings}
+          groups={[
+            {
+              title: "ACCOUNT",
+              tabs: [
+                ["auth", "Pairings", ShieldCheck],
+                ["plugins", "Plugins", Plug],
+                ["agents", "Agents", Bot],
+              ],
+            },
+            {
+              title: "TELEPHONY",
+              tabs: [
+                ["contacts", "Contacts", Users],
+                ["dialer", "Dialer", Keyboard],
+                ["numbers", "Numbers", PhoneCall],
+                ["assistants", "Voice AI", Bot],
+              ],
+            },
+            {
+              title: "LINK APP",
+	              tabs: [
+	                ["speak", "Speech", Mic],
+	                ["design", "Tool Design", Grid2X2],
+	                ["wiki", "Sources", Plug],
+	              ],
+            },
           ] as const}
           activeTab={tab}
           onSelect={setTab}
           label="Settings sections"
         />
         <div className="pageSectionMain">
-          <PageSectionHeader parent="Settings" title={settingsHeadingTitle} />
+          <PageSectionHeader parent="Link" title={settingsHeadingTitle} />
 
           {tab === "auth" && renderAuthTab()}
           {tab === "plugins" && renderPluginsTab()}
@@ -12287,16 +14610,17 @@ function SettingsView({
               embedded
             />
           )}
-          {tab === "agents" && <AgentControlPlaneSetupPanel connectors={connectors} refresh={refresh} />}
-          {tab === "speak" && <SpeakSettingsPanel />}
+	          {tab === "agents" && <AgentControlPlaneSetupPanel connectors={connectors} refresh={refresh} />}
+	          {tab === "speak" && <ScribesView embedded />}
           {tab === "dialer" && (
             <>
               <div className="tabPageActionBar">{dialerBuilderActions}</div>
               <DialerBuilder activeConfig={activeDialerConfig} onActiveConfigChange={setActiveDialerConfig} renderActions={setDialerBuilderActions} />
             </>
-          )}
-          {tab === "design" && <DesignSystemView embedded />}
-        </div>
+	          )}
+	          {tab === "design" && <DesignSystemView embedded />}
+	          {tab === "wiki" && renderWikiSettingsTab()}
+	        </div>
       </div>
     </section>
   );
@@ -12566,6 +14890,862 @@ function AgentControlPlaneSetupPanel({
   );
 }
 
+type ScribesWorkspaceTab = "dictation" | "models" | "history" | "cloud" | "tts" | "meetings" | "settings";
+
+const scribesWorkspaceTabs: readonly PageSectionTab<ScribesWorkspaceTab>[] = [
+  ["dictation", "Dictation", Mic],
+  ["models", "Models", Download],
+  ["history", "History", ArchiveIcon],
+  ["cloud", "Telnyx Cloud", Plug],
+  ["tts", "TTS", Volume2],
+  ["meetings", "Meeting Notes", Users],
+  ["settings", "Settings", Settings],
+];
+
+function ScribesView({ embedded = false }: { embedded?: boolean }) {
+  const [activeTab, setActiveTab] = useState<ScribesWorkspaceTab>(embedded ? "settings" : "dictation");
+  const [status, setStatus] = useState<ScribesStatus | null>(null);
+  const [message, setMessage] = useState("");
+
+  async function refreshScribesWorkspace() {
+    const nextStatus = await linkApi.getScribesStatus();
+    setStatus(nextStatus);
+  }
+
+  useEffect(() => {
+    void refreshScribesWorkspace().catch((err) => {
+      setMessage(err instanceof Error ? err.message : "Scribes workspace could not load.");
+    });
+  }, []);
+
+  const activeLabel = scribesWorkspaceTabs.find(([id]) => id === activeTab)?.[1] || "Scribes";
+
+  function renderActivePanel() {
+    if (!status) return <div className="appEmptyPanel">Loading Scribes workspace...</div>;
+    if (activeTab === "dictation") return <ScribesDictationPanel status={status} onRefresh={refreshScribesWorkspace} />;
+    if (activeTab === "models") return <ScribesModelsPanel />;
+    if (activeTab === "history") return <ScribesHistoryPanel sessions={status.sessions} onRefresh={refreshScribesWorkspace} />;
+    if (activeTab === "cloud") return <ScribesCloudPanel status={status} onRefresh={refreshScribesWorkspace} />;
+    if (activeTab === "tts") return <ScribesTtsPanel status={status} />;
+    if (activeTab === "meetings") return <ScribesMeetingNotesPanel status={status} onRefresh={refreshScribesWorkspace} />;
+    return <ScribesWorkspaceSettingsPanel workspace={status.workspace} onRefresh={refreshScribesWorkspace} />;
+  }
+
+  return (
+    <section className={embedded ? "scribesView settingsScribesPanel" : "content scribesView canonicalChat"}>
+      {!embedded && (
+        <header className="pageHeader">
+          <div>
+            <h1>Scribes</h1>
+          </div>
+        </header>
+      )}
+      <div className={embedded ? "scribesSurface" : "pageSectionShell scribesWorkspaceShell"}>
+        {!embedded && (
+          <PageSectionSidebar
+            tabs={scribesWorkspaceTabs}
+            heading="Scribes"
+            headingIcon={ScribesWaveformIcon}
+            activeTab={activeTab}
+            onSelect={setActiveTab}
+            label="Scribes workspace sections"
+          />
+        )}
+        <main className="pageSectionMain scribesWorkspaceMain">
+          {!embedded && (
+            <PageSectionHeader
+              parent="Scribes"
+              title={activeLabel}
+              action={(
+                <button className="button secondary" type="button" onClick={() => void refreshScribesWorkspace()}>
+                  <RefreshCw size={14} />
+                  Refresh
+                </button>
+              )}
+            />
+          )}
+          {status && <ScribesRouteSummary status={status} />}
+          {renderActivePanel()}
+          {embedded && <SpeakSettingsPanel />}
+          {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
+        </main>
+      </div>
+    </section>
+  );
+}
+
+function ScribesRouteSummary({ status }: { status: ScribesStatus }) {
+  const artifactCount = status.sessions.reduce((count, session) => count + session.artifacts.length, 0);
+  return (
+    <div className="scribesSummaryGrid" aria-label="Scribes workspace status">
+      <div className="scribesRouteCard">
+        <span className="accessIcon"><Mic size={18} /></span>
+        <div>
+          <strong>Local STT</strong>
+          <small>{status.route.mode === "local" ? status.route.diagnostics.message : "OpenAI Whisper and NVIDIA Parakeet"}</small>
+        </div>
+      </div>
+      <div className="scribesRouteCard">
+        <span className="accessIcon"><Plug size={18} /></span>
+        <div>
+          <strong>Telnyx Cloud</strong>
+          <small>{status.telnyxCloudReady ? "TELNYX_API_KEY connected for cloud STT/TTS" : "TELNYX_API_KEY required for cloud STT/TTS"}</small>
+        </div>
+      </div>
+      <div className="scribesRouteCard">
+        <span className="accessIcon"><ArchiveIcon size={18} /></span>
+        <div>
+          <strong>{status.sessions.length.toLocaleString()} Records</strong>
+          <small>{artifactCount.toLocaleString()} generated artifacts in ~/Link/scribes/</small>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ScribesDictationPanel({ status, onRefresh }: { status: ScribesStatus; onRefresh: () => Promise<void> }) {
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftTranscript, setDraftTranscript] = useState("");
+  const [busyAction, setBusyAction] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function startDictation() {
+    setBusyAction("start");
+    setMessage("");
+    try {
+      await linkApi.startWhisper();
+      await onRefresh();
+      setMessage("Scribes dictation started.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes dictation could not start.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function stopDictation() {
+    setBusyAction("stop");
+    setMessage("");
+    try {
+      await linkApi.stopWhisper();
+      await onRefresh();
+      setMessage("Scribes dictation stopped.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes dictation could not stop.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function saveDraft() {
+    const transcriptText = draftTranscript.trim();
+    if (!transcriptText) return;
+    setBusyAction("save");
+    setMessage("");
+    try {
+      await linkApi.createScribesSession({
+        title: draftTitle.trim() || undefined,
+        transcriptText,
+        provider: status.settings.sttProvider,
+        model: status.settings.sttModel,
+        mode: status.settings.sttMode,
+        sessionType: "dictation",
+        language: status.settings.sttLanguage,
+        retainedAudio: status.workspace.retainAudio,
+      });
+      setDraftTitle("");
+      setDraftTranscript("");
+      await onRefresh();
+      setMessage("Transcript saved to Scribes.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Transcript could not be saved.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  return (
+    <div className="scribesWorkspacePanel">
+      <section className="accessCard speakStatusCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><Mic size={18} /></span>
+            <div>
+              <h3>Dictation</h3>
+              <p>{status.route.diagnostics.message}</p>
+            </div>
+          </div>
+          <Badge tone={status.route.ready ? "success" : "warning"}>{status.route.ready ? "Ready" : "Needs setup"}</Badge>
+        </div>
+        <div className="speakShortcutPanel">
+          <span className="accessIcon"><Keyboard size={18} /></span>
+          <div>
+            <small>Shortcut</small>
+            <strong>{status.settings.shortcutLabel}</strong>
+          </div>
+          <div className={`speakStatusPill ${status.server.ready ? "ready" : ""}`}>{status.server.running ? "Server running" : status.settings.sttMode === "telnyx-cloud" ? "Cloud route" : "Server stopped"}</div>
+        </div>
+        <div className="speakActionRow">
+          <button className="button primary" type="button" onClick={() => void startDictation()} disabled={busyAction !== ""}>
+            <Play size={14} />
+            {busyAction === "start" ? "Starting" : "Start"}
+          </button>
+          <button className="button secondary" type="button" onClick={() => void stopDictation()} disabled={busyAction !== ""}>
+            <Square size={14} />
+            {busyAction === "stop" ? "Stopping" : "Stop"}
+          </button>
+        </div>
+      </section>
+
+      <section className="accessCard scribesDraftCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><FileText size={18} /></span>
+            <div>
+              <h3>New Transcript</h3>
+            </div>
+          </div>
+          <button className="button primary" type="button" onClick={() => void saveDraft()} disabled={busyAction !== "" || !draftTranscript.trim()}>
+            <Save size={14} />
+            {busyAction === "save" ? "Saving" : "Save"}
+          </button>
+        </div>
+        <div className="scribesDraftFields">
+          <input value={draftTitle} onChange={(event) => setDraftTitle(event.target.value)} placeholder="Title" />
+          <textarea value={draftTranscript} onChange={(event) => setDraftTranscript(event.target.value)} placeholder="Transcript text" />
+        </div>
+      </section>
+      {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
+    </div>
+  );
+}
+
+function ScribesHistoryPanel({ sessions, onRefresh }: { sessions: ScribesSession[]; onRefresh: () => Promise<void> }) {
+  const [busyAction, setBusyAction] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function generateArtifact(session: ScribesSession, kind: ScribesArtifactKind) {
+    setBusyAction(`${kind}:${session.id}`);
+    setMessage("");
+    try {
+      await linkApi.generateScribesArtifact({ sessionId: session.id, kind });
+      await onRefresh();
+      setMessage(`${formatScribesArtifactKind(kind)} generated.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes artifact could not be generated.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function deleteSession(session: ScribesSession) {
+    setBusyAction(`delete:${session.id}`);
+    setMessage("");
+    try {
+      await linkApi.deleteScribesSession({ id: session.id });
+      await onRefresh();
+      setMessage("Scribes record deleted.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes record could not be deleted.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  return (
+    <section className="accessCard scribesHistoryCard">
+      <div className="accessCardHeader">
+        <div className="accessCardTitle">
+          <span className="accessIcon"><ArchiveIcon size={18} /></span>
+          <div>
+            <h3>Transcript History</h3>
+          </div>
+        </div>
+        <Badge tone="default">{sessions.length.toLocaleString()} records</Badge>
+      </div>
+      <div className="scribesSessionTable" role="table" aria-label="Scribes transcript history">
+        <div className="scribesSessionRow scribesSessionRowHead" role="row">
+          <span role="columnheader">Transcript</span>
+          <span role="columnheader">Provider</span>
+          <span role="columnheader">Duration</span>
+          <span role="columnheader">Updated</span>
+          <span role="columnheader">Actions</span>
+        </div>
+        {sessions.map((session) => (
+          <div className="scribesSessionRow" role="row" key={session.id}>
+            <div role="cell">
+              <strong>{session.title}</strong>
+              <small>{session.artifacts[0]?.path || "~/Link/scribes/transcripts/"}</small>
+            </div>
+            <span role="cell">{sttProviderLabel(session.provider)}</span>
+            <span role="cell">{formatScribesDuration(session.durationMs)}</span>
+            <span role="cell">{compactRelativeTime(session.updatedAt)}</span>
+            <div className="scribesModelActions" role="cell">
+              <button className="button secondary" type="button" onClick={() => void generateArtifact(session, "summary")} disabled={busyAction !== ""}>
+                <FileText size={14} />
+                Summary
+              </button>
+              <button className="button secondary" type="button" onClick={() => void generateArtifact(session, "action-items")} disabled={busyAction !== ""}>
+                <SquareCheck size={14} />
+                Actions
+              </button>
+              <button className="button secondary" type="button" onClick={() => void deleteSession(session)} disabled={busyAction !== ""}>
+                <Trash2 size={14} />
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+      {sessions.length === 0 && <EmptyState title="No transcripts yet" body="Scribes records will appear here after dictation, meeting capture, or transcript import." icon={FileText} />}
+      {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
+    </section>
+  );
+}
+
+function ScribesCloudPanel({ status, onRefresh }: { status: ScribesStatus; onRefresh: () => Promise<void> }) {
+  const [busyAction, setBusyAction] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function selectCloudRoute(target: "stt" | "tts") {
+    setBusyAction(target);
+    setMessage("");
+    try {
+      if (target === "stt") {
+        await linkApi.saveSpeakSettings({
+          sttMode: "telnyx-cloud",
+          sttProvider: "telnyx",
+          sttEngine: "Telnyx",
+          sttModel: "telnyx/stt",
+        });
+      } else {
+        await linkApi.saveSpeakSettings({
+          ttsMode: "telnyx-cloud",
+          ttsProvider: "telnyx",
+        });
+      }
+      await onRefresh();
+      setMessage("Telnyx Cloud route saved.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Telnyx Cloud route could not be saved.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  return (
+    <div className="scribesWorkspacePanel">
+      <section className="accessCard scribesCloudCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><Plug size={18} /></span>
+            <div>
+              <h3>Telnyx Cloud</h3>
+              <p>{status.telnyxCloudReady ? "TELNYX_API_KEY is configured." : "Cloud STT and TTS are blocked until TELNYX_API_KEY is configured."}</p>
+            </div>
+          </div>
+          <Badge tone={status.telnyxCloudReady ? "success" : "warning"}>{status.telnyxCloudReady ? "Connected" : "Key required"}</Badge>
+        </div>
+        <div className="scribesCloudGrid">
+          <div className="scribesCloudRoute">
+            <strong>Cloud STT</strong>
+            <span>Provider: Telnyx</span>
+            <button className="button secondary" type="button" onClick={() => void selectCloudRoute("stt")} disabled={busyAction !== "" || !status.telnyxCloudReady}>
+              <Mic size={14} />
+              {busyAction === "stt" ? "Saving" : "Use for STT"}
+            </button>
+          </div>
+          <div className="scribesCloudRoute">
+            <strong>Cloud TTS</strong>
+            <span>Provider: Telnyx</span>
+            <button className="button secondary" type="button" onClick={() => void selectCloudRoute("tts")} disabled={busyAction !== "" || !status.telnyxCloudReady}>
+              <Volume2 size={14} />
+              {busyAction === "tts" ? "Saving" : "Use for TTS"}
+            </button>
+          </div>
+        </div>
+      </section>
+      {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
+    </div>
+  );
+}
+
+function ScribesTtsPanel({ status }: { status: ScribesStatus }) {
+  return (
+    <div className="scribesWorkspacePanel">
+      <section className="accessCard speakSettingsCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><Volume2 size={18} /></span>
+            <div>
+              <h3>Text-to-Speech</h3>
+            </div>
+          </div>
+          <Badge tone={status.settings.ttsMode === "telnyx-cloud" && status.telnyxCloudReady ? "success" : status.settings.ttsMode === "local" ? "default" : "warning"}>
+            {status.settings.ttsMode === "local" ? "Local stub" : status.telnyxCloudReady ? "Cloud ready" : "Key required"}
+          </Badge>
+        </div>
+        <div className="scribesModeNotice">
+          <strong>{status.settings.ttsMode === "local" ? "Local TTS" : "Telnyx Cloud TTS"}</strong>
+          <span>{status.settings.ttsMode === "local" ? "Pluggable local provider slot." : "Hosted voice generation through Telnyx when TELNYX_API_KEY is configured."}</span>
+        </div>
+      </section>
+      <SpeakSettingsPanel />
+    </div>
+  );
+}
+
+function ScribesMeetingNotesPanel({ status, onRefresh }: { status: ScribesStatus; onRefresh: () => Promise<void> }) {
+  const [busyAction, setBusyAction] = useState("");
+  const [message, setMessage] = useState("");
+  const meetingSessions = status.sessions.filter((session) => session.sessionType === "meeting");
+
+  async function saveCaptureSettings(patch: Partial<ScribesWorkspaceSettings["meetingCapture"]>) {
+    setBusyAction("settings");
+    setMessage("");
+    try {
+      await linkApi.saveScribesSettings({
+        meetingCapture: {
+          ...status.workspace.meetingCapture,
+          ...patch,
+        },
+      });
+      await onRefresh();
+      setMessage("Meeting capture settings saved.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Meeting capture settings could not be saved.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function generateMeetingSummary(session: ScribesSession) {
+    setBusyAction(`meeting:${session.id}`);
+    setMessage("");
+    try {
+      await linkApi.generateScribesArtifact({ sessionId: session.id, kind: "summary" });
+      await onRefresh();
+      setMessage("Meeting summary generated.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Meeting summary could not be generated.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  return (
+    <div className="scribesWorkspacePanel">
+      <section className="accessCard scribesMeetingCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><Users size={18} /></span>
+            <div>
+              <h3>Meeting Capture</h3>
+            </div>
+          </div>
+          <Badge tone={status.workspace.meetingCapture.microphone ? "success" : "warning"}>{status.workspace.meetingCapture.microphone ? "Mic enabled" : "Mic off"}</Badge>
+        </div>
+        <div className="scribesCaptureGrid">
+          <label className="speakToggleRow">
+            <span>Microphone</span>
+            <button className={`settingsToggle ${status.workspace.meetingCapture.microphone ? "selected" : ""}`} type="button" onClick={() => void saveCaptureSettings({ microphone: !status.workspace.meetingCapture.microphone })} disabled={busyAction !== ""}>
+              <span>{status.workspace.meetingCapture.microphone ? "On" : "Off"}</span>
+              <i />
+            </button>
+          </label>
+          <label className="speakToggleRow">
+            <span>System Audio</span>
+            <button className={`settingsToggle ${status.workspace.meetingCapture.systemAudio ? "selected" : ""}`} type="button" onClick={() => void saveCaptureSettings({ systemAudio: !status.workspace.meetingCapture.systemAudio })} disabled={busyAction !== ""}>
+              <span>{status.workspace.meetingCapture.systemAudio ? "On" : "Off"}</span>
+              <i />
+            </button>
+          </label>
+          <label className="speakToggleRow">
+            <span>Speaker Labels</span>
+            <button className={`settingsToggle ${status.workspace.meetingCapture.speakerLabels ? "selected" : ""}`} type="button" onClick={() => void saveCaptureSettings({ speakerLabels: !status.workspace.meetingCapture.speakerLabels })} disabled={busyAction !== ""}>
+              <span>{status.workspace.meetingCapture.speakerLabels ? "On" : "Off"}</span>
+              <i />
+            </button>
+          </label>
+          <label className="speakToggleRow">
+            <span>Diarization</span>
+            <button className={`settingsToggle ${status.workspace.meetingCapture.diarization ? "selected" : ""}`} type="button" onClick={() => void saveCaptureSettings({ diarization: !status.workspace.meetingCapture.diarization })} disabled={busyAction !== ""}>
+              <span>{status.workspace.meetingCapture.diarization ? "On" : "Off"}</span>
+              <i />
+            </button>
+          </label>
+        </div>
+      </section>
+      <section className="accessCard scribesHistoryCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><Clock size={18} /></span>
+            <div>
+              <h3>Meeting Notes</h3>
+            </div>
+          </div>
+          <Badge tone="default">{meetingSessions.length.toLocaleString()} meetings</Badge>
+        </div>
+        <div className="scribesMeetingList">
+          {meetingSessions.map((session) => (
+            <div className="scribesMeetingItem" key={session.id}>
+              <div>
+                <strong>{session.title}</strong>
+                <small>{session.meeting.speakerLabels.join(", ") || "No speaker labels"} · {session.meeting.diarizationStatus}</small>
+                <p>{session.segments.slice(0, 2).map((segment) => `${segment.speaker}: ${segment.text}`).join(" ")}</p>
+              </div>
+              <button className="button secondary" type="button" onClick={() => void generateMeetingSummary(session)} disabled={busyAction !== ""}>
+                <FileText size={14} />
+                Summary
+              </button>
+            </div>
+          ))}
+        </div>
+        {meetingSessions.length === 0 && <EmptyState title="No meetings yet" body="Meeting transcripts will appear here with segments, speaker labels, and summaries." icon={Users} />}
+      </section>
+      {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
+    </div>
+  );
+}
+
+function ScribesWorkspaceSettingsPanel({ workspace, onRefresh }: { workspace: ScribesWorkspaceSettings; onRefresh: () => Promise<void> }) {
+  const [vocabularyDraft, setVocabularyDraft] = useState(workspace.customVocabulary.join("\n"));
+  const [selectedProfileId, setSelectedProfileId] = useState(workspace.activeCleanupProfileId);
+  const selectedProfile = workspace.cleanupProfiles.find((profile) => profile.id === selectedProfileId) || workspace.cleanupProfiles[0];
+  const [profileInstructions, setProfileInstructions] = useState(selectedProfile?.instructions || "");
+  const [busyAction, setBusyAction] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    setVocabularyDraft(workspace.customVocabulary.join("\n"));
+    setSelectedProfileId(workspace.activeCleanupProfileId);
+  }, [workspace.activeCleanupProfileId, workspace.customVocabulary]);
+
+  useEffect(() => {
+    setProfileInstructions(selectedProfile?.instructions || "");
+  }, [selectedProfile?.id, selectedProfile?.instructions]);
+
+  async function saveWorkspaceSettings(patch: Partial<ScribesWorkspaceSettings>) {
+    setBusyAction("settings");
+    setMessage("");
+    try {
+      await linkApi.saveScribesSettings(patch);
+      await onRefresh();
+      setMessage("Scribes settings saved.");
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes settings could not be saved.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function saveProfile() {
+    if (!selectedProfile) return;
+    const cleanupProfiles: ScribesCleanupProfile[] = workspace.cleanupProfiles.map((profile) =>
+      profile.id === selectedProfile.id
+        ? { ...profile, instructions: profileInstructions, updatedAt: new Date().toISOString() }
+        : profile,
+    );
+    await saveWorkspaceSettings({ cleanupProfiles, activeCleanupProfileId: selectedProfile.id });
+  }
+
+  return (
+    <div className="scribesWorkspacePanel">
+      <section className="accessCard speakSettingsCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><Settings size={18} /></span>
+            <div>
+              <h3>Scribes Settings</h3>
+            </div>
+          </div>
+        </div>
+        <div className="speakSettingsRows">
+          <div className="speakToggleRow">
+            <span>Retain Audio</span>
+            <button className={`settingsToggle ${workspace.retainAudio ? "selected" : ""}`} type="button" onClick={() => void saveWorkspaceSettings({ retainAudio: !workspace.retainAudio })} disabled={busyAction !== ""}>
+              <span>{workspace.retainAudio ? "On" : "Off"}</span>
+              <i />
+            </button>
+          </div>
+          <div className="speakToggleRow">
+            <span>Edit Mode</span>
+            <button className={`settingsToggle ${workspace.editModeEnabled ? "selected" : ""}`} type="button" onClick={() => void saveWorkspaceSettings({ editModeEnabled: !workspace.editModeEnabled })} disabled={busyAction !== ""}>
+              <span>{workspace.editModeEnabled ? "On" : "Off"}</span>
+              <i />
+            </button>
+          </div>
+          <label className="speakSettingField">
+            <span>Audio Days</span>
+            <input type="number" min={0} max={365} value={workspace.audioRetentionDays} onChange={(event) => void saveWorkspaceSettings({ audioRetentionDays: Number(event.target.value) })} />
+          </label>
+        </div>
+      </section>
+
+      <section className="accessCard speakSettingsCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><Tags size={18} /></span>
+            <div>
+              <h3>Vocabulary</h3>
+            </div>
+          </div>
+          <button className="button secondary" type="button" onClick={() => void saveWorkspaceSettings({ customVocabulary: vocabularyDraft.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) })} disabled={busyAction !== ""}>
+            <Save size={14} />
+            Save
+          </button>
+        </div>
+        <textarea className="scribesSettingsTextarea" value={vocabularyDraft} onChange={(event) => setVocabularyDraft(event.target.value)} />
+      </section>
+
+      <section className="accessCard speakSettingsCard">
+        <div className="accessCardHeader">
+          <div className="accessCardTitle">
+            <span className="accessIcon"><Pencil size={18} /></span>
+            <div>
+              <h3>Cleanup Profiles</h3>
+            </div>
+          </div>
+          <button className="button secondary" type="button" onClick={() => void saveProfile()} disabled={busyAction !== "" || !selectedProfile}>
+            <Save size={14} />
+            Save Profile
+          </button>
+        </div>
+        <div className="speakSettingsRows">
+          <label className="speakSettingField">
+            <span>Active Profile</span>
+            <select value={selectedProfileId} onChange={(event) => setSelectedProfileId(event.target.value)}>
+              {workspace.cleanupProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}
+            </select>
+          </label>
+          <textarea className="scribesSettingsTextarea" value={profileInstructions} onChange={(event) => setProfileInstructions(event.target.value)} />
+          <div className="scribesModeNotice">
+            <strong>Cleanup guard</strong>
+            <span>Transcript text is edited as content only; profile text is never treated as transcript instructions.</span>
+          </div>
+        </div>
+      </section>
+      {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
+    </div>
+  );
+}
+
+function formatScribesDuration(durationMs: number) {
+  if (!durationMs) return "0s";
+  const seconds = Math.max(0, Math.round(durationMs / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+function formatScribesArtifactKind(kind: ScribesArtifactKind) {
+  if (kind === "action-items") return "Action items";
+  if (kind === "meeting-notes") return "Meeting notes";
+  if (kind === "tts-script") return "TTS script";
+  return kind.charAt(0).toUpperCase() + kind.slice(1);
+}
+
+function sttProviderDefaultModel(provider: SpeakSettings["sttProvider"]) {
+  if (provider === "telnyx") return "telnyx/stt";
+  if (provider === "nvidia-parakeet") return "parakeet-tdt-0.6b-v3";
+  return "whisper.cpp/base";
+}
+
+function sttProviderLabel(provider: SpeakSettings["sttProvider"]) {
+  if (provider === "telnyx") return "Telnyx Cloud";
+  if (provider === "nvidia-parakeet") return "NVIDIA Parakeet";
+  return "OpenAI Whisper";
+}
+
+function sttProviderEngineLabel(provider: SpeakSettings["sttProvider"]): SpeakSettings["sttEngine"] {
+  if (provider === "telnyx") return "Telnyx";
+  if (provider === "nvidia-parakeet") return "NVIDIA Parakeet";
+  return "Local Whisper";
+}
+
+function ScribesModelsPanel() {
+  const [status, setStatus] = useState<ScribesStatus | null>(null);
+  const [busyAction, setBusyAction] = useState("");
+  const [message, setMessage] = useState("");
+
+  async function refreshScribesStatus() {
+    const nextStatus = await linkApi.getScribesStatus();
+    setStatus(nextStatus);
+  }
+
+  useEffect(() => {
+    void refreshScribesStatus().catch((err) => {
+      setMessage(err instanceof Error ? err.message : "Scribes model status could not load.");
+    });
+  }, []);
+
+  async function useModel(model: ScribesModel) {
+    setBusyAction(`use:${model.id}`);
+    setMessage("");
+    try {
+      await linkApi.saveSpeakSettings({
+        sttMode: "local",
+        sttProvider: model.provider,
+        sttEngine: sttProviderEngineLabel(model.provider),
+        sttModel: model.id,
+      });
+      await refreshScribesStatus();
+      setMessage(`${model.label} selected for local STT.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes model could not be selected.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function downloadModel(model: ScribesModel) {
+    setBusyAction(`download:${model.id}`);
+    setMessage("");
+    try {
+      await linkApi.downloadScribesModel({ modelId: model.id, provider: model.provider });
+      await refreshScribesStatus();
+      setMessage(`${model.label} is available locally.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes model download failed.");
+      await refreshScribesStatus().catch(() => undefined);
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function deleteModel(model: ScribesModel) {
+    setBusyAction(`delete:${model.id}`);
+    setMessage("");
+    try {
+      await linkApi.deleteScribesModel({ modelId: model.id, provider: model.provider });
+      await refreshScribesStatus();
+      setMessage(`${model.label} removed from local storage.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes model could not be deleted.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function cancelDownload(model: ScribesModel) {
+    setBusyAction(`cancel:${model.id}`);
+    setMessage("");
+    try {
+      await linkApi.cancelScribesModelDownload({ modelId: model.id, provider: model.provider });
+      await refreshScribesStatus();
+      setMessage(`Cancel requested for ${model.label}.`);
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes model download could not be canceled.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function toggleServer() {
+    if (!status) return;
+    setBusyAction(status.server.running ? "server:stop" : "server:start");
+    setMessage("");
+    try {
+      if (status.server.running) {
+        await linkApi.stopScribesLocalServer();
+      } else {
+        await linkApi.startScribesLocalServer({ warm: true });
+      }
+      await refreshScribesStatus();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : "Scribes local server action failed.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  if (!status) {
+    return <div className="appEmptyPanel">Loading Scribes models...</div>;
+  }
+
+  const selectedModelId = status.settings.sttMode === "local" ? status.settings.sttModel : "";
+
+  return (
+    <section className="accessCard scribesModelManager">
+      <div className="accessCardHeader">
+        <div className="accessCardTitle">
+          <span className="accessIcon"><Download size={18} /></span>
+          <div>
+            <h3>Local STT Models</h3>
+            <p>{status.route.diagnostics.message}</p>
+          </div>
+        </div>
+        <button className="button secondary" type="button" onClick={() => void toggleServer()} disabled={busyAction !== ""}>
+          {status.server.running ? <Square size={14} /> : <Play size={14} />}
+          {busyAction.startsWith("server") ? "Working" : status.server.running ? "Stop Server" : "Start Server"}
+        </button>
+      </div>
+      <div className="scribesServerStrip">
+        <span className={`speakStatusPill ${status.server.ready ? "ready" : ""}`}>{status.server.running ? status.server.ready ? "Ready" : "Running" : "Stopped"}</span>
+        <span>{status.server.message}</span>
+        {status.server.endpoint && <code>{status.server.endpoint}</code>}
+      </div>
+      <div className="scribesModelTable" role="table" aria-label="Scribes local STT models">
+        <div className="scribesModelRow scribesModelRowHead" role="row">
+          <span role="columnheader">Model</span>
+          <span role="columnheader">Provider</span>
+          <span role="columnheader">Size</span>
+          <span role="columnheader">Status</span>
+          <span role="columnheader">Actions</span>
+        </div>
+        {status.models.map((model) => {
+          const selected = selectedModelId === model.id;
+          const progress = model.download?.totalBytes ? Math.round(((model.download.receivedBytes || 0) / model.download.totalBytes) * 100) : 0;
+          return (
+            <div className={`scribesModelRow ${selected ? "selected" : ""}`} role="row" key={model.id}>
+              <div role="cell">
+                <strong>{model.label}</strong>
+                <small>{model.description}</small>
+              </div>
+              <span role="cell">{sttProviderLabel(model.provider)}</span>
+              <span role="cell">{formatScribesBytes(model.sizeBytes)}</span>
+              <span role="cell">{model.downloading ? `${progress}%` : model.downloaded ? "Downloaded" : "Not downloaded"}</span>
+              <div className="scribesModelActions" role="cell">
+                <button className="button secondary" type="button" onClick={() => void useModel(model)} disabled={busyAction !== "" || selected}>
+                  <Check size={14} />
+                  {selected ? "Selected" : "Use"}
+                </button>
+                {model.downloading ? (
+                  <button className="button secondary" type="button" onClick={() => void cancelDownload(model)} disabled={busyAction !== ""}>
+                    <Square size={14} />
+                    Cancel
+                  </button>
+                ) : model.downloaded ? (
+                  <button className="button secondary" type="button" onClick={() => void deleteModel(model)} disabled={busyAction !== ""}>
+                    <Trash2 size={14} />
+                    Delete
+                  </button>
+                ) : (
+                  <button className="button primary" type="button" onClick={() => void downloadModel(model)} disabled={busyAction !== ""}>
+                    <Download size={14} />
+                    {busyAction === `download:${model.id}` ? "Downloading" : "Download"}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {message && <div className="voiceInputStatus" aria-live="polite">{message}</div>}
+    </section>
+  );
+}
+
+function formatScribesBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
 function SpeakSettingsPanel() {
   const [settings, setSettings] = useState<SpeakSettings | null>(null);
   const [status, setStatus] = useState<WhisperStatus | null>(null);
@@ -12590,7 +15770,7 @@ function SpeakSettingsPanel() {
 
   useEffect(() => {
     void refreshSpeakSettings().catch((err) => {
-      setMessage(err instanceof Error ? err.message : "Speech settings could not load.");
+      setMessage(err instanceof Error ? err.message : "Scribes settings could not load.");
     });
   }, []);
 
@@ -12609,8 +15789,43 @@ function SpeakSettingsPanel() {
       setMessage("Saved");
     } catch (err) {
       setSettings(settings);
-      setMessage(err instanceof Error ? err.message : "Speech settings could not be saved.");
+      setMessage(err instanceof Error ? err.message : "Scribes settings could not be saved.");
     }
+  }
+
+  async function chooseSttMode(nextMode: SpeakSettings["sttMode"]) {
+    if (nextMode === "telnyx-cloud") {
+      await saveSpeakSettingsPatch({
+        sttMode: "telnyx-cloud",
+        sttProvider: "telnyx",
+        sttEngine: "Telnyx",
+        sttModel: sttProviderDefaultModel("telnyx"),
+      });
+      return;
+    }
+    await saveSpeakSettingsPatch({
+      sttMode: "local",
+      sttProvider: "openai-whisper",
+      sttEngine: "Local Whisper",
+      sttModel: sttProviderDefaultModel("openai-whisper"),
+    });
+  }
+
+  async function chooseSttProvider(provider: SpeakSettings["sttProvider"]) {
+    await saveSpeakSettingsPatch({
+      sttMode: provider === "telnyx" ? "telnyx-cloud" : "local",
+      sttProvider: provider,
+      sttEngine: sttProviderEngineLabel(provider),
+      sttModel: sttProviderDefaultModel(provider),
+    });
+  }
+
+  async function chooseTtsMode(nextMode: SpeakSettings["ttsMode"]) {
+    await saveSpeakSettingsPatch({
+      ttsMode: nextMode,
+      localTtsProvider: "stub",
+      ttsProvider: "telnyx",
+    });
   }
 
   async function runWhisperAction(action: "build" | "start" | "stop") {
@@ -12625,7 +15840,7 @@ function SpeakSettingsPanel() {
       setStatus(nextStatus);
       setMessage(nextStatus.message);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : "Telnyx Whisper action failed.");
+      setMessage(err instanceof Error ? err.message : "Scribes dictation action failed.");
       await refreshSpeakSettings().catch(() => undefined);
     } finally {
       setBusyAction("");
@@ -12640,6 +15855,10 @@ function SpeakSettingsPanel() {
   }, []);
 
   async function loadVoices(provider = voiceProviderFilter) {
+    if (settings?.ttsMode === "local") {
+      setMessage("Local TTS is a pluggable Scribes slot. Use Telnyx Cloud TTS to load hosted voices.");
+      return;
+    }
     setBusyAction("voices");
     setMessage("");
     try {
@@ -12657,6 +15876,7 @@ function SpeakSettingsPanel() {
 
   async function useVoice(voice: TelnyxTtsVoice) {
     await saveSpeakSettingsPatch({
+      ttsMode: "telnyx-cloud",
       ttsProvider: voice.provider || settings?.ttsProvider || "telnyx",
       ttsVoice: voice.voiceId,
     });
@@ -12689,10 +15909,13 @@ function SpeakSettingsPanel() {
   }
 
   if (!settings || !status) {
-    return <div className="appEmptyPanel">Loading Speech settings...</div>;
+    return <div className="appEmptyPanel">Loading Scribes settings...</div>;
   }
 
-  const canStart = status.available && status.apiKeyReady && !status.running;
+  const cloudSttSelected = settings.sttMode === "telnyx-cloud" && settings.sttProvider === "telnyx";
+  const localSttSelected = settings.sttMode === "local";
+  const cloudTtsSelected = settings.ttsMode === "telnyx-cloud";
+  const canStart = status.available && !status.running && (cloudSttSelected ? status.cloudReady : status.localReady);
   const voiceLanguageOptions = Array.from(new Set(voices.map((voice) => voice.language).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   const voiceGenderOptions = Array.from(new Set(voices.map((voice) => voice.gender).filter(Boolean))).sort((a, b) => a.localeCompare(b));
   const normalizedVoiceSearch = voiceSearch.trim().toLowerCase();
@@ -12711,13 +15934,13 @@ function SpeakSettingsPanel() {
           <div className="accessCardTitle">
             <span className="accessIcon"><Mic size={18} /></span>
             <div>
-              <h3>Telnyx Whisper</h3>
+              <h3>Scribes Dictation</h3>
               <p>{status.message}</p>
             </div>
           </div>
           <button
             className={`settingsToggle ${settings.whisperEnabled ? "selected" : ""}`}
-            aria-label={settings.whisperEnabled ? "Disable Telnyx Whisper" : "Enable Telnyx Whisper"}
+            aria-label={settings.whisperEnabled ? "Disable Scribes dictation" : "Enable Scribes dictation"}
             onClick={() => void saveSpeakSettingsPatch({ whisperEnabled: !settings.whisperEnabled })}
           >
             <span>{settings.whisperEnabled ? "On" : "Off"}</span>
@@ -12732,6 +15955,10 @@ function SpeakSettingsPanel() {
           </div>
           <div className="speakStatusPill">{status.running ? `Running${status.pid ? ` #${status.pid}` : ""}` : status.built ? "Ready" : "Not built"}</div>
         </div>
+        <div className="scribesModeNotice">
+          <strong>{cloudSttSelected ? "Telnyx Cloud STT" : "Local STT"}</strong>
+          <span>{cloudSttSelected ? "Requires TELNYX_API_KEY. The current macOS helper uses this path." : "OpenAI Whisper and NVIDIA Parakeet route through the Scribes local STT server."}</span>
+        </div>
         <div className="speakActionRow">
           <button className="button secondary" onClick={() => void runWhisperAction("build")} disabled={busyAction !== "" || !status.available}>
             <Download size={14} />
@@ -12739,7 +15966,7 @@ function SpeakSettingsPanel() {
           </button>
           <button className="button primary" onClick={() => void runWhisperAction("start")} disabled={busyAction !== "" || !canStart || !settings.whisperEnabled}>
             <Play size={14} />
-            {busyAction === "start" ? "Starting" : "Start"}
+            {busyAction === "start" ? "Starting" : cloudSttSelected ? "Start Cloud" : "Start Local"}
           </button>
           <button className="button secondary" onClick={() => void runWhisperAction("stop")} disabled={busyAction !== "" || !status.running}>
             <Square size={14} />
@@ -12759,6 +15986,13 @@ function SpeakSettingsPanel() {
         </div>
         <div className="speakSettingsRows">
           <label className="speakSettingField">
+            <span>STT Mode</span>
+            <select value={settings.sttMode} onChange={(event) => void chooseSttMode(event.target.value as SpeakSettings["sttMode"])}>
+              <option value="local">Local</option>
+              <option value="telnyx-cloud">Telnyx Cloud</option>
+            </select>
+          </label>
+          <label className="speakSettingField">
             <span>Shortcut Mode</span>
             <select value={settings.shortcutMode} onChange={(event) => void saveSpeakSettingsPatch({ shortcutMode: event.target.value as SpeakSettings["shortcutMode"] })}>
               <option value="hold-fn">Hold fn</option>
@@ -12766,12 +16000,11 @@ function SpeakSettingsPanel() {
             </select>
           </label>
           <label className="speakSettingField">
-            <span>Engine</span>
-            <select value={settings.sttEngine} onChange={(event) => void saveSpeakSettingsPatch({ sttEngine: event.target.value as SpeakSettings["sttEngine"] })}>
-              <option value="Telnyx">Telnyx</option>
-              <option value="Deepgram">Deepgram</option>
-              <option value="Azure">Azure</option>
-              <option value="Google">Google</option>
+            <span>Provider</span>
+            <select value={settings.sttProvider} onChange={(event) => void chooseSttProvider(event.target.value as SpeakSettings["sttProvider"])}>
+              {localSttSelected && <option value="openai-whisper">OpenAI Whisper</option>}
+              {localSttSelected && <option value="nvidia-parakeet">NVIDIA Parakeet</option>}
+              {cloudSttSelected && <option value="telnyx">Telnyx Cloud</option>}
             </select>
           </label>
           <label className="speakSettingField">
@@ -12798,6 +16031,11 @@ function SpeakSettingsPanel() {
               <i />
             </button>
           </div>
+          <div className="scribesRouteNote">
+            <span>{settings.sttEngine}</span>
+            <strong>{sttProviderLabel(settings.sttProvider)}</strong>
+            <small>{localSttSelected ? "Local transcription runs through the selected allowlisted Scribes model." : "Cloud transcription is gated by TELNYX_API_KEY."}</small>
+          </div>
         </div>
       </section>
 
@@ -12809,20 +16047,23 @@ function SpeakSettingsPanel() {
               <h3>Text-to-Speech</h3>
             </div>
           </div>
-          <button className="button secondary" onClick={() => void loadVoices()} disabled={busyAction !== ""}>
+          <button className="button secondary" onClick={() => void loadVoices()} disabled={busyAction !== "" || !cloudTtsSelected}>
             <RefreshCw size={14} />
             {busyAction === "voices" ? "Loading" : "Load Voices"}
           </button>
         </div>
         <div className="speakSettingsRows">
           <label className="speakSettingField">
+            <span>TTS Mode</span>
+            <select value={settings.ttsMode} onChange={(event) => void chooseTtsMode(event.target.value as SpeakSettings["ttsMode"])}>
+              <option value="telnyx-cloud">Telnyx Cloud</option>
+              <option value="local">Local</option>
+            </select>
+          </label>
+          <label className="speakSettingField">
             <span>Provider</span>
-            <select value={settings.ttsProvider} onChange={(event) => void saveSpeakSettingsPatch({ ttsProvider: event.target.value })}>
-              <option value="telnyx">Telnyx</option>
-              <option value="aws">AWS</option>
-              <option value="azure">Azure</option>
-              <option value="elevenlabs">ElevenLabs</option>
-              <option value="xai">xAI</option>
+            <select value={cloudTtsSelected ? settings.ttsProvider : settings.localTtsProvider} onChange={(event) => void saveSpeakSettingsPatch({ ttsMode: "telnyx-cloud", ttsProvider: event.target.value })} disabled={!cloudTtsSelected}>
+              {cloudTtsSelected ? <option value="telnyx">Telnyx Cloud</option> : <option value="stub">Pluggable local TTS</option>}
             </select>
           </label>
           <label className="speakSettingField">
@@ -12840,11 +16081,17 @@ function SpeakSettingsPanel() {
             )}
           </label>
         </div>
+        {!cloudTtsSelected && (
+          <div className="scribesModeNotice">
+            <strong>Local TTS placeholder</strong>
+            <span>Plan C keeps this as a pluggable slot; Telnyx Cloud TTS remains the working hosted path.</span>
+          </div>
+        )}
         <div className="ttsLibraryPanel">
           <div className="ttsLibraryHeader">
             <div>
               <h4>Voice Library</h4>
-              <p>Browse hosted voices, play a short sample, then save the voice for Speech.</p>
+              <p>Browse hosted voices, play a short sample, then save the voice for Scribes.</p>
             </div>
             <button className="button secondary" type="button" onClick={() => window.open("https://ttslibrary.com/voices", "_blank")}>
               <ExternalLink size={14} />
@@ -13227,14 +16474,16 @@ function credentialGroupConnected(group: CredentialGroupStatus, connectors: Conn
 }
 
 function credentialHelpCopy(group: CredentialGroupStatus) {
-  if (group.id === "litellm") return "Ask AI-swe-Agent in Slack for your LiteLLM key.";
+  if (group.id === "litellm") return "Optional managed gateway and frontier BYO settings. Local Ollama mode does not require a cloud key; Telnyx BYO uses the Telnyx API key group.";
   return group.help;
 }
 
 function credentialFieldLabel(name: string) {
-  if (name === "LITELLM_API_KEY") return "LiteLLM API Key";
-  if (name === "LITELLM_BASE_URL") return "LiteLLM Base URL";
+  if (name === "LITELLM_API_KEY") return "Managed Gateway API Key";
+  if (name === "LITELLM_BASE_URL") return "Managed Gateway URL";
   if (name === "LITELLM_MODEL") return "LiteLLM Model";
+  if (name === "TELNYX_INFERENCE_BASE_URL") return "Telnyx Inference Base URL";
+  if (name === "ANTHROPIC_API_KEY") return "Anthropic API Key";
   if (name === "GOOGLE_WORKSPACE_AGENT_CONNECTION_ID") return "Google Workspace Agent Connection";
   if (name === "GOG_ACCOUNT") return "GOG Account";
   if (name === "GOG_KEYRING_PASSWORD") return "GOG Keyring Password";
@@ -13265,11 +16514,44 @@ function isSecretCredentialField(name: string) {
 }
 
 function isRequiredCredentialGroup(group: CredentialGroupStatus) {
-  return ["telnyx", "litellm", "github", "google-workspace", "guru", "pylon", "intercom-help-center", "mintlify-developer-docs"].includes(group.id);
+  return ["telnyx", "github", "google-workspace", "guru", "pylon", "intercom-help-center", "mintlify-developer-docs"].includes(group.id);
 }
 
 function compareCredentialGroups(left: CredentialGroupStatus, right: CredentialGroupStatus) {
   return left.label.localeCompare(right.label, undefined, { sensitivity: "base" });
+}
+
+function fallbackAiModelRoutes(): AiModelRoute[] {
+  return [
+    {
+      id: "auto/ask-before-cloud",
+      modelName: "auto/ask-before-cloud",
+      label: "Auto: ask before cloud",
+      provider: "local",
+      dataBoundary: "local",
+      targetModel: "llama3.2",
+      description: "Default local-first route. It does not silently fall back to cloud.",
+      available: true,
+      default: true,
+    },
+    {
+      id: "auto/local-only",
+      modelName: "auto/local-only",
+      label: "Auto: local only",
+      provider: "local",
+      dataBoundary: "local",
+      targetModel: "llama3.2",
+      description: "Only uses the local Ollama-compatible model.",
+      available: true,
+    },
+  ];
+}
+
+function dataBoundaryLabel(boundary?: AiModelRoute["dataBoundary"]) {
+  if (boundary === "telnyx-cloud") return "Telnyx Cloud";
+  if (boundary === "frontier-byo") return "Frontier BYO";
+  if (boundary === "self-hosted") return "Self-hosted";
+  return "Local";
 }
 
 function sortAgents(agents: AgentSummary[], sortMode: "az" | "za" | "status") {
@@ -13388,6 +16670,7 @@ function formatSourceLabel(source: AgentSummary["source"]) {
   if (source === "agent-control-plane") return "Agent Control Plane";
   if (source === "a2a-discovery") return "Directory";
   if (source === "aida") return "AIDA";
+  if (source === "self-hosted") return "Self-hosted";
   return formatStatusLabel(source);
 }
 
@@ -13577,6 +16860,12 @@ function DesignSystemView({ embedded = false }: { embedded?: boolean }) {
               <div><StatusDot tone="warning" /><strong>Telnyx Inference</strong><small>Needs API key before live agents can run.</small></div>
             </div>
           </Panel>
+          <Panel title="Tables">
+            <div className="designSpecList">
+              <p>Middle-section tables use the shared chatSessionRows/chatResultRow pattern: 18px row side padding, 14px column gaps, 58px rows, 48px uppercase headers, and an optional 44px trailing action column.</p>
+              <p>Header labels are left-aligned to the body text in the same column. Rows are clickable as a whole, with the trailing arrow turning primary on hover in light and dark mode.</p>
+            </div>
+          </Panel>
         </div>
       )}
 
@@ -13594,6 +16883,7 @@ function DesignSystemView({ embedded = false }: { embedded?: boolean }) {
             <div className="designSpecGrid">
               <div><strong>Navigation</strong><p>Use icon plus label in top tab strips. Keep selected tabs white in light mode and raised neutral in dark mode.</p></div>
               <div><strong>Panels</strong><p>Use panels for bounded tools, repeated rows, and demos. Avoid nested cards and decorative section wrappers.</p></div>
+              <div><strong>Header actions</strong><p>Primary actions in page headers and section headers use the shared 40px top-control height.</p></div>
               <div><strong>Forms</strong><p>Group credentials and setup flows by backend capability. Keep save actions close to the field they affect.</p></div>
               <div><strong>Phone</strong><p>Keep telephony controls stable in size. Dialer keys, contact actions, and call buttons should not shift on state changes.</p></div>
             </div>
@@ -13807,6 +17097,7 @@ function buildLinkDesignSystemInstruction() {
     "Support dark mode with [data-theme=\"dark\"] and neutral surfaces: #151515 background, #20201f surface, #f4f1ec text, #3b3936 border.",
     "",
     "Use compact operational layouts: full-width canvas, dense panels, icon-led buttons, tabs for views, segmented controls for modes, toggles for binary settings, and stable 32px controls or 40px header actions.",
+    "For middle-section tables, use the standard Link table rhythm: 18px row side padding, 14px column gaps, 58px rows, 48px uppercase headers, left-aligned header/body columns, whole-row click targets, and a 44px trailing action column when an arrow is needed.",
     "Avoid landing-page heroes, nested cards, decorative gradients/orbs, oversized type inside panels, and layouts that depend on a single hue palette.",
     "Keep generated tools first-screen useful: show the actual app workflow in the main surface immediately.",
     "",
@@ -13997,6 +17288,40 @@ function formatChatAgentName(name: string) {
   return name.split(" / ")[0]?.trim() || name;
 }
 
+type ChatSessionType = {
+  id: "general" | "task" | "make-skill" | "build-app" | "email-draft";
+  label: string;
+};
+
+function classifyChatSessionType(session: ChatSession): ChatSessionType {
+  const transcript = [
+    session.title,
+    ...session.messages.flatMap((message) => [
+      message.content,
+      ...(message.artifacts ?? []).map((artifact) => `${artifact.title} ${artifact.filename}`),
+    ]),
+  ].join(" ").toLowerCase();
+
+  if (/\b(make|create|write|generate)\s+(a\s+)?skill\b|\bskill\.md\b|\bnew skill\b/.test(transcript)) {
+    return { id: "make-skill", label: "Make skill" };
+  }
+  if (/\bbuild app\b|\bapp builder\b|\bedge app\b|\bedge compute\b|\bpreview app\b|\bdeploy\b|\bapidev\.telnyx\.com\b/.test(transcript)) {
+    return { id: "build-app", label: "Build app" };
+  }
+  if (/\b(draft|compose|write)\s+(an?\s+)?email\b|\bgmail\b|\binbox\b/.test(transcript)) {
+    return { id: "email-draft", label: "Email draft" };
+  }
+  if (session.task || /^task:/i.test(session.title) || /\b(workboard|todo|to-do|in progress|done task)\b/.test(transcript)) {
+    return { id: "task", label: "Task" };
+  }
+  return { id: "general", label: "General" };
+}
+
+function chatSessionTypeSortRank(type: string) {
+  const rank = ["general", "task", "make-skill", "build-app", "email-draft"].indexOf(type);
+  return rank === -1 ? 99 : rank;
+}
+
 function compactRelativeTime(value?: string) {
   const timestamp = value ? Date.parse(value) : NaN;
   if (Number.isNaN(timestamp)) return "";
@@ -14017,7 +17342,7 @@ function SenderName({ name }: { name: string }) {
   return (
     <span className="assistantSenderName">
       <span className="assistantSenderIcon" aria-hidden="true">
-        <img src="./triforce-26.png" alt="" />
+        <BookOpen size={13} strokeWidth={1.8} aria-hidden="true" />
       </span>
       <span>{name}</span>
     </span>

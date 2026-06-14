@@ -7,7 +7,7 @@ Telnyx Link is inspired by Ramp's Glass as a product pattern: an internal AI cow
 - Desktop-first personal workspace with a quiet dark interface, persistent left navigation, and fast access to chat, tools, skills, memory, and settings.
 - A full workspace, not a single chat thread: users should eventually be able to split panes, keep multiple sessions open, preview artifacts, and return to a persisted layout.
 - Active work should be visible as a queue of pending or running tasks, with clear approval and dismiss actions for human review.
-- A skill marketplace backed by markdown files in Git, exposed to non-engineers as a simple publish and review flow. Link may call this future surface Armory, Skill Temple, Dojo, or another Telnyx-approved name.
+- A skill marketplace backed by markdown files in Git, exposed to non-engineers as a simple publish and review flow under clear product labels such as Wiki, Skills, or Apps.
 - Skill discovery should include an AI guide that recommends skills from connected tools, role, team, and recent work, rather than forcing users to browse a large catalog.
 - Connected tools surfaced as first-class objects with connection state, permission controls, and readable capability descriptions.
 - Tool permissions grouped by read-only, write/delete, and interactive actions, with clear Auto, Allow, and Ask modes.
@@ -33,7 +33,7 @@ Telnyx Link is inspired by Ramp's Glass as a product pattern: an internal AI cow
 ## Screens Represented By The References
 
 - Memory refresh modal scanning connected sources such as Slack, Notion, Calendar, and Linear.
-- Dojo-style skills screen with a centered user progress panel and skill-kit grid.
+- Skills screen with a centered user progress panel and skill-kit grid.
 - Connector settings screen with connected and available tools, per-tool permission modes, and read/write/interactive groupings.
 - Design system screen showing button, icon button, badge, status dot, segmented control, toggle, text input, and search input variants.
 - Active work review screen with pending items, artifact previews, change summaries, and approve or dismiss actions.

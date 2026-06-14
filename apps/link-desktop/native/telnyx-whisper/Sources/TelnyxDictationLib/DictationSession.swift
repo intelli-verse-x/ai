@@ -15,7 +15,12 @@ public protocol STTStreaming: Sendable {
     var transcriptEvents: AsyncStream<STTTranscriptEvent> { get }
     func connect() async throws
     func sendAudioFrame(_ frame: Data) async throws
+    func finishAudio() async throws
     func disconnect() async
+}
+
+public extension STTStreaming {
+    func finishAudio() async throws {}
 }
 
 /// Summary of a completed dictation session for display in the HUD.

@@ -81,7 +81,7 @@ App publisher Electron E2E:
 npm run test:e2e:publisher
 ```
 
-That command builds `tools/link` plus the desktop renderer, starts a local managed Link App Publisher with auth and actor/group context required, launches Electron against it, and verifies the Triforce Apps catalog, duplicate/fork handoff, and reviewer approval path through the real preload IPC bridge. It intentionally uses the record-only deployer, so `/readyz` reports publisher reachable but not production Edge-ready.
+That command builds `tools/link` plus the desktop renderer, starts a local managed Link App Publisher with auth and actor/group context required, launches Electron against it, and verifies the Apps catalog, duplicate/fork handoff, and reviewer approval path through the real preload IPC bridge. It intentionally uses the record-only deployer, so `/readyz` reports publisher reachable but not production Edge-ready.
 
 `meta-dev.yml` follows [PADR-1 Service Metadata Specification](https://platform-handbook.internal.telnyx.com/decision_record/architecture/padr-0001_service_metadata_spec/). If `meta-prod.yml` is added later, `npm run metadata:check` validates the merged dev+prod view through `infra-svc-metatool`.
 
@@ -94,8 +94,8 @@ That command builds `tools/link` plus the desktop renderer, starts a local manag
 - Agents directory with Agent Control Plane Okta readiness and mocked fallback agents
 - Connections with connector status and Auto/Allow/Ask tool permission groups
 - Memory with Hindsight-ready banks, recall testing, and explicit refresh state
-- Dojo with personal and squad bot training kits
-- Triforce Apps publishing through the managed Link App Publisher contract, with live VPN-only API handoff and local fallback catalog state
+- Wiki with personal and squad bot training kits
+- Apps publishing through the managed Link App Publisher contract, with live VPN-only API handoff and local fallback catalog state
 - Internal Design System and Settings surfaces
 
 Generated drafts, approval decisions, automations, and connector request state are persisted in Electron user data.
@@ -110,13 +110,13 @@ Link injects this operating guide into task monitoring chat sessions and live AC
 
 ## Link App Publisher
 
-Triforce Apps is wired for the managed publisher service rather than direct Edge Compute deployment from the desktop app. The desktop bridge exposes fixed IPC methods for catalog listing, publish intents, version requests, review decisions, rollback/deprecation, duplication handoff, and opening approved VPN URLs. The publisher service owns source-ref handling, Edge Compute deployment, version history, and catalog promotion.
+Apps publishing is wired for the managed publisher service rather than direct Edge Compute deployment from the desktop app. The desktop bridge exposes fixed IPC methods for catalog listing, publish intents, version requests, review decisions, rollback/deprecation, duplication handoff, and opening approved VPN URLs. The publisher service owns source-ref handling, Edge Compute deployment, version history, and catalog promotion.
 
 The default service URL is `https://link-app-publisher.query.prod.telnyx.io`; set `LINK_APP_PUBLISHER_URL` only for a private test publisher. Link authenticates with the saved Okta Rev2 token or `TELNYX_API_KEY`, and only opens approved internal HTTPS app hosts.
 
-The Triforce Apps tab calls `/readyz` and shows a publisher status banner. If it says `Connect VPN`, the catalog is showing local/default data and publish/open actions are not exercising the managed VPN service yet.
+The Apps page calls `/readyz` and shows a publisher status banner. If it says `Connect VPN`, the catalog is showing local/default data and publish/open actions are not exercising the managed VPN service yet.
 
-To publish a local app, add `link-app.yml` at the app directory root, commit the app to a `team-telnyx` GitHub repo, then use Triforce > Publish > App > Load `link-app.yml`. Link reads the manifest locally, derives the Git remote/current commit/source subdir, and sends only that source reference to the managed publisher.
+To publish a local app, add `link-app.yml` at the app directory root, commit the app to a `team-telnyx` GitHub repo, then use Apps > Create > App > Load `link-app.yml`. Link reads the manifest locally, derives the Git remote/current commit/source subdir, and sends only that source reference to the managed publisher.
 
 ```yaml
 name: Carrier Readiness Hub

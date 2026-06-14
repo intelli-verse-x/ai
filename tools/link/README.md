@@ -13,6 +13,7 @@ The product direction is inspired by Ramp's Glass as an internal AI coworker pat
 - Optional OpenAI Agents SDK graph for future live orchestration
 - Mocked tool gateway with safety metadata
 - Markdown skill loader with frontmatter validation
+- OKF bundle validation for Archive imports
 - Shared customer Slack draft workflow
 - Approval decision model
 - Managed Link App Publisher API contract
@@ -278,6 +279,10 @@ All current tool outputs are deterministic mocks for Slack, Salesforce, Google W
 ## Memory Placeholder
 
 Memory is intentionally disabled. Future memory should include daily synthesis, cleanup pipelines, source attribution, permission-aware recall, user controls, retention policy, and strict customer data boundaries.
+
+## OKF Bundle Validation
+
+`tools/link` includes an Open Knowledge Format v0.1 parser for Link Archive imports. It treats OKF as an interchange format, not a replacement for permission-aware memory. Concept files must be Markdown with YAML frontmatter and a non-empty `type` field; unknown fields are preserved, and broken internal links are reported as warnings so partially generated bundles remain inspectable.
 
 ## Next Milestones
 

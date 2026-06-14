@@ -293,7 +293,7 @@ public class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         dictationCoordinator = DictationCoordinator(
             audioCapture: audioCapture,
             audioLevels: { audioCapture.audioLevels },
-            sttStreaming: TelnyxSTTStreamingClient(),
+            sttStreaming: ScribesSTTStreamingFactory.makeStreamingClient(),
             hudPresenter: menuBarHUDPresenter,
             textInserter: PasteboardTextInserter(),
             accessibilityTrustChecker: { [weak self] in

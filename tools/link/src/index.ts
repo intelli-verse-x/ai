@@ -10,6 +10,8 @@ export { parseFrontmatter, normalizeSkillMetadata } from "./skills/frontmatter.j
 export { ToolRegistry, metadataForTool, mockedTools, createDefaultToolRegistry } from "./tools.js";
 export { parseLinkAppManifestText, normalizeLinkAppManifest } from "./app-manifest.js";
 export type { LinkAppManifestFields } from "./app-manifest.js";
+export { parseOkfConceptMarkdown, summarizeOkfBundle, validateOkfBundle } from "./okf/index.js";
+export type { OkfBundleSummary, OkfBundleValidation, OkfConcept, OkfConceptLink, OkfFrontmatter, OkfFrontmatterValue } from "./okf/index.js";
 export { importLocalLinkApp, inspectLocalLinkApp, publisherPayloadFromLocalApp } from "./local-app.js";
 export type { ImportLocalLinkAppOptions, InspectLocalLinkAppOptions, LinkLocalAppImportResult, LinkLocalAppInspection, LinkLocalAppPublishInput, LinkLocalAppImportScope } from "./local-app.js";
 export {

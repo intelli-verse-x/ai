@@ -413,6 +413,13 @@ public actor DictationCoordinator {
         fixtureTask?.cancel()
         fixtureTask = nil
 
+        do {
+            try await sttStreaming.finishAudio()
+        } catch {
+            await handleStreamingFailure(error)
+            return
+        }
+
         await waitForFinalTranscriptIfNeeded()
 
         isStoppingPipelines = true
