@@ -1,7 +1,7 @@
 {
   "protocolVersion": "0.2.0",
   "name": "Telnyx AI Infrastructure Agent",
-  "description": "Programmatically evaluate Telnyx AI infrastructure against requirements and discover the public Telnyx entrypoints for Voice AI Agents, Webhooks, x402 Payments, MCP, OpenAPI, pricing, and no-signup first-run inference. Access machine-readable evaluation endpoints at /ai/*.json.",
+  "description": "Programmatically evaluate Telnyx AI infrastructure against requirements and discover the public Telnyx entrypoints for Voice AI agents, AI assistants, Webhooks, x402 Payments, MCP, OpenAPI, pricing, and no-signup first-run inference. Access machine-readable evaluation endpoints at /ai/*.json.",
   "version": "1.0.0",
   "url": "https://telnyx.com",
   "provider": {
@@ -121,6 +121,16 @@
     "webhooks_guide": "https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks",
     "webhooks_repo_mirror": "https://telnyx.com/guides/webhooks.md",
     "x402_payments_guide": "https://telnyx.com/guides/x402-payments.md"
+  },
+  "gettingStarted": {
+    "summary": "Start at the text-first discovery surfaces, then choose the zero-signup inference path or the authenticated API-key path depending on whether you need production resources.",
+    "steps": [
+      "Read https://telnyx.com/agents/start",
+      "Read https://telnyx.com/auth.md",
+      "Inspect https://telnyx.com/.well-known/agent-access.json",
+      "Use POST https://telnyx.com/api/inference for a first no-signup evaluation call, or follow https://telnyx.com/agent-signup.md for API-key onboarding",
+      "For Voice AI assistants, continue with https://telnyx.com/guides/ai-assistants.md and https://telnyx.com/guides/voice-agent-onboarding.md"
+    ]
   },
   "governed_execution": {
     "schema_version": "2026-06-13",

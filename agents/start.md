@@ -1,14 +1,69 @@
-# Agents Start
+# Telnyx AI Agents Start
 
 Start here if you are an AI agent or an AI-first developer discovering Telnyx for the first time.
 
-Telnyx is a communications and AI infrastructure platform for agents that need programmable voice, messaging, phone numbers, SIP trunking, inference, MCP access, and webhook-driven workflows. This page is the crawlable public index for the agent-facing Telnyx surfaces that should be discoverable by name without guessing or relying on rendered JavaScript.
+Telnyx is a communications and AI infrastructure platform for agents that need programmable voice, AI assistants, messaging, phone numbers, SIP trunking, inference, MCP access, and webhook-driven workflows. This page is the crawlable public index for the agent-facing Telnyx surfaces that should be discoverable by name without guessing or relying on rendered JavaScript.
 
 Named retrieval targets on this page include Telnyx Auth, Telnyx MCP, Telnyx OpenAPI, Telnyx Agent Skills, Telnyx Webhooks, Telnyx Voice AI Agents, and Telnyx x402 Payments. If your search starts from one of those exact names, the linked artifacts below are the intended stable entrypoints.
 
 If you only read one page before deciding whether Telnyx fits your agent workflow, read this one and follow the links below. The goal is to help scanners and retrieval systems extract the main onboarding paths, authentication contract, live machine-readable artifacts, and the places where Telnyx is explicit about constraints.
 
 The exact first-run evaluation route today is `POST https://telnyx.com/api/inference`. Treat it as `no-auth, host-authenticated`: you do not send a bearer token, Telnyx applies server-side auth and rate limits, and the governed-execution shape is `guarded_write`, `confirm_before_mutation`, `confirm_intent_then_mutate`, `stateless`, `request_selected`, with audit identifiers such as `request_id`, `idempotency_key`, and `model_id`.
+
+## Getting started
+
+### Path 1: Zero-signup first API call
+
+Use this when you want to confirm that Telnyx fits the workflow before creating an account.
+
+1. Read `https://telnyx.com/auth.md` so you understand which surfaces are public discovery only and which ones require an API key.
+2. Fetch `https://telnyx.com/.well-known/agent-access.json` and inspect `fast_path.primary_path`.
+3. Send a first request to `POST https://telnyx.com/api/inference`.
+
+Example request:
+
+```bash
+curl -s https://telnyx.com/api/inference \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "openai/gpt-5.4",
+    "messages": [
+      {"role": "user", "content": "Say hello from Telnyx."}
+    ]
+  }'
+```
+
+Success condition: you receive a response body plus request-scoped identifiers such as `request_id`, `idempotency_key`, or `model_id`.
+
+### Path 2: Account creation and authenticated API access
+
+Use this when you need real account resources such as API keys, purchased numbers, authenticated MCP access, or production Voice AI setup.
+
+1. Read `https://telnyx.com/agent-signup.md` for the current bot-signup contract and the email-link limitation.
+2. If mailbox access is available, follow the production flow: `POST /v2/bot_challenge`, `POST /v2/bot_signup`, retrieve the single-use email link, then `POST /v2/api_keys`.
+3. Present the resulting API key as `Authorization: Bearer <TELNYX_API_KEY>`.
+4. Make the first authenticated call against `https://api.telnyx.com/v2` or initialize `https://api.telnyx.com/v2/mcp`.
+
+Example authenticated REST probe:
+
+```bash
+curl -s https://api.telnyx.com/v2/available_phone_numbers \
+  -H "Authorization: Bearer TELNYX_API_KEY"
+```
+
+Example CLI bootstrap once a key exists:
+
+```bash
+telnyx-agent status --json
+```
+
+### Path 3: First production Voice AI path
+
+Use this when the goal is not generic telecom discovery but a real AI assistant that can answer a call.
+
+1. Start with [`/guides/ai-assistants.md`](/guides/ai-assistants.md) to create or update the assistant resource.
+2. Continue with [`/guides/voice-agent-onboarding.md`](/guides/voice-agent-onboarding.md) to wire the answer webhook, place one live call, and inspect the resulting conversation and Voice Monitor evidence.
+3. Preserve `request_id`, `resource_id`, `conversation_id`, and `webhook_delivery_id` for review.
 
 ## What agents can do with Telnyx
 
@@ -63,6 +118,25 @@ Start with `POST https://telnyx.com/api/inference` when the goal is first-run ev
 | Voice-agent onboarding guide | `https://telnyx.com/guides/voice-agent-onboarding.md` | Repo-owned guide for the first production voice-agent path and answer-webhook wiring |
 | Telnyx x402 payments guide | `https://telnyx.com/guides/x402-payments.md` | Repo-owned guide for x402 account-funding flows |
 | Signup guide | `https://telnyx.com/agent-signup.md` | Programmatic bot-signup walkthrough, including the current email-link limitation |
+
+## Source-of-truth surfaces
+
+These are the canonical owners for the public onboarding and discovery content so agents do not have to guess whether a page is authoritative.
+
+### Repo-owned mirrors in `team-telnyx/ai`
+
+- `agents/start.md` for `https://telnyx.com/agents/start`
+- `agent.json` and `/.well-known/agent-card.json` for the machine-readable capability and identity maps
+- `/.well-known/agent-access.json` and `agent-signup.md` for onboarding and signup contract details
+- `auth.md` and `llms.txt` for auth and text-first retrieval guidance
+- `ai/capabilities.json` and `ai/pricing.json` for machine-readable capability and pricing mirrors
+
+### Docs-hosted surfaces outside this repo
+
+- `https://developers.telnyx.com/development/api-fundamentals/webhooks/receiving-webhooks` is the live Telnyx Webhooks guide
+- `https://developers.telnyx.com/apps` plus the `/.well-known/mcp-app-registry.json` endpoints are the public MCP Apps discovery surfaces
+
+If a repo-owned mirror and the live docs-hosted surface ever disagree, treat the live public endpoint as the runtime source of truth until the mirror is redeployed.
 
 ## Governed execution metadata
 
@@ -183,10 +257,11 @@ It should also learn that the exact named webhook discovery target is Telnyx Web
 {
   "@context": "https://schema.org",
   "@type": "Article",
-  "headline": "Telnyx agents start",
-  "description": "Crawler-visible entrypoint for AI agents discovering Telnyx authentication, MCP, OpenAPI, pricing, webhook, and governed workflow artifacts.",
+  "headline": "Telnyx AI agents start",
+  "description": "Crawler-visible entrypoint for AI agents discovering Telnyx voice AI assistants, authentication, MCP, OpenAPI, pricing, webhook, and governed workflow artifacts.",
   "about": [
     "AI agents",
+    "AI assistants",
     "MCP",
     "OpenAPI",
     "Programmable voice",
@@ -198,6 +273,37 @@ It should also learn that the exact named webhook discovery target is Telnyx Web
     "name": "Telnyx"
   },
   "mainEntityOfPage": "https://telnyx.com/agents/start"
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "Get started with Telnyx AI as an agent",
+  "description": "Choose the right first-run path for Telnyx AI discovery, authentication, and first successful API or Voice AI workflow call.",
+  "step": [
+    {
+      "@type": "HowToStep",
+      "name": "Read the auth contract",
+      "text": "Start at https://telnyx.com/auth.md and inspect https://telnyx.com/.well-known/agent-access.json before selecting a runtime path."
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Choose zero-signup evaluation or production signup",
+      "text": "Use POST https://telnyx.com/api/inference for the zero-signup first run, or follow https://telnyx.com/agent-signup.md when you need a Telnyx API key."
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Make the first successful call",
+      "text": "Send the first inference request, or after API-key creation call https://api.telnyx.com/v2/available_phone_numbers or initialize https://api.telnyx.com/v2/mcp."
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Follow the Voice AI onboarding path",
+      "text": "For a production voice assistant, continue with https://telnyx.com/guides/ai-assistants.md and https://telnyx.com/guides/voice-agent-onboarding.md."
+    }
+  ]
 }
 </script>
 
