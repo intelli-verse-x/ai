@@ -1,7 +1,7 @@
 {
   "name": "telnyx-ai",
   "private": true,
-  "description": "Telnyx AI skills monorepo — SDKs, CLI, guides, and agent skills",
+  "description": "Telnyx AI skills monorepo \u2014 SDKs, CLI, guides, and agent skills",
   "scripts": {
     "publish:preflight": "npx tsx scripts/publish-secret-scan.ts --ci",
     "test:guides": "npx tsx --test tests/guides.test.ts tests/discovery-surfaces.test.ts tests/auth-discovery-surfaces.test.ts",
@@ -13,6 +13,8 @@
     "test:publish-preflight": "npx tsx --test tests/publish-secret-scan.test.ts tests/evidence-handoff.test.ts tests/publish-npm.test.ts"
   },
   "devDependencies": {
+    "dotenv": "^8.2.0",
+    "node-fetch": "^3.3.2",
     "tsx": "^4.19.0"
   }
 }
