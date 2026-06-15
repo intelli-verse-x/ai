@@ -236,6 +236,11 @@ The intended end state is a clean bridge:
 See [Edge Compute guide](/guides/edge-compute.md).
 
 
+## AFK smoke test
+
+Verified the AFK coder pipeline on 2026-06-12.
+
+
 ## License
 
 [MIT](LICENSE)
