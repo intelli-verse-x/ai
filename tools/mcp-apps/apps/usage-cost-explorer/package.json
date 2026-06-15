@@ -7,10 +7,10 @@
   "main": "dist/server.js",
   "scripts": {
     "test": "vitest run",
-    "dev": "tsx src/server.ts",
-    "start": "node dist/server.js",
+    "dev": "node init && tsx src/server.ts",
+    "start": "node init && node dist/server.js",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc -p tsconfig.json"
+    "build": "node init && tsc -p tsconfig.json"
   },
   "files": [
     "dist",
