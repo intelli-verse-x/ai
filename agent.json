@@ -67,7 +67,7 @@
       "description": "Use Telnyx as an OpenAI-compatible inference provider for Microsoft Agent Framework and other multi-agent frameworks.",
       "guide": "/guides/microsoft-agent-framework.md",
       "api": "POST /v2/ai/openai/chat/completions",
-      "docs": "https://developers.telnyx.com/docs/ai/openai-compatibility",
+      "docs": "https://developers.telnyx.com/docs/inference/openai",
       "requires": [
         "api_key"
       ]
