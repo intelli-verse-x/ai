@@ -1,17 +1,17 @@
 {
   "name": "@telnyx/agent-cli",
   "version": "0.3.0",
-  "description": "Agent-friendly CLI for Telnyx API v2 — composite setup commands that reduce multi-step workflows to a single command",
+  "description": "Agent-friendly CLI for Telnyx API v2 \u2014 composite setup commands that reduce multi-step workflows to a single command",
   "type": "module",
   "bin": {
     "telnyx-agent": "./bin/telnyx-agent.ts"
   },
   "scripts": {
-    "start": "tsx bin/telnyx-agent.ts",
+    "start": "node init && tsx bin/telnyx-agent.ts",
     "test": "tsx --test tests/integration.test.ts tests/telnyx-cli-flags.test.ts tests/edge-handoff.test.ts",
     "typecheck": "tsc --noEmit",
     "postinstall": "tsx scripts/postinstall.ts",
-    "build": "npm run typecheck"
+    "build": "node init && npm run typecheck"
   },
   "dependencies": {
     "ethers": "^6.16.0",
