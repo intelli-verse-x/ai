@@ -5,9 +5,7 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 interface CursorMcpServer {
   type?: "http";
   url: string;
-  headers?: {
-    Authorization: string;
-  };
+  headers?: Record<string, string>;
 }
 
 interface CursorMcpConfig {
@@ -180,7 +178,13 @@ function isCursorMcpServer(value: unknown): value is CursorMcpServer {
 }
 
 function hasAuthorizationHeader(value: CursorMcpServer): boolean {
-  return typeof value.headers?.Authorization === "string" && value.headers.Authorization.trim().length > 0;
+  if (!isJsonObject(value.headers)) {
+    return false;
+  }
+
+  return Object.entries(value.headers).some(
+    ([headerName, headerValue]) => headerName.toLowerCase() === "authorization" && typeof headerValue === "string" && headerValue.trim().length > 0,
+  );
 }
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
