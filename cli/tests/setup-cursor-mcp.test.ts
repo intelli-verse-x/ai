@@ -178,6 +178,37 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.ok(data.mcpServers.telnyx);
   });
 
+  it("fails when mcpServers is not an object without --force", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
+    const cursorDir = join(tempDir, ".cursor");
+    mkdirSync(cursorDir, { recursive: true });
+    const configPath = join(cursorDir, "mcp.json");
+    const initialContent = JSON.stringify({ mcpServers: [] }, null, 2);
+    writeFileSync(configPath, initialContent, "utf8");
+
+    const result = runWithStderr(["setup-cursor-mcp", "--dir", tempDir]);
+    assert.ok(result.stderr.includes("mcpServers must be an object"));
+    assert.equal(readFileSync(configPath, "utf8"), initialContent);
+  });
+
+  it("repairs non-object mcpServers with --force", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
+    const cursorDir = join(tempDir, ".cursor");
+    mkdirSync(cursorDir, { recursive: true });
+    const configPath = join(cursorDir, "mcp.json");
+    writeFileSync(configPath, JSON.stringify({ otherSetting: true, mcpServers: [] }), "utf8");
+
+    const output = run(["setup-cursor-mcp", "--dir", tempDir, "--force", "--json"]);
+    const result = JSON.parse(output);
+    const data = JSON.parse(readFileSync(configPath, "utf8"));
+
+    assert.equal(result.action, "merged");
+    assert.equal(result.ready, true);
+    assert.equal(data.otherSetting, true);
+    assert.equal(Array.isArray(data.mcpServers), false);
+    assert.equal(data.mcpServers.telnyx.url, TELNYX_MCP_URL);
+  });
+
   it("outputs valid JSON with --json", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
     const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);

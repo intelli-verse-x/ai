@@ -65,8 +65,36 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
       result.action = "created";
     }
 
+    if (!isJsonObject(currentConfig)) {
+      if (!force) {
+        result.action = "error";
+        result.detail = "mcp.json must contain a JSON object. Use --force to overwrite.";
+        if (jsonOutput) {
+          outputJson(result);
+          return;
+        }
+        printError("Invalid .cursor/mcp.json", result.detail);
+        return;
+      }
+      currentConfig = { mcpServers: {} };
+      result.action = "created";
+    }
+
     if (!currentConfig.mcpServers) {
       currentConfig.mcpServers = {};
+    } else if (!isJsonObject(currentConfig.mcpServers)) {
+      if (!force) {
+        result.action = "error";
+        result.detail = "mcp.json mcpServers must be an object. Use --force to overwrite.";
+        if (jsonOutput) {
+          outputJson(result);
+          return;
+        }
+        printError("Invalid .cursor/mcp.json", result.detail);
+        return;
+      }
+      currentConfig.mcpServers = {};
+      result.action = "merged";
     }
 
     const existingTelnyx = currentConfig.mcpServers.telnyx;
@@ -134,6 +162,10 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
 
 function isCursorMcpServer(value: unknown): value is CursorMcpServer {
   return Boolean(value) && typeof value === "object" && (value as CursorMcpServer).type === "http" && typeof (value as CursorMcpServer).url === "string";
+}
+
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function telnyxOnlyConfig(mcpEntry: CursorMcpServer): { mcpServers: { telnyx: CursorMcpServer } } {
