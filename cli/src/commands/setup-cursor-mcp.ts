@@ -17,7 +17,7 @@ interface CursorMcpResult {
   path: string;
   action: "created" | "merged" | "skipped" | "error";
   detail?: string;
-  config?: CursorMcpConfig;
+  config?: { mcpServers: { telnyx: CursorMcpServer } };
 }
 
 export async function setupCursorMcpCommand(flags: Record<string, string | boolean>): Promise<void> {
@@ -102,10 +102,10 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
       }
       writeFileSync(mcpPath, JSON.stringify(currentConfig, null, 2), "utf8");
       result.ready = true;
-      result.config = currentConfig;
+      result.config = telnyxOnlyConfig(mcpEntry);
     } else if (result.action === "skipped" && !result.detail?.includes("different settings")) {
       result.ready = true;
-      result.config = currentConfig;
+      result.config = telnyxOnlyConfig(mcpEntry);
     }
 
     if (jsonOutput) {
@@ -134,4 +134,8 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
 
 function isCursorMcpServer(value: unknown): value is CursorMcpServer {
   return Boolean(value) && typeof value === "object" && (value as CursorMcpServer).type === "http" && typeof (value as CursorMcpServer).url === "string";
+}
+
+function telnyxOnlyConfig(mcpEntry: CursorMcpServer): { mcpServers: { telnyx: CursorMcpServer } } {
+  return { mcpServers: { telnyx: mcpEntry } };
 }

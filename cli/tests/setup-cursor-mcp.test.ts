@@ -186,6 +186,34 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.ok(data.path);
   });
 
+  it("does not echo unrelated MCP server secrets in JSON output", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
+    const cursorDir = join(tempDir, ".cursor");
+    mkdirSync(cursorDir, { recursive: true });
+    const configPath = join(cursorDir, "mcp.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        mcpServers: {
+          existing: {
+            type: "http",
+            url: "https://example.com/mcp",
+            headers: { Authorization: "Bearer should-not-leak" },
+          },
+        },
+      })
+    );
+
+    const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
+    const data = JSON.parse(output);
+    assert.equal(data.action, "merged");
+    assert.equal(data.ready, true);
+    assert.equal(data.config.mcpServers.telnyx.url, TELNYX_MCP_URL);
+    assert.equal(data.config.mcpServers.existing, undefined);
+    assert.ok(!output.includes("should-not-leak"));
+    assert.ok(!output.includes("Authorization"));
+  });
+
   it("outputs JSON error for malformed JSON without --force", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
     const cursorDir = join(tempDir, ".cursor");
