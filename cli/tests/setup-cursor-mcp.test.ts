@@ -107,6 +107,30 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.equal(readFileSync(configPath, "utf8"), initialContent);
   });
 
+  it("skips when Telnyx MCP uses Cursor's URL-only remote server shape", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
+    const cursorDir = join(tempDir, ".cursor");
+    mkdirSync(cursorDir, { recursive: true });
+    const configPath = join(cursorDir, "mcp.json");
+    const initialConfig = {
+      mcpServers: {
+        telnyx: {
+          url: TELNYX_MCP_URL,
+          headers: { Authorization: "Bearer ${TELNYX_API_KEY}" },
+        },
+      },
+    };
+    const initialContent = JSON.stringify(initialConfig, null, 2);
+    writeFileSync(configPath, initialContent, "utf8");
+
+    const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
+    const data = JSON.parse(output);
+
+    assert.equal(data.action, "skipped");
+    assert.equal(data.ready, true);
+    assert.equal(readFileSync(configPath, "utf8"), initialContent);
+  });
+
   it("fails when telnyx server exists with different settings (without --force)", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
     const cursorDir = join(tempDir, ".cursor");

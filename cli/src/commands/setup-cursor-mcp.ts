@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 
 interface CursorMcpServer {
-  type: "http";
+  type?: "http";
   url: string;
 }
 
@@ -167,7 +167,7 @@ function failWithJson(result: CursorMcpResult): void {
 }
 
 function isCursorMcpServer(value: unknown): value is CursorMcpServer {
-  return Boolean(value) && typeof value === "object" && (value as CursorMcpServer).type === "http" && typeof (value as CursorMcpServer).url === "string";
+  return Boolean(value) && typeof value === "object" && ((value as CursorMcpServer).type === undefined || (value as CursorMcpServer).type === "http") && typeof (value as CursorMcpServer).url === "string";
 }
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
