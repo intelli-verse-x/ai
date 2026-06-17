@@ -10,6 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..", "..");
 const CLI = join(__dirname, "..", "bin", "telnyx-agent.ts");
 const TELNYX_MCP_URL = "https://api.telnyx.com/v2/mcp";
+const TELNYX_MCP_AUTH_HEADER = "Bearer ${env:TELNYX_API_KEY}";
 
 function run(args: string[], env?: NodeJS.ProcessEnv): string {
   return execFileSync("npx", ["tsx", CLI, ...args], {
@@ -72,6 +73,7 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.ok(data.mcpServers.telnyx);
     assert.equal(data.mcpServers.telnyx.url, TELNYX_MCP_URL);
     assert.equal(data.mcpServers.telnyx.type, "http");
+    assert.equal(data.mcpServers.telnyx.headers.Authorization, TELNYX_MCP_AUTH_HEADER);
   });
 
   it("merges with existing config", () => {
@@ -97,7 +99,7 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.ok(data.mcpServers.telnyx);
   });
 
-  it("skips when Telnyx MCP is already properly configured", () => {
+  it("upgrades existing Telnyx MCP URL-only config with auth header", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
     const cursorDir = join(tempDir, ".cursor");
     mkdirSync(cursorDir, { recursive: true });
@@ -113,12 +115,15 @@ describe("CLI — setup-cursor-mcp", () => {
     const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
     const data = JSON.parse(output);
 
-    assert.equal(data.action, "skipped");
+    assert.equal(data.action, "merged");
     assert.equal(data.ready, true);
-    assert.equal(readFileSync(configPath, "utf8"), initialContent);
+    const mergedConfig = JSON.parse(readFileSync(configPath, "utf8"));
+    assert.equal(mergedConfig.mcpServers.telnyx.url, TELNYX_MCP_URL);
+    assert.equal(mergedConfig.mcpServers.telnyx.type, "http");
+    assert.equal(mergedConfig.mcpServers.telnyx.headers.Authorization, TELNYX_MCP_AUTH_HEADER);
   });
 
-  it("skips when Telnyx MCP uses Cursor's URL-only remote server shape", () => {
+  it("skips when Telnyx MCP has auth header and no explicit type", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
     const cursorDir = join(tempDir, ".cursor");
     mkdirSync(cursorDir, { recursive: true });
@@ -184,6 +189,7 @@ describe("CLI — setup-cursor-mcp", () => {
     const data = JSON.parse(readFileSync(configPath, "utf8"));
     assert.equal(data.mcpServers.telnyx.type, "http");
     assert.equal(data.mcpServers.telnyx.url, TELNYX_MCP_URL);
+    assert.equal(data.mcpServers.telnyx.headers.Authorization, TELNYX_MCP_AUTH_HEADER);
   });
 
   it("fails on malformed JSON without --force", () => {
@@ -280,9 +286,9 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.equal(data.action, "merged");
     assert.equal(data.ready, true);
     assert.equal(data.config.mcpServers.telnyx.url, TELNYX_MCP_URL);
+    assert.equal(data.config.mcpServers.telnyx.headers.Authorization, TELNYX_MCP_AUTH_HEADER);
     assert.equal(data.config.mcpServers.existing, undefined);
     assert.ok(!result.stdout.includes("should-not-leak"));
-    assert.ok(!result.stdout.includes("Authorization"));
   });
 
   it("outputs JSON error for malformed JSON without --force", () => {

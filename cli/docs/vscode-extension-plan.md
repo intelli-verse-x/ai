@@ -11,7 +11,7 @@ This is a planning deliverable only. Do not implement, publish, or scaffold the 
 
 ## Target Features
 
-- **MCP setup**: Configure project-level Cursor MCP settings by invoking `telnyx-agent setup-cursor-mcp --dir <workspace>`. The command writes `.cursor/mcp.json` with `type: "http"` and `url: "https://api.telnyx.com/v2/mcp"`.
+- **MCP setup**: Configure project-level Cursor MCP settings by invoking `telnyx-agent setup-cursor-mcp --dir <workspace>`. The command writes `.cursor/mcp.json` with `type: "http"`, `url: "https://api.telnyx.com/v2/mcp"`, and `headers.Authorization: "Bearer ${env:TELNYX_API_KEY}"`.
 - **Safe update UX**: Surface skipped/conflict/malformed-JSON states from the CLI and offer an explicit force action equivalent to `--force`.
 - **Skills browser**: List Telnyx skills from this repo and provide copyable install commands.
 - **Capability explorer**: Read `agent.json` and `telnyx-agent capabilities --json` to show available Telnyx actions and composite setup commands.
@@ -51,8 +51,8 @@ Recommended first decision: use a separate extension package/repo once publishin
 
 ## Authentication Flow
 
-- MCP requests use Telnyx's hosted MCP server at `https://api.telnyx.com/v2/mcp` with Bearer auth supplied by the user/runtime client.
-- The extension should not collect API keys for MCP setup. It only writes the endpoint config.
+- MCP requests use Telnyx's hosted MCP server at `https://api.telnyx.com/v2/mcp` with Bearer auth from the Cursor runtime environment via `headers.Authorization: "Bearer ${env:TELNYX_API_KEY}"`.
+- The extension should not collect API keys for MCP setup. It only writes the endpoint config and should instruct users to make `TELNYX_API_KEY` available to Cursor before starting MCP sessions.
 - Any future account or provisioning action should reuse the Agent CLI's existing authentication lookup order (`TELNYX_API_KEY`, then `~/.config/telnyx/config.json`) and clearly disclose when credentials are required.
 - If credential storage becomes necessary, use VS Code SecretStorage and document migration from CLI config separately.
 
@@ -71,7 +71,18 @@ Expected JSON shape:
 {
   "ready": true,
   "path": "/path/to/project/.cursor/mcp.json",
-  "action": "created"
+  "action": "created",
+  "config": {
+    "mcpServers": {
+      "telnyx": {
+        "type": "http",
+        "url": "https://api.telnyx.com/v2/mcp",
+        "headers": {
+          "Authorization": "Bearer ${env:TELNYX_API_KEY}"
+        }
+      }
+    }
+  }
 }
 ```
 

@@ -5,6 +5,9 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 interface CursorMcpServer {
   type?: "http";
   url: string;
+  headers?: {
+    Authorization: string;
+  };
 }
 
 interface CursorMcpConfig {
@@ -28,9 +31,13 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
   const mcpPath = join(cursorDir, "mcp.json");
 
   const TELNYX_MCP_URL = "https://api.telnyx.com/v2/mcp";
+  const TELNYX_MCP_AUTH_HEADER = "Bearer ${env:TELNYX_API_KEY}";
   const mcpEntry: CursorMcpServer = {
     type: "http",
     url: TELNYX_MCP_URL,
+    headers: {
+      Authorization: TELNYX_MCP_AUTH_HEADER,
+    },
   };
 
   const result: CursorMcpResult = {
@@ -99,9 +106,11 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
 
     const existingTelnyx = currentConfig.mcpServers.telnyx;
     if (existingTelnyx) {
-      const isMatch = isCursorMcpServer(existingTelnyx) && existingTelnyx.url === TELNYX_MCP_URL;
+      const isMatch = isCursorMcpServer(existingTelnyx) && existingTelnyx.url === TELNYX_MCP_URL && hasAuthorizationHeader(existingTelnyx);
       if (!isMatch) {
-        if (!force) {
+        if (isCursorMcpServer(existingTelnyx) && existingTelnyx.url === TELNYX_MCP_URL && !hasAuthorizationHeader(existingTelnyx)) {
+          result.action = "merged";
+        } else if (!force) {
           result.action = "skipped";
           result.detail = "A 'telnyx' MCP server already exists with different settings. Use --force to overwrite.";
           if (jsonOutput) {
@@ -168,6 +177,10 @@ function failWithJson(result: CursorMcpResult): void {
 
 function isCursorMcpServer(value: unknown): value is CursorMcpServer {
   return Boolean(value) && typeof value === "object" && ((value as CursorMcpServer).type === undefined || (value as CursorMcpServer).type === "http") && typeof (value as CursorMcpServer).url === "string";
+}
+
+function hasAuthorizationHeader(value: CursorMcpServer): boolean {
+  return typeof value.headers?.Authorization === "string" && value.headers.Authorization.trim().length > 0;
 }
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {

@@ -72,13 +72,16 @@ telnyx-agent setup-cursor-mcp
 telnyx-agent setup-cursor-mcp --dir ./my-project --json
 ```
 
-This creates or safely merges the Telnyx MCP server into your project's `.cursor/mcp.json`. If you prefer to configure it manually, add:                                                                                               
+This creates or safely merges the Telnyx MCP server into your project's `.cursor/mcp.json` and references `TELNYX_API_KEY` for Bearer auth. If you prefer to configure it manually, add:                                                                                               
 ```json       
   {                                                         
     "mcpServers": {
       "telnyx": {
         "type": "http",
-        "url": "https://api.telnyx.com/v2/mcp"
+        "url": "https://api.telnyx.com/v2/mcp",
+        "headers": {
+          "Authorization": "Bearer ${env:TELNYX_API_KEY}"
+        }
       }
     }
   }

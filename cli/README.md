@@ -113,14 +113,17 @@ What they do:
 
 **Scaffold or update Cursor MCP configuration for Telnyx.**
 
-Creates or merges `.cursor/mcp.json` in the target project directory with the canonical Telnyx remote MCP server:
+Creates or merges `.cursor/mcp.json` in the target project directory with the canonical Telnyx remote MCP server and `TELNYX_API_KEY` Bearer auth:
 
 ```json
 {
   "mcpServers": {
     "telnyx": {
       "type": "http",
-      "url": "https://api.telnyx.com/v2/mcp"
+      "url": "https://api.telnyx.com/v2/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:TELNYX_API_KEY}"
+      }
     }
   }
 }
@@ -139,7 +142,7 @@ telnyx-agent setup-cursor-mcp --json
 | `--dir <path>` | Project directory that should contain `.cursor/mcp.json` (default: current working directory) |
 | `--force` | Overwrite a malformed config file or an existing `mcpServers.telnyx` entry with different settings |
 
-By default, the command preserves existing JSON settings and refuses to overwrite a conflicting `telnyx` MCP server entry. Use `--force` only when you intentionally want the CLI to replace that entry or recover from malformed JSON.
+By default, the command preserves existing JSON settings, upgrades a URL-only Telnyx entry with the required `Authorization` header, and refuses to overwrite a conflicting `telnyx` MCP server entry. Use `--force` only when you intentionally want the CLI to replace that entry or recover from malformed JSON.
 
 Output: `{ ready, path, action, detail?, config? }`
 
