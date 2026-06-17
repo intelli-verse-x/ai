@@ -13,6 +13,7 @@ import { setupPortingCommand } from "./commands/setup-porting.ts";
 import { edgeDoctorCommand } from "./commands/edge-doctor.ts";
 import { setupEdgeMcpCommand } from "./commands/setup-edge-mcp.ts";
 import { setupEdgeWebhookCommand } from "./commands/setup-edge-webhook.ts";
+import { setupCursorMcpCommand } from "./commands/setup-cursor-mcp.ts";
 import { capabilitiesCommand } from "./commands/capabilities.ts";
 import { statusCommand } from "./commands/status.ts";
 import { fundAccountCommand } from "./commands/fund-account.ts";
@@ -36,6 +37,7 @@ Commands:
   edge-doctor       Validate Edge Compute prerequisites and handoff readiness
   setup-edge-mcp    Handoff to an Edge-hosted MCP server example
   setup-edge-webhook Handoff to an Edge-hosted webhook receiver example
+  setup-cursor-mcp  Scaffold Cursor MCP configuration for Telnyx
   status            Account health overview
   capabilities      List all available API capabilities
   fund-account      Fund account via x402 USDC payment (EIP-712 signing)
@@ -65,6 +67,8 @@ Setup-specific Flags:
   --billing-phone   Billing telephone number on the account (setup-porting)
   --old-provider    Current/losing carrier name (setup-porting)
   --submit          Submit the newly created porting order immediately (setup-porting)
+  --dir <path>      Project directory for Cursor MCP config (setup-cursor-mcp, default: cwd)
+  --force           Overwrite conflicting Cursor MCP config entries (setup-cursor-mcp)
 
 Fund-account Flags:
   --amount <usd>    Amount to fund in USD (required, e.g., 50.00)
@@ -84,6 +88,7 @@ Examples:
   telnyx-agent edge-doctor --json
   telnyx-agent setup-edge-mcp --name my-mcp-server
   telnyx-agent setup-edge-webhook --name my-webhook
+  telnyx-agent setup-cursor-mcp --dir ./my-project --force
   telnyx-agent fund-account --amount 50.00
   telnyx-agent fund-account --amount 50.00 --wallet-key 0x... --json
 `;
@@ -100,6 +105,7 @@ const COMMANDS: Record<string, (flags: Record<string, string | boolean>) => Prom
   "edge-doctor": edgeDoctorCommand,
   "setup-edge-mcp": setupEdgeMcpCommand,
   "setup-edge-webhook": setupEdgeWebhookCommand,
+  "setup-cursor-mcp": setupCursorMcpCommand,
   capabilities: capabilitiesCommand,
   status: statusCommand,
   "fund-account": fundAccountCommand,

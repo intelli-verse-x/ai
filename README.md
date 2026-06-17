@@ -65,9 +65,14 @@ See [`plugins/opencode/README.md`](/plugins/opencode/README.md) for full setup a
 > [!NOTE]
 > Note: Our Cursor Marketplace listing is pending. 
 
-In the meantime, install skills via the [Skills CLI](#agent-skills).
+In the meantime, install skills via the [Skills CLI](#agent-skills) and use the Agent CLI to configure the Telnyx MCP server automatically:
 
-Add the Telnyx MCP server to your project's `.cursor/mcp.json`:                                                                                                
+```sh
+telnyx-agent setup-cursor-mcp
+telnyx-agent setup-cursor-mcp --dir ./my-project --json
+```
+
+This creates or safely merges the Telnyx MCP server into your project's `.cursor/mcp.json`. If you prefer to configure it manually, add:                                                                                               
 ```json       
   {                                                         
     "mcpServers": {

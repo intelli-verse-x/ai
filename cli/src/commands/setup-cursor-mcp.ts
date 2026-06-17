@@ -1,0 +1,137 @@
+import { outputJson, printError, printSuccess, printWarning } from "../utils/output.ts";
+import { join } from "node:path";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+
+interface CursorMcpServer {
+  type: "http";
+  url: string;
+}
+
+interface CursorMcpConfig {
+  mcpServers?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface CursorMcpResult {
+  ready: boolean;
+  path: string;
+  action: "created" | "merged" | "skipped" | "error";
+  detail?: string;
+  config?: CursorMcpConfig;
+}
+
+export async function setupCursorMcpCommand(flags: Record<string, string | boolean>): Promise<void> {
+  const jsonOutput = flags.json === true;
+  const force = flags.force === true;
+  const targetDir = (typeof flags.dir === "string" ? flags.dir : process.cwd());
+  const cursorDir = join(targetDir, ".cursor");
+  const mcpPath = join(cursorDir, "mcp.json");
+
+  const TELNYX_MCP_URL = "https://api.telnyx.com/v2/mcp";
+  const mcpEntry: CursorMcpServer = {
+    type: "http",
+    url: TELNYX_MCP_URL,
+  };
+
+  const result: CursorMcpResult = {
+    ready: false,
+    path: mcpPath,
+    action: "skipped",
+  };
+
+  try {
+    let currentConfig: CursorMcpConfig = { mcpServers: {} };
+
+    if (existsSync(mcpPath)) {
+      try {
+        const raw = readFileSync(mcpPath, "utf8");
+        currentConfig = JSON.parse(raw);
+      } catch {
+        if (!force) {
+          result.action = "error";
+          result.detail = "mcp.json exists but is malformed JSON. Use --force to overwrite.";
+          if (jsonOutput) {
+            outputJson(result);
+            return;
+          }
+          printError("Failed to parse existing .cursor/mcp.json", result.detail);
+          return;
+        }
+        // If force, we just overwrite
+        currentConfig = { mcpServers: {} };
+        result.action = "created";
+      }
+    } else {
+      result.action = "created";
+    }
+
+    if (!currentConfig.mcpServers) {
+      currentConfig.mcpServers = {};
+    }
+
+    const existingTelnyx = currentConfig.mcpServers.telnyx;
+    if (existingTelnyx) {
+      const isMatch = isCursorMcpServer(existingTelnyx) && existingTelnyx.url === TELNYX_MCP_URL;
+      if (!isMatch) {
+        if (!force) {
+          result.action = "skipped";
+          result.detail = "A 'telnyx' MCP server already exists with different settings. Use --force to overwrite.";
+          if (jsonOutput) {
+            outputJson(result);
+            return;
+          }
+          printWarning(result.detail);
+          return;
+        } else {
+          result.action = "merged";
+        }
+      } else {
+        result.action = "skipped";
+        result.detail = "Telnyx MCP server is already properly configured.";
+      }
+    } else {
+      if (result.action !== "created") {
+        result.action = "merged";
+      }
+    }
+
+    if (result.action === "created" || result.action === "merged") {
+      currentConfig.mcpServers.telnyx = mcpEntry;
+      if (!existsSync(cursorDir)) {
+        mkdirSync(cursorDir, { recursive: true });
+      }
+      writeFileSync(mcpPath, JSON.stringify(currentConfig, null, 2), "utf8");
+      result.ready = true;
+      result.config = currentConfig;
+    } else if (result.action === "skipped" && !result.detail?.includes("different settings")) {
+      result.ready = true;
+      result.config = currentConfig;
+    }
+
+    if (jsonOutput) {
+      outputJson(result);
+      return;
+    }
+
+    if (result.action === "created") {
+      printSuccess("Cursor MCP config created", { Path: mcpPath });
+    } else if (result.action === "merged") {
+      printSuccess("Cursor MCP config updated", { Path: mcpPath });
+    } else if (result.action === "skipped") {
+      printSuccess("Cursor MCP config is up to date", { Path: mcpPath });
+    }
+
+  } catch (error: unknown) {
+    result.action = "error";
+    result.detail = error instanceof Error ? error.message : String(error);
+    if (jsonOutput) {
+      outputJson(result);
+    } else {
+      printError("Failed to setup Cursor MCP", result.detail);
+    }
+  }
+}
+
+function isCursorMcpServer(value: unknown): value is CursorMcpServer {
+  return Boolean(value) && typeof value === "object" && (value as CursorMcpServer).type === "http" && typeof (value as CursorMcpServer).url === "string";
+}

@@ -109,6 +109,40 @@ What they do:
 - give you the concrete next deploy command
 - preserve an honest handoff instead of pretending `telnyx-agent` owns Edge lifecycle
 
+### `telnyx-agent setup-cursor-mcp`
+
+**Scaffold or update Cursor MCP configuration for Telnyx.**
+
+Creates or merges `.cursor/mcp.json` in the target project directory with the canonical Telnyx remote MCP server:
+
+```json
+{
+  "mcpServers": {
+    "telnyx": {
+      "type": "http",
+      "url": "https://api.telnyx.com/v2/mcp"
+    }
+  }
+}
+```
+
+```bash
+telnyx-agent setup-cursor-mcp
+telnyx-agent setup-cursor-mcp --dir ./my-project
+telnyx-agent setup-cursor-mcp --dir ./my-project --force
+telnyx-agent setup-cursor-mcp --json
+```
+
+**Flags:**
+| Flag | Description |
+|------|-------------|
+| `--dir <path>` | Project directory that should contain `.cursor/mcp.json` (default: current working directory) |
+| `--force` | Overwrite a malformed config file or an existing `mcpServers.telnyx` entry with different settings |
+
+By default, the command preserves existing JSON settings and refuses to overwrite a conflicting `telnyx` MCP server entry. Use `--force` only when you intentionally want the CLI to replace that entry or recover from malformed JSON.
+
+Output: `{ ready, path, action, detail?, config? }`
+
 ### `telnyx-agent fund-account`
 
 **Fund your Telnyx account with USDC on Base via x402 protocol.**
@@ -160,7 +194,7 @@ The CLI looks for an API key in this order:
 ## Architecture
 
 - **Hybrid execution** — wraps `telnyx-cli` where available, falls back to native `fetch()` for operations without CLI support
-- **No CLI framework** — simple `process.argv` parsing for 13 commands
+- **No CLI framework** — simple `process.argv` parsing for the command router
 - **TypeScript + tsx** — direct execution, no build step
 - **Error handling** — composite commands report what succeeded and what failed
 
