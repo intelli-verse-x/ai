@@ -173,6 +173,38 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.equal(readFileSync(configPath, "utf8"), initialContent);
   });
 
+  it("upgrades existing Telnyx MCP config with non-Bearer authorization header", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
+    const cursorDir = join(tempDir, ".cursor");
+    mkdirSync(cursorDir, { recursive: true });
+    const configPath = join(cursorDir, "mcp.json");
+    writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          mcpServers: {
+            telnyx: {
+              type: "http",
+              url: TELNYX_MCP_URL,
+              headers: { Authorization: "Token existing-token" },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    const output = run(["setup-cursor-mcp", "--dir", tempDir, "--json"]);
+    const result = JSON.parse(output);
+    const data = JSON.parse(readFileSync(configPath, "utf8"));
+
+    assert.equal(result.action, "merged");
+    assert.equal(result.ready, true);
+    assert.equal(data.mcpServers.telnyx.headers.Authorization, TELNYX_MCP_AUTH_HEADER);
+  });
+
   it("fails when telnyx server exists with different settings (without --force)", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
     const cursorDir = join(tempDir, ".cursor");

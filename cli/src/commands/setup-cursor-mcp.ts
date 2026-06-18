@@ -104,9 +104,9 @@ export async function setupCursorMcpCommand(flags: Record<string, string | boole
 
     const existingTelnyx = currentConfig.mcpServers.telnyx;
     if (existingTelnyx) {
-      const isMatch = isCursorMcpServer(existingTelnyx) && existingTelnyx.url === TELNYX_MCP_URL && hasAuthorizationHeader(existingTelnyx);
+      const isMatch = isCursorMcpServer(existingTelnyx) && existingTelnyx.url === TELNYX_MCP_URL && hasBearerAuthorizationHeader(existingTelnyx);
       if (!isMatch) {
-        if (isCursorMcpServer(existingTelnyx) && existingTelnyx.url === TELNYX_MCP_URL && !hasAuthorizationHeader(existingTelnyx)) {
+        if (isCursorMcpServer(existingTelnyx) && existingTelnyx.url === TELNYX_MCP_URL && !hasBearerAuthorizationHeader(existingTelnyx)) {
           result.action = "merged";
         } else if (!force) {
           result.action = "skipped";
@@ -177,13 +177,13 @@ function isCursorMcpServer(value: unknown): value is CursorMcpServer {
   return Boolean(value) && typeof value === "object" && ((value as CursorMcpServer).type === undefined || (value as CursorMcpServer).type === "http") && typeof (value as CursorMcpServer).url === "string";
 }
 
-function hasAuthorizationHeader(value: CursorMcpServer): boolean {
+function hasBearerAuthorizationHeader(value: CursorMcpServer): boolean {
   if (!isJsonObject(value.headers)) {
     return false;
   }
 
   return Object.entries(value.headers).some(
-    ([headerName, headerValue]) => headerName.toLowerCase() === "authorization" && typeof headerValue === "string" && headerValue.trim().length > 0,
+    ([headerName, headerValue]) => headerName.toLowerCase() === "authorization" && typeof headerValue === "string" && /^Bearer\s+\S+/.test(headerValue.trim()),
   );
 }
 
