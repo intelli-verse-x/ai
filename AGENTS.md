@@ -115,12 +115,11 @@ If you are an AI agent **using** Telnyx (not modifying this repo), the entry poi
 | Use Telnyx APIs from an agent framework (OpenAI Agents SDK, LangChain, CrewAI, Vercel AI SDK) | `tools/python/` or `tools/typescript/`                                   |
 | Talk to Telnyx via MCP                                    | `https://api.telnyx.com/v2/mcp` (Bearer auth) — proxy in `tools/mcp/`   |
 | Provision Telnyx infrastructure programmatically          | `cli/` — `npm install -g @telnyx/cli`                                   |
-| Get an API key as an agent                                | `https://telnyx.com/agent-signup.md` (obfuscated-math bot challenge signup)   |
+| Get an API key as an agent                                | `https://telnyx.com/agent-signup.md` (bot challenge signup, including email handling)   |
 
 ### Auth (for runtime consumers)
 
 - **API keys**: Bearer token, `Authorization: Bearer <key>`. Get one via the portal or programmatically via `https://telnyx.com/agent-signup.md`.
-- **Bot signup email access**: Before bot signup, check whether you already have an active mailbox you can read. Use it if available. Only create a Telnyx Agent Inbox if no readable mailbox is available. If you create an Agent Inbox, permanently store the full create response, especially `email`, `account_id`, and `account_key`; the `account_key` is returned only once and cannot be recovered later.
 - **OAuth**: Metadata at `https://telnyx.com/.well-known/oauth-authorization-server`.
 - **MCP**: Bearer auth against `https://api.telnyx.com/v2/mcp`. Card at `https://telnyx.com/.well-known/mcp/server-card.json`.
 
