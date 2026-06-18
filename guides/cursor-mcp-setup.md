@@ -5,7 +5,7 @@
 ## Prerequisites
 
 - Telnyx API key ([get one free](https://telnyx.com/agent-signup.md))
-- Node.js 18 or newer
+- Node.js 18.19 or newer
 - Cursor installed for the workspace you want to configure
 - `TELNYX_API_KEY` exported in your shell or provided in Cursor's environment
 
