@@ -24,7 +24,7 @@ npx skills add team-telnyx/ai --skill telnyx-cursor-mcp-setup --agent cursor
 
 - Telnyx API key in `TELNYX_API_KEY`.
 - Cursor installed for the target project.
-- Node.js 18 or newer for `npx`.
+- Node.js 18.19 or newer for `npx`.
 
 ## Configure Cursor MCP
 

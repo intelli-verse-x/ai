@@ -167,7 +167,7 @@ describe("CLI — setup-cursor-mcp", () => {
     assert.equal(readFileSync(configPath, "utf8"), initialContent);
   });
 
-  it("preserves existing Telnyx MCP config with lowercase authorization header", () => {
+  it("preserves existing Telnyx MCP config with lowercase authorization header and bearer scheme", () => {
     const tempDir = mkdtempSync(join(tmpdir(), "cursor-test-"));
     const cursorDir = join(tempDir, ".cursor");
     mkdirSync(cursorDir, { recursive: true });
@@ -177,7 +177,7 @@ describe("CLI — setup-cursor-mcp", () => {
         telnyx: {
           type: "http",
           url: TELNYX_MCP_URL,
-          headers: { authorization: "Bearer existing-token" },
+          headers: { authorization: "bearer existing-token" },
         },
       },
     };

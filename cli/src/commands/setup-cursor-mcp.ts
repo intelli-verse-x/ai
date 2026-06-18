@@ -183,7 +183,7 @@ function hasBearerAuthorizationHeader(value: CursorMcpServer): boolean {
   }
 
   return Object.entries(value.headers).some(
-    ([headerName, headerValue]) => headerName.toLowerCase() === "authorization" && typeof headerValue === "string" && /^Bearer\s+\S+/.test(headerValue.trim()),
+    ([headerName, headerValue]) => headerName.toLowerCase() === "authorization" && typeof headerValue === "string" && /^Bearer\s+\S+/i.test(headerValue.trim()),
   );
 }
 
