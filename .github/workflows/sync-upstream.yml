@@ -1,0 +1,63 @@
+# Keep this fork current with team-telnyx/ai (the Telnyx Agent Skills repo),
+# WITHOUT clobbering our hand-maintained overlay.
+#
+# Strategy: merge upstream/main into main. Our additions live in paths that
+# upstream never touches (skills/intelliverse-conventions/, intelliverse/), so
+# merges are conflict-free in practice. If upstream ever renames things, the
+# job opens a PR for manual review instead of pushing.
+name: Sync upstream (team-telnyx/ai)
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # every Monday 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "intelliverse-bot"
+          git config user.email "bot@intelli-verse-x.ai"
+
+      - name: Add upstream + fetch
+        run: |
+          git remote add upstream https://github.com/team-telnyx/ai.git || true
+          git fetch upstream main
+
+      - name: Try fast merge to main
+        id: merge
+        run: |
+          git checkout main
+          if git merge --no-edit upstream/main; then
+            echo "merged=true" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "merged=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push merged main
+        if: steps.merge.outputs.merged == 'true'
+        run: git push origin main
+
+      - name: Open PR on conflict
+        if: steps.merge.outputs.merged == 'false'
+        run: |
+          BRANCH="upstream-sync-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH" upstream/main
+          git push origin "$BRANCH"
+          gh pr create --base main --head "$BRANCH" \
+            --title "Upstream sync (manual review — conflicts)" \
+            --body "Automated upstream sync hit conflicts. Review and preserve the intelliverse-conventions overlay before merging."
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
