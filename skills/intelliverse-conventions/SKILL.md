@@ -84,7 +84,7 @@ SMS verification/notification email = SES. Do not hardcode a different provider.
 
 ## 5. Deploy/runtime facts
 - Cluster namespace: `aicart`. Shared RDS:
-  `aicart-prod.c8t8osoe03oe.us-east-1.rds.amazonaws.com:5432`.
+  `aicart-prod.c8rq2igk8bw7.us-east-1.rds.amazonaws.com:5432`.
 - The automation brain is **n8n** (`n8n.intelli-verse-x.ai`) — Telnyx webhooks
   point at n8n, which applies this contract and writes to Twenty.
 - Secrets are created imperatively (never commit `TELNYX_API_KEY` or SES creds).
